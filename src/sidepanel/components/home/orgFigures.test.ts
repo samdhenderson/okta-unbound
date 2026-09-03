@@ -236,6 +236,63 @@ describe('buildSubCount', () => {
     });
   });
 
+  it('agrees with its denominator when there is exactly one of them', () => {
+    // I-024: the note is the only sentence on the card whose noun follows a
+    // count, and it read "of 1 applications" on any org with a single app —
+    // the Home tab being the first surface an admin sees.
+    const one = buildSubCount({
+      ...base,
+      counted: named({ count: 1 }, 'applications'),
+      count: 1,
+    });
+    expect(one.note).toBe('of 1 application');
+  });
+
+  it('keeps the plural at zero, and localises a four-figure denominator', () => {
+    expect(buildSubCount({ ...base, counted: named({ count: 0 }, 'applications') }).note).toBe(
+      'of 0 applications',
+    );
+    const many = buildSubCount({ ...base, counted: named({ count: 1204 }) }).note;
+    expect(many).toMatch(/^of 1\D?204 groups$/);
+  });
+
+  it('takes a stated singular over the derived one, for a noun derivation would mangle', () => {
+    // The escape hatch that keeps `NamedSource` additive: `noun` stays the
+    // plural every other branch speaks in, and an irregular collection names
+    // its own singular rather than accepting `policie`.
+    const irregular = buildSubCount({
+      ...base,
+      counted: { ...named({ count: 1 }, 'authentication policies'), singular: 'auth policy' },
+      count: 1,
+    });
+    expect(irregular.note).toBe('of 1 auth policy');
+  });
+
+  it('leaves the three count-free sentences plural, whatever the count', () => {
+    // The other three branches speak about the collection, not about a number,
+    // and one of them carries a plural verb ("have not been read"). Pluralising
+    // on the count here would produce "Needs group rule, which have not been
+    // read." Pinned because the fix above is one branch away from it.
+    const single = { count: 1 } as const;
+    expect(buildSubCount({ ...base, counted: named({ ...single, complete: false }) }).note).toBe(
+      'At least — the last read of groups did not finish.',
+    );
+    expect(
+      buildSubCount({
+        ...base,
+        gates: [named({ ...single, complete: false }, 'group rules')],
+      }).note,
+    ).toBe('Needs group rules, which have not been read.');
+    expect(
+      buildSubCount({
+        ...base,
+        // Zero rows and no walk is the *never read* shape; one row with no
+        // finished walk is a floor, which the assertion above already covers.
+        counted: named({ count: 0, complete: false, lastFullWalkAt: null }),
+      }).note,
+    ).toBe('Groups have not been read yet.');
+  });
+
   it('marks a floor when the counted walk did not finish', () => {
     const floor = buildSubCount({ ...base, counted: named({ count: 214, complete: false }) });
     expect(floor).toMatchObject({ status: 'partial', value: 31 });

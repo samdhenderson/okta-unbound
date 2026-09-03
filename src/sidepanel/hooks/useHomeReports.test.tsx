@@ -13,7 +13,16 @@ import { renderHook } from '@testing-library/react';
 import { useHomeReports, type UseHomeReportsResult } from './useHomeReports';
 import type { OrgEntityIndex } from './useOrgEntityIndex';
 
-const NOW = 1_800_000_000_000;
+const DAY = 24 * 60 * 60 * 1000;
+/**
+ * The stubs' walk stamp, and the reference every date in this file is written
+ * against. Relative to the real clock rather than fixed, because the dormant
+ * report's anchor is only usable when the last full walk is recent — a frozen
+ * stamp would decide that for the test by accident.
+ */
+const NOW = Date.now();
+
+const daysBefore = (days: number) => new Date(NOW - days * DAY).toISOString();
 
 interface StubOptions {
   complete?: boolean;
@@ -58,6 +67,7 @@ function makeIndex(options: StubOptions = {}): OrgEntityIndex {
       type: 'OKTA_GROUP',
       profile: { name: 'Sales tools' },
       _embedded: { stats: { usersCount: 12 } },
+      lastMembershipUpdated: daysBefore(730),
     },
     { id: 'g4', type: 'OKTA_GROUP', profile: { name: 'Holds an app open' } },
   ];
@@ -85,6 +95,7 @@ describe('useHomeReports', () => {
     expect(result.current.reports.map((entry) => entry.key)).toEqual([
       'group-cleanup',
       'unmaintained-app-access',
+      'dormant-app-access',
     ]);
     expect(sync).not.toHaveBeenCalled();
   });
@@ -116,6 +127,62 @@ describe('useHomeReports', () => {
       expect(entry.value).toBeNull();
       expect(entry.findings).toEqual([]);
       expect(entry.note).toBe('Needs group rules, which have not been read.');
+    }
+  });
+});
+
+/**
+ * The dormant report's clock (ADR-0067 §3). The join and its copy are tested in
+ * `components/groups/ruleOrphans`; what only exists here is where the anchor
+ * comes from — the group handle's `lastFullWalkAt` — and what the reader is
+ * shown when it cannot carry a claim.
+ */
+describe('useHomeReports · the dormant report', () => {
+  const dormant = (result: UseHomeReportsResult) => report(result, 'dormant-app-access');
+
+  it('states the silence it observed, measured from the last complete group read', () => {
+    const { result } = render(makeIndex());
+    expect(dormant(result.current)?.label).toBe('App access with no membership change in 6 months');
+    expect(dormant(result.current)?.value).toBe(1);
+    expect(dormant(result.current)?.findings).toEqual([
+      {
+        id: 'g3',
+        name: 'Sales tools',
+        detail: '12 members · Slack · no membership change in 2 years',
+      },
+    ]);
+    expect(dormant(result.current)?.caveat).toContain(
+      'Measured from the last complete read of your groups,',
+    );
+  });
+
+  it('withholds the report entirely when the groups were never fully walked', () => {
+    const { result } = render(makeIndex({ complete: false, lastFullWalkAt: null }));
+    expect(dormant(result.current)?.value).toBeNull();
+    expect(dormant(result.current)?.findings).toEqual([]);
+  });
+
+  it('withholds the report when the anchor is too old to certify a silence', () => {
+    // Every collection here read cleanly — the count is suppressed purely
+    // because the walk it would be measured from is 60 days behind. Without
+    // this, a group that gained fifty members yesterday but whose profile was
+    // last edited in 2021 reads as dormant with high confidence, forever.
+    const { result } = render(makeIndex({ lastFullWalkAt: NOW - 60 * DAY }));
+    expect(dormant(result.current)).toMatchObject({ status: 'unavailable', value: null });
+    expect(dormant(result.current)?.findings).toEqual([]);
+    expect(dormant(result.current)?.note).toContain(
+      'Needs a complete read of your groups from the last 30 days.',
+    );
+    // The sibling report is unaffected: its claim does not rest on the anchor.
+    expect(report(result.current, 'unmaintained-app-access')?.value).toBe(1);
+  });
+
+  it('offers nothing to act on — the findings navigate and nothing more', () => {
+    // ADR-0067 §5. A finding is an id, a name and a line of prose; there is no
+    // verb, no selection and no path into the bulk machinery from this shape.
+    const { result } = render(makeIndex());
+    for (const finding of dormant(result.current)?.findings ?? []) {
+      expect(Object.keys(finding).sort()).toEqual(['detail', 'id', 'name']);
     }
   });
 });

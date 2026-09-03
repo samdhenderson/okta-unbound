@@ -17,9 +17,26 @@
  * and transition string. The rules disclosure goes in `ListRow`'s `body` slot,
  * which is the shape this card needs: the padding belongs to the header, the body
  * sets its own, and the border belongs to the card around both.
+ *
+ * **The header toggles on click, not just via its trailing `IconButton`** (I-023):
+ * `AppListItem` and `RuleCard` both make the whole header a click target, and this
+ * card was the one place the same gesture did nothing. It uses `RuleCard`'s
+ * pattern — a shared `StretchedButton` overlay, a real `<button>` rather than a
+ * `<div onClick>`, so Enter/Space and focus semantics come for free — not
+ * `AppListItem`'s `press-subtle` div, which has no keyboard route of its own
+ * (filed separately; not this card's problem). The trailing `IconButton` stays:
+ * it is the only *visible* signal that the row expands at all — the chevron and
+ * its rotation — and both `AppListItem` and `RuleCard` keep an equivalent
+ * affordance, so removing it here would cost discoverability for no gain. The
+ * two controls stay non-colliding because only the `IconButton` carries
+ * `aria-expanded`/`aria-controls` (`StretchedButton` has no such prop) and its
+ * label keeps naming the policy (`Show/Hide rules for {name}`), while the
+ * overlay's label is deliberately shorter (`Show/Hide rules`) and reads the name
+ * from `aria-describedby` instead — so a screen reader hears two related but
+ * non-identical announcements, never the same string twice.
  */
 import React, { memo, useCallback, useId, useState } from 'react';
-import { CopyableId, IconButton, ListRow } from '../shared';
+import { CopyableId, Eyebrow, IconButton, ListRow, StretchedButton } from '../shared';
 import Icon from '../shared/Icon';
 import PolicyRulesList from './PolicyRulesList';
 import { useEntityQuery } from '../../cache/useEntityQuery';
@@ -48,6 +65,7 @@ interface PolicyCardProps {
 const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const rulesId = useId();
+  const nameId = useId();
 
   const toggleExpanded = useCallback(() => setIsExpanded((prev) => !prev), []);
 
@@ -93,9 +111,7 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
         >
           <div>
             <div className="space-y-3 border-t border-neutral-100 bg-neutral-50 px-4 pb-4 pt-3">
-              <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
-                Rules
-              </div>
+              <Eyebrow as="div">Rules</Eyebrow>
               <PolicyRulesList rules={rules} isLoading={isLoading} error={error} />
               {/*
                 The id goes through the shared `CopyableId` rather than being
@@ -119,10 +135,26 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
         </div>
       }
     >
-      <div className="flex items-start justify-between gap-4">
+      {/*
+        `relative` is the `StretchedButton` contract: the overlay stretches to
+        its nearest positioned ancestor, so that ancestor has to be exactly the
+        clickable region — the header, not the whole card (the body below has
+        its own controls that must stay independently clickable).
+      */}
+      <div className="relative flex items-start justify-between gap-4">
+        <StretchedButton
+          // Shorter than the `IconButton`'s label on purpose — `describedBy`
+          // supplies the policy name, so the two controls read as related
+          // rather than as the same announcement twice.
+          label={isExpanded ? 'Hide rules' : 'Show rules'}
+          describedBy={nameId}
+          onClick={toggleExpanded}
+        />
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-(--sp-inline)">
-            <h3 className="text-sm font-semibold text-neutral-900">{name}</h3>
+            <h3 id={nameId} className="text-sm font-semibold text-neutral-900">
+              {name}
+            </h3>
             <span
               className={`rounded-md border px-2 py-0.5 text-xs font-medium ${policyStatusClasses(policy.status)}`}
             >
@@ -155,7 +187,10 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
           size="md"
           expanded={isExpanded}
           controls={rulesId}
-          className="shrink-0"
+          // `relative z-10`: the `StretchedButton` contract for a sibling
+          // control that must sit above the overlay in stacking order, or it
+          // becomes unclickable.
+          className="relative z-10 shrink-0"
           onClick={toggleExpanded}
         >
           <Icon

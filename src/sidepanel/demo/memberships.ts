@@ -122,49 +122,135 @@ const OFFICE_GROUPS: readonly { ordinal: number; city: string }[] = [
 const attr = (user: OktaUser, key: string): string => String(user.profile[key] ?? '');
 
 /**
- * Groups whose membership is a genuine predicate over the profile — the ones a
- * group rule feeds. Each entry mirrors the expression in `snapshot.demoRules`.
+ * One rule-fed group: the predicate that fills it, and the rule that declares it.
+ *
+ * `expression` is the **exact** Okta Expression Language string `demoRules` must
+ * carry for this group, so the fixture states its rules once and
+ * `demoRuleCoverage.test.ts` can prove the two halves are the same list. A
+ * `null` expression is a deliberate exemption and must say who fills the group
+ * instead — see {@link RULE_FED}'s note on invisible maintainers.
  */
-const RULE_FED: readonly { ordinal: number; predicate: (user: OktaUser) => boolean }[] = [
+type RuleFedGroup = {
+  ordinal: number;
+  predicate: (user: OktaUser) => boolean;
+  expression: string | null;
+  /** Required exactly when `expression` is `null`: who fills this group, and why no rule can. */
+  exemption?: string;
+};
+
+/**
+ * Groups whose membership is a genuine predicate over the profile.
+ *
+ * Each entry declares the expression the group's rule states, and the predicate
+ * that produces the membership; `demoRuleCoverage.test.ts` asserts the rule
+ * exists in `snapshot.demoRules` with that exact expression, and — wherever
+ * `shared/ruleEvaluator` can evaluate it — that evaluating the rule over the org
+ * reproduces the derived membership exactly. Before that test existed the two
+ * lists had drifted to twenty-three predicates against nine rules, and the gap
+ * was invisible until something evaluated the rules rather than the predicates.
+ *
+ * ## Two groups are exempt, on purpose
+ *
+ * `expression: null` marks a group a predicate fills but **no rule can**. That
+ * is not a hole in the fixture, it is the org being realistic: a group can have
+ * an invisible maintainer. `Everyone` is Okta's own built-in, and `Workday - All
+ * Workers` arrives with the HR import. Both are exactly the population Home's
+ * "groups no rule fills" finding is about — a group that is maintained by
+ * something the panel cannot see reads identically to one nobody maintains, and
+ * that ambiguity is the finding's point. Declaring rules for them to make an
+ * assertion pass would flatten the org into "everything is ruled" and delete the
+ * condition several chapters exist to show.
+ *
+ * The exemption is written down here rather than left as a gap, because an
+ * exemption nobody can see is how this drifted in the first place.
+ */
+const RULE_FED: readonly RuleFedGroup[] = [
   ...DEPARTMENT_GROUPS.map(({ ordinal, department }) => ({
     ordinal,
     predicate: (user: OktaUser) => attr(user, 'department') === department,
+    expression: `user.department == "${department}"`,
   })),
   ...OFFICE_GROUPS.map(({ ordinal, city }) => ({
     ordinal,
     predicate: (user: OktaUser) => attr(user, 'city') === city,
+    expression: `user.city == "${city}"`,
   })),
-  { ordinal: GROUP.vpnUsers, predicate: (user) => user.status === 'ACTIVE' },
+  {
+    // `user.status` is real Okta EL, but outside what `shared/ruleEvaluator`
+    // reads: it resolves `user.*` against the profile, where `status` does not
+    // exist, and a missing attribute compares as `null` — so the evaluator
+    // answers `no-match` for everyone rather than "cannot tell". The rule is
+    // declared here because it *is* this group's predicate; the disagreement is
+    // an evaluator defect, pinned and explained in `demoRuleCoverage.test.ts`.
+    ordinal: GROUP.vpnUsers,
+    predicate: (user) => user.status === 'ACTIVE',
+    expression: 'user.status == "ACTIVE"',
+  },
   {
     ordinal: GROUP.contractorsEmea,
     predicate: (user) =>
       attr(user, 'employeeType') === 'CONTRACTOR' &&
       EMEA_COUNTRIES.includes(attr(user, 'countryCode')),
+    expression:
+      'user.employeeType == "CONTRACTOR" && (user.countryCode == "GB" || user.countryCode == "DE" || user.countryCode == "IE")',
   },
   {
     ordinal: GROUP.contractorsAmer,
     predicate: (user) =>
       attr(user, 'employeeType') === 'CONTRACTOR' &&
       ['US', 'CA'].includes(attr(user, 'countryCode')),
+    expression:
+      'user.employeeType == "CONTRACTOR" && (user.countryCode == "US" || user.countryCode == "CA")',
   },
-  { ordinal: GROUP.interns, predicate: (user) => attr(user, 'employeeType') === 'INTERN' },
+  {
+    // The organization clause is a no-op over this org — everyone works for
+    // Northwind — so the expression and the predicate select the same people.
+    // It is there because the rule card needs a `String.stringContains` form to
+    // render, and the rule is INACTIVE because the cohort's season ended.
+    ordinal: GROUP.interns,
+    predicate: (user) => attr(user, 'employeeType') === 'INTERN',
+    expression:
+      'user.employeeType == "INTERN" && String.stringContains(user.organization, "Northwind")',
+  },
   {
     // The hero rule: engineers, minus contractors. Its overlap with the plain
     // Engineering group is exactly what the impact-preview scene is about.
     ordinal: GROUP.githubEngineering,
     predicate: (user) =>
       attr(user, 'department') === 'Engineering' && attr(user, 'employeeType') !== 'CONTRACTOR',
+    expression: 'user.department == "Engineering" && user.employeeType != "CONTRACTOR"',
   },
-  { ordinal: GROUP.everyone, predicate: () => true },
+  {
+    ordinal: GROUP.everyone,
+    predicate: () => true,
+    expression: null,
+    exemption:
+      'Okta maintains the built-in Everyone group itself and rejects a group rule that targets it; declaring one would misstate the platform.',
+  },
   {
     ordinal: GROUP.workdayAllWorkers,
     predicate: (user) => user.status !== 'STAGED' && user.status !== 'DEPROVISIONED',
+    expression: null,
+    exemption:
+      'Sourced from the Workday HR import, which fills it on every sync. The invisible maintainer is the point: to the panel it is indistinguishable from an unmaintained group.',
   },
   {
+    // Was the fixture's loudest inconsistency: a department predicate no rule
+    // expressed, so a department correction moved three groups while the blast
+    // radius could only name two.
     ordinal: GROUP.datadogEngineering,
     predicate: (user) => attr(user, 'department') === 'Engineering',
+    expression: 'user.department == "Engineering"',
   },
 ];
+
+/**
+ * The rule-fed table, for the coverage test that keeps it honest.
+ *
+ * Exported for `demoRuleCoverage.test.ts` only. Nothing at runtime should read
+ * it — read {@link demoGroupMembers} instead, which is the derived answer.
+ */
+export const RULE_FED_GROUPS: readonly RuleFedGroup[] = RULE_FED;
 
 /**
  * Groups nobody's profile implies — the hand-managed ones.

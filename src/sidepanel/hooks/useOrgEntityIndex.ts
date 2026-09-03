@@ -29,6 +29,18 @@
  * `snapshotUpdated` listeners for one answer, so the collections are read here
  * and the consumers take what they need.
  *
+ * ## One mount, enforced by a provider
+ *
+ * That invariant used to be a convention, and the convention broke: Home mounted
+ * this hook and the ⌘K palette mounted a second one, which is eight reads and
+ * eight listeners for one org's four collections (`I-033`). So the mount now
+ * belongs to exactly one owner —
+ * {@link module:sidepanel/contexts/OrgEntityIndexContext}, mounted once in `App`
+ * — and this module exports it as {@link useOrgEntityIndexSource}, which nothing
+ * but that provider may call. Surfaces read the published value through
+ * `useOrgEntityIndex`, the provider's hook, so a second mount is now something
+ * you have to go out of your way to write.
+ *
  * ## `complete` is load-bearing, not decoration
  *
  * A walk that was interrupted leaves real rows behind, and an id that is simply
@@ -157,8 +169,8 @@ export interface OrgEntityIndex {
   appGroups: UseOrgSnapshotResult<OktaAppGroupAssignment>;
 }
 
-/** Options for {@link useOrgEntityIndex}. */
-export interface UseOrgEntityIndexOptions {
+/** Options for {@link useOrgEntityIndexSource}. */
+export interface UseOrgEntityIndexSourceOptions {
   /** Connected org origin; `null` reads nothing rather than another org's rows. */
   oktaOrigin: string | null | undefined;
   /** Live Okta tab the background routes through; `null` disables syncing. */
@@ -190,22 +202,31 @@ function appName(app: OktaAppListItem): string {
 /**
  * Index one org's groups, rules and apps from the local snapshot.
  *
- * @param options - See {@link UseOrgEntityIndexOptions}.
+ * **Call this from `OrgEntityIndexProvider` and nowhere else.** It is the mount:
+ * four `useOrgSnapshot` reads and four `snapshotUpdated` listeners. A surface
+ * that wants the index reads the provider's published value with
+ * `useOrgEntityIndex` — see
+ * {@link module:sidepanel/contexts/OrgEntityIndexContext}.
+ *
+ * @param options - See {@link UseOrgEntityIndexSourceOptions}.
  * @returns See {@link OrgEntityIndex}.
  *
  * @example
- * ```ts
- * const index = useOrgEntityIndex({ oktaOrigin, targetTabId, enabled: isActive });
+ * ```tsx
+ * // In the provider, once per panel:
+ * const index = useOrgEntityIndexSource({ oktaOrigin, targetTabId, enabled });
+ * // In a surface:
+ * const index = useOrgEntityIndex();
  * const found = index.lookup('group', '00gFAKE0000000000001');
  * if (found.status === 'hit') showRow(found.entity);          // zero requests
  * else if (found.status !== 'miss') await fetchFromOkta();    // 'unknown'
  * ```
  */
-export function useOrgEntityIndex({
+export function useOrgEntityIndexSource({
   oktaOrigin,
   targetTabId,
   enabled = true,
-}: UseOrgEntityIndexOptions): OrgEntityIndex {
+}: UseOrgEntityIndexSourceOptions): OrgEntityIndex {
   const groups = useOrgSnapshot<RawOktaGroup>('groups', oktaOrigin, targetTabId, { enabled });
   const rules = useOrgSnapshot<OktaGroupRule>('rules', oktaOrigin, targetTabId, { enabled });
   const apps = useOrgSnapshot<OktaAppListItem>('apps', oktaOrigin, targetTabId, { enabled });
@@ -292,5 +313,12 @@ export function useOrgEntityIndex({
     [groupsById, rulesById, appsById, isAuthoritative],
   );
 
-  return { lookup, searchByName, isAuthoritative, groups, rules, apps, appGroups };
+  // Memoized because the published value is now shared: `useOrgFigures`,
+  // `useHomeReports`, `useEntitySearchSources` and `useJumpResolver` all memoize
+  // on the index object, and a fresh literal per provider render would re-derive
+  // in four hooks for every unrelated re-render of the shell.
+  return useMemo(
+    () => ({ lookup, searchByName, isAuthoritative, groups, rules, apps, appGroups }),
+    [lookup, searchByName, isAuthoritative, groups, rules, apps, appGroups],
+  );
 }

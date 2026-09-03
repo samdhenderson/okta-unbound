@@ -48,7 +48,7 @@ info`) — never `error`.
 `Tooltip`,
 `CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`,
 `Eyebrow`, `StableWidth`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`,
-`SearchDropdown`, `SelectionChips`.
+`SearchDropdown`, `SelectionChips`, `RuleExpressionText`.
 
 There are **three** copy primitives and they are not interchangeable. `CopyButton` is a
 labelled `Button` for copying a _body_ of text (a list of emails, a CSV). `CopyableId` is
@@ -58,6 +58,67 @@ on its own, with no `<code>` beside it, for a control that copies an id the surf
 already displaying some other way (`EntityLink`'s `copyId`); `CopyableId` delegates to it,
 so the glyph swap and the ~1.5s `"Copied!"` accessible-name flip are decided in one place
 (D-015).
+
+`EntityLink` is the **one** way to reference another entity — "that rule / that group /
+that user / that app" — and it has three modes, picked by which of `name` and `id` you
+pass. Never hand-roll any of them:
+
+| You have         | Pass          | You get                                                                                                                         |
+| ---------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| a name and an id | `name` + `id` | a chip with the type glyph and a chevron that opens the entity on its own tab                                                   |
+| a name, no id    | `name` only   | plain text with a tooltip saying why it cannot be opened — a link is never a control that does nothing                          |
+| an id, no name   | `id` only     | the missing name **stated** in the non-answer register, the raw id beside it via `CopyableId`, and the entity still opens by id |
+
+The id-only mode is the shared home for "this reference is known only by an id" (I-017).
+Three views had each grown their own local chip for it, and none could open the entity —
+a capability regression against the resolved chip beside it in the same list, since a
+valid id is a valid destination whether or not the view learned a name. **Never pass the
+id in as the `name`**: an id in a name's slot is indistinguishable from a group actually
+called `00gFAKE…` (I-003).
+
+Its chrome follows the house **non-answer convention** that `AppScopeIndicator` and
+`GroupSourceIndicator` state explicitly and that applies well beyond `EntityLink`: **a
+chip is a proven answer; a non-answer is muted italic text and is never chipped**, so a
+missing answer can never carry an answer's weight at a glance. A reference whose entity
+is _gone_ ("no group in this org has this id") is a proven answer and keeps its warning
+chip — `RuleDetailView`'s `MissingGroupChip` is that, and is deliberately not the same
+thing.
+
+Four props parameterise the unresolved state, all with sane defaults so no caller passes
+Tailwind to make it fit: `unresolvedLabel` (the words, default `"<Type> name not loaded"`),
+`unresolvedReason` (the tooltip — "Okta returned no name" and "this view never asked" are
+different facts), `copyIdLabel` (default `"Copy <type> id <id>"`), and `type`, which picks
+the glyph. Whether it links is not a prop and should not become one: it follows the id's
+navigability, so a chevron appears only where it can be honoured. Sizing is likewise fixed
+at `text-xs` on purpose — a resolved and an unresolved reference share one slot in a list,
+and letting a caller size one of them was the type-size mismatch I-003 had to fix.
+
+`RuleExpressionText` is the **one** way to print a rule's condition text. It renders the
+expression in mono and swaps each quoted literal the caller can name for an `EntityLink`
+group chip, so `isMemberOfAnyGroup("00gFAKE1")` reads as the group instead of as an opaque
+id. It **resolves nothing it was not already given** — the caller passes a
+`resolveGroupName` (the same `GroupNameResolver` shape `ClauseGroupList` takes), there is
+no fetch, and an id with no known name keeps its raw quoted form rather than becoming a
+half-labelled badge. It never guesses which literal is a group id: it offers every literal
+to the resolver and badges only what comes back named, which is why
+`user.department == "Engineering"` prints as itself. It lived under `groups/detail/` until
+three features were consuming it across feature boundaries (I-016).
+
+| Prop               | Default      | What it does                                                                                                                      |
+| ------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `text`             | — (required) | the condition text; **untrusted**, rendered escaped and never logged                                                              |
+| `resolveGroupName` | `undefined`  | names group ids in the text; omitted, the whole expression prints verbatim                                                        |
+| `tone`             | `'default'`  | `'default'` (`neutral-900`) for the condition in question, `'subdued'` (`neutral-700`) for one printed under another it qualifies |
+| `className`        | `''`         | **layout and spacing only** — `min-w-0`, `flex-1`, a margin                                                                       |
+
+The type treatment — `block font-mono text-xs break-words whitespace-pre-wrap` — is
+**fixed and not a prop**. All three call sites used to restate that exact recipe through
+`className`, which is the drift `Eyebrow` was extracted to stop, and a size prop would
+reintroduce the resolved-vs-unresolved type-size mismatch `I-003` had to fix on
+`EntityLink`. Colour is the one axis that genuinely varied — a clause versus the
+alternatives nested under it — so it is a two-value `tone` and not a colour. The badge's
+`copyIdLabel` names the _id_, not the group, because two groups in one condition can share
+a display name (I-009); that is decided here rather than per caller.
 
 `ListRow` is the **row chrome** primitive (ADR-0029): border, radius, hover,
 `density` (`compact` | `comfortable`), `state` (`default` | `selected` |
@@ -322,6 +383,42 @@ scroll that does not exist, and the rung fetches nothing, so there is no per-pan
 gate. It is also the rung that closes ADR-0030's last unconverted layout dialect: `RuleCard`'s
 expandable body, whose four write verbs flex-wrapped at the bottom of a card were the exact
 "page-level verb read as a section's property" failure ADR-0030 §2 exists to stop.
+
+`EntityChooser` (`components/home/`) is the **scope-first launcher**: pick one entity out
+of a list already in memory, and hand its id back. It exists for the actions a surface
+cannot afford to run for everybody — Home's MFA-coverage row is a factor read per member,
+so the honest shape is not a number with a list behind it but a chooser that names the
+group first and lands where the scan can be started deliberately (`I-019`).
+
+It **filters; it never searches.** Everything offered arrives through `choices`, and
+typing narrows that array locally. A chooser that queried Okta per keystroke would spend
+requests to avoid spending requests, which is the whole reason the surface is a chooser
+and not a count. Its visible cap is stated on screen whenever it truncates, the same rule
+the reports card applies to a capped finding list: a list quietly cut to its first page
+reads as "your group is not in this org".
+
+| Prop          | Default                   | What it does                                                                                                          |
+| ------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `choices`     | — (required)              | every offerable `{ id, name, detail? }`, already in memory; **untrusted** names, rendered escaped                     |
+| `filterLabel` | — (required)              | accessible name _and_ placeholder of the filter field ("Filter groups")                                               |
+| `actionLabel` | — (required)              | accessible name of each row's press target — the **verb**, since the name is already announced via `aria-describedby` |
+| `onChoose`    | — (required)              | called with the chosen id; the caller decides where that goes                                                         |
+| `emptyLabel`  | `'Nothing matches that.'` | what to say when the filter matches nothing                                                                           |
+
+What it **refuses**: no `onFilterChange` or async source (see above — the caller passes
+its 20k rows and pays nothing, but this component is never the thing that fetches them);
+no `renderRow`, `className` or `variant`, because the row treatment is shared with the
+reports card's finding lists through `EntityChoiceRow` and a styling hatch is how those
+two drift apart; no `multiple`/selection state, because pressing a row is a one-shot
+hand-off with nothing to accumulate and nothing to confirm; and no fuzzy matching, since
+an admin filtering by name is recalling a name they already know and a fuzzy match's job
+— surfacing what you did not type — only buries the exact hit.
+
+It lives under `home/` rather than `shared/` because it has exactly one caller. The
+promotion trigger is `RuleExpressionText`'s: the second feature to consume it moves it to
+`shared/`, into the barrel, unchanged. `ReportRow` (`RowLines` + `RowDisclosure`) sits
+beside it for the same reason — it is the reports card's row idiom, shared by the rows
+that count and the row that scopes so the two cannot drift under a polish pass.
 
 ## Documented raw-control exceptions
 

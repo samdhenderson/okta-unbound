@@ -238,3 +238,85 @@ describe('useCreateFeedingRule', () => {
     });
   });
 });
+
+/**
+ * `onCreated` is what closes `I-032`: the Rules pane that prompted the verb has
+ * to stop showing "no rule assigns users to this group" the moment one does. The
+ * hook only announces the create — the reload itself is `useGroupSource.refreshRules`.
+ */
+describe('useCreateFeedingRule — announcing the create to the open pane', () => {
+  const created = { success: true, rule: { id: '0prFAKE1', name: 'Engineering intake' } };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.createGroupRule.mockResolvedValue(created);
+  });
+
+  /** Render with a callback whose current value the test can swap out. */
+  function renderWithCallback(initial: (() => void) | undefined) {
+    let onCreated = initial;
+    const view = renderHook(() => useCreateFeedingRule({ targetTabId: 1, group, onCreated }));
+    return {
+      ...view,
+      /** Replace the callback the next render hands the hook. */
+      setOnCreated(next: (() => void) | undefined) {
+        onCreated = next;
+        view.rerender();
+      },
+    };
+  }
+
+  it('announces a landed create so the caller can reload the pane', async () => {
+    const onCreated = vi.fn();
+    const { result } = renderWithCallback(onCreated);
+    draft(result);
+
+    await act(async () => {
+      await result.current.confirm();
+    });
+
+    expect(onCreated).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays silent when Okta rejects the create — there is nothing new to show', async () => {
+    api.createGroupRule.mockResolvedValue({ success: false, error: 'Rule name already in use' });
+    const onCreated = vi.fn();
+    const { result } = renderWithCallback(onCreated);
+    draft(result);
+
+    await act(async () => {
+      await result.current.confirm();
+    });
+
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('stays silent when the write throws', async () => {
+    api.createGroupRule.mockRejectedValue(new Error('Tab disconnected'));
+    const onCreated = vi.fn();
+    const { result } = renderWithCallback(onCreated);
+    draft(result);
+
+    await act(async () => {
+      await result.current.confirm();
+    });
+
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('reads the callback at call time, so a caller can withdraw it mid-flight', async () => {
+    const onCreated = vi.fn();
+    const { result, setOnCreated } = renderWithCallback(onCreated);
+    draft(result);
+
+    // The Group Detail rung withdraws it while its tab is hidden (ADR-0018), so
+    // a create that resolves after the reader switched tabs issues no follow-up read.
+    setOnCreated(undefined);
+    await act(async () => {
+      await result.current.confirm();
+    });
+
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(result.current.createdRuleId).toBe('0prFAKE1');
+  });
+});

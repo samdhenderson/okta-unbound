@@ -46,8 +46,12 @@
  */
 import React, { useMemo } from 'react';
 import Icon, { type IconType } from '../../shared/Icon';
-import { AlertMessage, StableWidth } from '../../shared';
-import RuleExpressionText, { type GroupNameResolver } from './RuleExpressionText';
+import {
+  AlertMessage,
+  RuleExpressionText,
+  StableWidth,
+  type GroupNameResolver,
+} from '../../shared';
 import {
   explainRuleExpression,
   type ClauseExplanation,
@@ -219,7 +223,7 @@ const ClauseRow: React.FC<ClauseRowProps> = ({ clause, resolveGroupName }) => {
         <RuleExpressionText
           text={clause.expressionText}
           resolveGroupName={resolveGroupName}
-          className="min-w-0 font-mono text-xs break-words whitespace-pre-wrap text-neutral-900"
+          className="min-w-0"
         />
         <StableWidth reserve={<ClauseStatusChip presentation={WIDEST_CLAUSE_STATUS} />} align="end">
           <ClauseStatusChip presentation={presentation} />
@@ -246,7 +250,8 @@ const ClauseRow: React.FC<ClauseRowProps> = ({ clause, resolveGroupName }) => {
                 <RuleExpressionText
                   text={alternative.expressionText}
                   resolveGroupName={resolveGroupName}
-                  className="min-w-0 flex-1 font-mono text-xs break-words whitespace-pre-wrap text-neutral-700"
+                  tone="subdued"
+                  className="min-w-0 flex-1"
                 />
                 <span className="shrink-0 text-xs text-neutral-600">
                   {statusPresentation[alternative.status].label}

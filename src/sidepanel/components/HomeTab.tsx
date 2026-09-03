@@ -11,7 +11,9 @@
  * This component composes and does not fetch. It owns the wiring — which
  * searchers exist, where a result goes — and delegates behaviour to
  * {@link module:sidepanel/hooks/useJumpResolver} and the request cost to
- * {@link module:sidepanel/hooks/useOrgEntityIndex}.
+ * {@link module:sidepanel/hooks/useOrgEntityIndex}, which Home reads through the
+ * shell's {@link module:sidepanel/contexts/OrgEntityIndexContext} rather than
+ * mounting itself — the palette reads the same one (`I-033`).
  *
  * ## The fan-out is derived from reachability, not hardcoded
  *
@@ -29,7 +31,10 @@
  * already hold, so both reports under the card are joins over rows on disk. It
  * deliberately owns no sync ladder: `useOrgFigures` owns the single top-up Home
  * is allowed to spend per mount, and a second consumer deciding independently
- * that the snapshot looked stale would double it.
+ * that the snapshot looked stale would double it. The card's third row is the
+ * exception that proves it: MFA coverage cannot be joined from disk, so it ships
+ * as a chooser over the same rows and hands the request off to the group's own
+ * page rather than spending one here.
  *
  * ## No `PageHeader`
  *
@@ -61,7 +66,6 @@ import WorkingSet from './home/WorkingSet';
 import OrgSnapshotCard from './home/OrgSnapshotCard';
 import ReportsCard from './home/ReportsCard';
 import { useOktaApi } from '../hooks/useOktaApi';
-import { useOrgEntityIndex } from '../hooks/useOrgEntityIndex';
 import { useWorkingSet } from '../hooks/useWorkingSet';
 import { useOrgFigures } from '../hooks/useOrgFigures';
 import { useHomeReports } from '../hooks/useHomeReports';
@@ -69,6 +73,7 @@ import { useJumpResolver, type JumpResult } from '../hooks/useJumpResolver';
 import { useEntitySearchSources } from '../hooks/useEntitySearchSources';
 import { useStaggerReveal } from '../hooks/useStaggerReveal';
 import { useEntityNavigation } from '../contexts/NavigationContext';
+import { useOrgEntityIndex } from '../contexts/OrgEntityIndexContext';
 import { navigationTarget } from './home/jumpDestinations';
 import type { WorkingSetRef } from '../../shared/storage/workingSetStore';
 import type { ListViewRequest, ListViewTab } from '../listViewRequest';
@@ -92,6 +97,16 @@ export interface HomeTabProps {
   onOpenListView: (request: ListViewRequest) => void;
   /** Open a list tab unfiltered — what an org card headline does. */
   onOpenTab: (tab: ListViewTab) => void;
+  /**
+   * Open a group's Insights pane with its MFA-coverage scan armed and un-run —
+   * where the reports card's launcher sends a chosen group.
+   *
+   * A prop rather than a `navigateTo` call, deliberately: the navigation context
+   * addresses *entities*, and which pane of a group's detail view a push lands
+   * on is not a property of the group. `App.tsx` owns that route the same way it
+   * owns {@link HomeTabProps.onOpenListView}'s.
+   */
+  onScanGroupMfa: (groupId: string) => void;
 }
 
 /**
@@ -116,11 +131,15 @@ const HomeTab: React.FC<HomeTabProps> = ({
   oktaOrigin,
   onOpenListView,
   onOpenTab,
+  onScanGroupMfa,
 }) => {
   const api = useOktaApi({ targetTabId, oktaOrigin });
   const nav = useEntityNavigation();
 
-  const index = useOrgEntityIndex({ oktaOrigin, targetTabId, enabled: isActive });
+  // The shell's one mount, read here rather than opened here (`I-033`): the
+  // provider gates the sync on Home being on screen, so `isActive` still
+  // decides whether this tab drives org traffic (ADR-0018).
+  const index = useOrgEntityIndex();
   const workingSet = useWorkingSet(oktaOrigin);
   const orgFigures = useOrgFigures({
     index,
@@ -131,7 +150,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
   // `useOrgFigures` already mounted, and it owns the single top-up Home is
   // allowed to spend. A second consumer deciding independently that the
   // snapshot looked stale would double it.
-  const { reports } = useHomeReports({ index });
+  const { reports, groupChoices, groupChoicesStatus } = useHomeReports({ index });
 
   // Captured once, at mount. React applies `autoFocus` on mount only, and the
   // tab is never unmounted, so this cannot re-steal focus from the rail button
@@ -195,6 +214,9 @@ const HomeTab: React.FC<HomeTabProps> = ({
         <ReportsCard
           reports={reports}
           onOpenGroup={(id) => nav.navigateTo({ type: 'group', id })}
+          groupChoices={groupChoices}
+          groupChoicesStatus={groupChoicesStatus}
+          onScanGroupMfa={onScanGroupMfa}
         />
       </div>
     </div>

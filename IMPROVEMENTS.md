@@ -97,7 +97,7 @@ block says they mean — same vocabulary, one definition, defined there.
   kept, its doc comment states plainly that a caller rendering same-named
   entities must pass `copyIdLabel`, and a story shows the collision case.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** blocked:D-107
 - **Widened 2026-08-25 by `ui-reviewer` on `I-002`'s diff:** the copy control
   is only half of it. `EntityLink`'s **chip** derives its `aria-label` as
   `Open <type> <name>` (`EntityLink.tsx:146`) and exposes **no override prop
@@ -146,7 +146,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low. Note `title` is a hover/focus affordance, not a substitute
   for an accessible name — the name text is already in the accessibility
   tree, so this is about the visual reader.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 
 ### I-012 · Tiered snapshot depth, and the reporting it unlocks
 
@@ -277,7 +277,7 @@ block says they mean — same vocabulary, one definition, defined there.
   `CopyableId` where a link would be wrong. The unresolvable case keeps
   rendering as it does today.
 - **Risk:** Low — render-time change, no new fetch.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `I-002`, `I-001`
 
 ### I-016 · `RuleExpressionText` is consumed cross-feature from `groups/detail/`
@@ -285,7 +285,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Category:** ux
 - **Priority:** P3
 - **Size:** S
-- **Files:** `src/sidepanel/components/groups/detail/RuleExpressionText.tsx`,
+- **Files:** `src/sidepanel/components/shared/RuleExpressionText.tsx`,
   `src/sidepanel/components/users/comparison/CauseWorklistRow.tsx`,
   `src/sidepanel/components/shared/index.ts`, `docs/components.md`
 - **Verified:** 2026-08-25 — created and immediately cross-imported by `I-002`.
@@ -300,7 +300,7 @@ block says they mean — same vocabulary, one definition, defined there.
   records why feature-to-feature imports are acceptable here so the next case is
   not re-litigated.
 - **Risk:** Low — a move plus import updates, no behavior change.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `I-002`
 
 ### I-017 · One unresolved-entity reference, not three
@@ -342,7 +342,7 @@ block says they mean — same vocabulary, one definition, defined there.
   `bg-neutral-50` that computes to ~4.63:1 — over the 4.5:1 AA floor, but by a
   thin margin, with no lint gate watching it. Settle the register here, once,
   with a real contrast check rather than by eye. Raised by `ui-reviewer`.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `I-003` (created all three), `I-001`, `I-015`, `I-016`, `D-015`
 
 ### I-018 · A ⌘K that works before you have clicked into the panel
@@ -413,7 +413,7 @@ block says they mean — same vocabulary, one definition, defined there.
   auto-runs.
 - **Risk:** Medium — the `initialPane` widening touches a component four
   surfaces mount.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** the Home reports commit, ADR-0018
 
 ### I-020 · Home's reports as Export Engine descriptors
@@ -446,7 +446,7 @@ block says they mean — same vocabulary, one definition, defined there.
   survive the trip — a report whose collections cannot support a count must not
   become an export that quietly ships a partial list.
 - **Risk:** Medium — it widens a contract every existing descriptor implements.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `I-019`, ADR-0030, ADR-0040
 
 ### I-021 · Icon registry entries for the three glyphs `GroupCollections` still hand-rolls
@@ -474,7 +474,7 @@ block says they mean — same vocabulary, one definition, defined there.
   `Icon` at a registry size; no inline `<svg>` remains in it.
 - **Risk:** Low — the glyphs are decorative, both call sites already carry
   their own `aria-label`.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 
 ### I-022 · A spacing role for the toolbar cluster, or a documented refusal
 
@@ -499,7 +499,19 @@ block says they mean — same vocabulary, one definition, defined there.
   gains a short section stating that toolbar rhythm is deliberately outside
   the role system and why, so the raw values stop reading as unfinished work.
 - **Risk:** Low — either outcome is additive or documentation-only.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
+
+- **`RulesTab` is deliberately NOT converted (2026-09-02).** The ADR-0048
+  amendment makes its conversion conditional on `RulesListActionBar` remaining a
+  direct child of the rung. Checked, and it must: `RulesTab.tsx:607-612` already
+  says so — _"First in the rung, and a direct child of it. `sticky` only travels
+  inside its own parent's box, and the `.dock-sentinel` timeline hoists onto that
+  same parent — nest this in a wrapper and the strip scrolls away instead of
+  docking (ADR-0051 §5)."_ Its toolbar panels share that one container with the
+  sticky strip, so there is no separate wrapper to carry `--sp-toolbar`, and
+  creating one is precisely the nesting that breaks docking. The conditional
+  resolves to **no**, on structure rather than on doubt — do not reopen it as an
+  oversight.
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -523,7 +535,7 @@ block says they mean — same vocabulary, one definition, defined there.
   either kept as a redundant affordance or removed — and the story covers
   both the header click and the keyboard path.
 - **Risk:** Low — one component, existing pattern to copy from two siblings.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -551,7 +563,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low — display string only, no API or cache behaviour. Note
   `useOrgFigures.test.tsx:130-131` asserts the current plural nouns and will
   need retargeting to the new contract.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -586,7 +598,7 @@ block says they mean — same vocabulary, one definition, defined there.
   is chosen is recorded next to `SHARED_INPUTS`, since the current list reads as
   complete and is not.
 - **Related:** ADR-0045 (capture thin, compose in React), D-064
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -623,7 +635,7 @@ block says they mean — same vocabulary, one definition, defined there.
   rather than the predicates. Note this re-films every chapter and moves Home's
   `unruled` figure.
 - **Related:** ADR-0043 (memberships are derived, not asserted), ADR-0052
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -663,7 +675,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Medium. Getting it wrong in the eager direction re-walks every
   collection on every release, which is exactly the cost ADR-0040 exists to
   avoid. Wants an ADR before code.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -703,7 +715,7 @@ block says they mean — same vocabulary, one definition, defined there.
   claims it makes are stronger than the existing ones, so it wants an ADR
   fixing the wording before the code. Depends on `D-076` for the numbers to be
   trustworthy on a long-lived snapshot.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -742,7 +754,7 @@ block says they mean — same vocabulary, one definition, defined there.
   the hero rule's solely-held set is **empty**, which is exactly why the
   original defect went unnoticed for so long; the scene needs a fixture where
   the count is non-zero or it will demonstrate nothing.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `D-052` (the defect that held it out), ADR-0043, ADR-0045
 
 ### I-031 · Group Detail's rules section answers "what does it say?" by leaving the tab
@@ -789,7 +801,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low for (1) and (3). (2) touches `useViewStack` wiring on the Groups
   tab and would need `RuleDetailView` to render without an `ActionBar`, which no
   caller needs today.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** ADR-0030 §2, ADR-0039, ADR-0016, `docs/features-plan.md` §H
 
 ### I-032 · A created feeding rule does not appear until the group is reopened
@@ -815,7 +827,7 @@ block says they mean — same vocabulary, one definition, defined there.
   pane shows the new rule without a reopen. A test pins that the member-source
   analysis survives the refresh.
 - **Risk:** Low-medium — touches the hook every Group Detail pane reads.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `I-013`
 
 ### I-033 · Two mounts of the org snapshot index, for one org
@@ -850,8 +862,245 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Medium — every Home consumer of `index` (`useOrgFigures`,
   `useHomeReports`, the jump bar) reads through the same object, so the
   provider's identity stability is load-bearing in three more places.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** ADR-0040, ADR-0062
+
+### I-036 · `RuleDetailView` keeps a private copy of the condition renderer
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/rules/RuleDetailView.tsx`
+  (`renderConditionWithGroupBadges`),
+  `src/sidepanel/components/shared/RuleExpressionText.tsx`
+- **Verified:** 2026-09-02 — found by the `I-031` writer while wiring the shared
+  renderer into `GroupRulesSection`.
+- **Problem:** `I-016` promoted `RuleExpressionText` to `shared/` precisely
+  because a rule expression should be rendered one way everywhere. The rule
+  detail rung — the surface whose whole subject is the expression — still runs
+  its own local `renderConditionWithGroupBadges`, an id-regex tokeniser doing
+  the same job. Two renderers for one string is the drift `RuleExpressionText`'s
+  own docblock warns about, and the rung is the one place a divergence would be
+  most visible.
+- **Done when:** `RuleDetailView` renders its condition through the shared
+  `RuleExpressionText` and the local tokeniser is deleted, or — if the rung
+  genuinely needs something the shared component refuses — the shared component
+  gains that as a documented prop and the rung uses it. A local copy is not an
+  outcome. Existing rung tests keep passing unchanged; if the badge markup
+  differs, the assertions are retargeted per `ADR-0022`, not relaxed.
+- **Risk:** Low — same input, same intended output, covered by existing tests.
+- **Status:** open
+- **Related:** `I-016` (promoted the shared renderer), `I-031` (found this)
+
+### I-037 · A resolver rebuilt each render defeats the memo it feeds
+
+- **Category:** structure
+- **Priority:** P4
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/comparison/CauseWorklistRow.tsx`
+  (`clauseGroupNames`)
+- **Verified:** 2026-09-02 — found by the `I-016` writer while reviewing
+  `RuleExpressionText`'s consumers against its new prop contract.
+- **Problem:** `CauseWorklistRow` builds a fresh resolver closure on every
+  render and passes it as `resolveGroupName`. `RuleExpressionText` memoises its
+  tokenisation on that function's identity, so the memo re-runs every render for
+  this consumer and does nothing. The output is identical and the tokeniser is
+  cheap, so this is a latent cost rather than a live one — but the memo is
+  currently decoration, and the next consumer to assume it works will be wrong.
+- **Done when:** the resolver is stable across renders (`useCallback`, or a
+  `useMemo` over the name map it closes over), so the tokenisation memo actually
+  holds. No behaviour changes; no new test is warranted for a pure-performance
+  fix that `ADR-0023` would call untestable through the DOM.
+- **Risk:** Low.
+- **Status:** open
+- **Related:** `I-016` (promoted the component and found this)
+
+### I-038 · The demo's intern cohort is refilled by an inactive rule
+
+- **Category:** structure
+- **Priority:** P4
+- **Size:** S
+- **Files:** `src/sidepanel/demo/memberships.ts` (`RULE_FED`, `HAND_MANAGED`),
+  `src/sidepanel/demo/snapshot.ts` (rule 9)
+- **Verified:** 2026-09-02 — found by the `I-026` writer while reconciling
+  `RULE_FED` against `demoRules`.
+- **Problem:** Demo rule 9 (`Interns → cohort group`) is `INACTIVE`, yet
+  `RULE_FED` re-derives the interns membership on every write. An inactive rule
+  does not fill a group in Okta, and the group's own `membershipDaysAgo: 430`
+  says the roster froze when the season ended. The fixture models a group as
+  rule-fed by a rule that cannot be feeding it, which is the same class of
+  self-contradiction `I-026` closed elsewhere — it was left out of that item
+  deliberately, as a separate concern from the missing-declarations drift.
+- **Done when:** `Interns 2026` moves to `HAND_MANAGED` with
+  `eligible = employeeType === 'INTERN'` and `size = pool.length`, so the same
+  people are in it and the roster is frozen rather than continuously re-derived.
+  It is appended **last** so the shared RNG does not reshuffle the other draws —
+  a mid-list insert would silently change every subsequent group's membership.
+  `demoRuleCoverage.test.ts` covers it as an exemption with a written reason.
+- **Risk:** Low, but it moves demo membership numbers, so it re-films any
+  chapter that shows the interns cohort.
+- **Status:** open
+- **Related:** `I-026` (found it), `ADR-0043`
+
+### I-039 · The demo org seeds a snapshot with no parse version
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/demo/control.ts` (the `patchMeta` calls),
+  `src/sidepanel/components/HomeTab.stories.tsx`,
+  `src/sidepanel/components/AppsTab.stories.tsx`
+- **Verified:** 2026-09-02 — found by the `I-027` writer; ADR-0066 names it
+  directly ("must stamp the current versions, or a demo will try to walk a fake
+  origin").
+- **Problem:** `I-027` made an absent `parseVersion` mean "not knowable", which
+  resolves to one full walk of the collection. The demo's seeded snapshot and the
+  two tab stories all `patchMeta` without stamping a version, so they describe a
+  snapshot that reads as stale on sight. In practice nothing walks today —
+  `snapshotBridge` gates every sync on `tabIsOnOrigin`, and the demo origin
+  (`https://example.okta.com`) has no real tab, so `syncOrg` is refused before
+  the version check is reached — which makes this a latent trap rather than a
+  live bug: the day that gate changes, the demo tries to walk a fake origin.
+- **Done when:** each `patchMeta` call stamps `parseVersion` from the
+  corresponding spec, so seeded demo data claims the version it was actually
+  written against. One line per call site.
+- **Risk:** Low — demo and story fixtures only, no production path.
+- **Status:** open
+- **Related:** `I-027` (created the field and found this), `ADR-0066`
+
+### I-040 · Browser globals are undeclared for `src/shared`, so lint warns on them
+
+- **Category:** tooling
+- **Priority:** P4
+- **Size:** S
+- **Files:** `eslint.config.js`, `src/shared/snapshot/snapshotSync.ts:396`,
+  `src/shared/snapshot/snapshotSync.test.ts:550`
+- **Verified:** 2026-09-02 — noticed by the `I-027` writer; pre-existing, not
+  introduced by that change.
+- **Problem:** `URLSearchParams` raises `no-undef` in `src/shared/snapshot`. It
+  is an ordinary browser global and the code is correct; the lint config simply
+  does not declare browser globals for these files. Warnings are legacy debt in
+  this repo rather than errors, so it does not fail the build — but a warning
+  that is always wrong trains readers to skim the warning list, which is how a
+  real one gets missed.
+- **Done when:** the lint config declares the browser globals for the file set
+  that legitimately uses them, and the two warnings go away without an inline
+  disable comment. Confirm `npm run lint` reports two fewer warnings.
+- **Risk:** Low, but it edits shared lint config, so check the warning count
+  moves by exactly the expected amount and no rule is disabled wholesale.
+- **Status:** open
+- **Related:** `I-027` (found it)
+
+### I-041 · Home cannot hand a report to the Export tab
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/home/ReportsCard.tsx`,
+  `src/sidepanel/components/HomeTab.tsx`, `src/sidepanel/App.tsx`
+- **Verified:** 2026-09-02 — `I-020` landed the descriptors and the Export-hub
+  route, and stopped deliberately short of this one.
+- **Problem:** `I-020` made every Home report exportable, but only by finding it
+  again in the Export tab's entity hub. The reader looking at a finding — the
+  person who actually wants the CSV — still has to leave, recall the report's
+  name, and re-select it. `ADR-0065` wants hub discoverability independently, so
+  that route is correct and stays; what is missing is the pre-scoped jump from
+  the surface that raised the question. `I-020` did not wire it because
+  `ReportsCard` is mounted only by `HomeTab`: a required prop breaks the card's
+  type-check, and an optional one ships a verb with no wire, which `ADR-0039`
+  bans.
+- **Done when:** `HomeTabProps` carries `onExportReport: (reportKey: string) =>
+void`, passed through to `ReportsCard`, and `App` routes it into the existing
+  `handleNavigateToExport({ descriptorId })` — the same shape `group-rules`
+  already uses. Each report key maps to its descriptor id; the mapping lives
+  with the reports, not in `App`. A story covers the control, and the caveat
+  stays visible on the card so the jump does not read as an endorsement.
+- **Risk:** Low — one new prop and an existing navigation path. The verb must
+  be omitted, never rendered disabled, for a report whose resolution is
+  `unavailable`.
+- **Status:** open
+- **Related:** `I-020` (built the descriptors and left this), `ADR-0065`,
+  `ADR-0039`
+
+### I-042 · The snapshot-row projection is written twice
+
+- **Category:** structure
+- **Priority:** P4
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useHomeReports.ts`,
+  `src/sidepanel/export/orgReportSource.ts` (`readJoinInputs`)
+- **Verified:** 2026-09-02 — found by the `I-020` writer, who could not fix it:
+  `useHomeReports.ts` was outside that item's allowlist.
+- **Problem:** `I-020` deliberately shares the joins and the honesty rules
+  between Home and the export layer — that was the point of the item. The one
+  thing it could not share is the mechanical projection from raw snapshot rows
+  to `OrphanCandidateGroup`, which is now spelled out in both places, fallbacks
+  included (`?? 0`, `|| id`, commented in both as matching `toGroupSummary`).
+  Two copies of a mapping whose fallbacks encode real decisions is how the two
+  surfaces start disagreeing about the same group.
+- **Done when:** the projection moves to a pure module both callers import, with
+  the fallback reasoning recorded once. No behaviour change: both suites pass
+  untouched, and if an assertion moves the extraction is wrong.
+- **Risk:** Low — pure function, two callers, both well covered.
+- **Status:** open
+- **Related:** `I-020` (created the second copy and reported it)
+
+### I-043 · Two new row idioms sit beside the one `ListRow` exists to be
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/home/EntityChooser.tsx`
+  (`EntityChoiceRow`), `src/sidepanel/components/home/ReportRow.tsx`
+  (`RowDisclosure`), `src/sidepanel/components/shared/ListRow.tsx`
+- **Verified:** 2026-09-02 — raised by `ui-reviewer` over this pass's diff.
+  Neither breaks a token or a11y rule today; both are structural.
+- **Problem:** `I-019` added two row treatments that reimplement what `ListRow`
+  already owns. `EntityChoiceRow` is an `<li>` with padding, rounded corners and
+  a hover wash plus a `StretchedButton` overlay — `GroupListItem`'s documented
+  pattern, hand-built. `RowDisclosure` is a `<button>` that _is_ the row, with
+  hover, `.press`, row-spacing tokens and a chevron — `ListRow`'s `body`-slot
+  disclosure, rebuilt. Both are internally consistent and their comments
+  explicitly compare themselves to `ListRow`, which is the tell: the author knew
+  the primitive existed and could not use it. `ADR-0029` bans hand-rolled row
+  containers precisely so a fourth recipe cannot accrete, and this is the third.
+- **Done when:** `ListRow` grows the two variants that were missing — a dense or
+  nested size, and an `as="button"` disclosure mode — and both call sites
+  compose it instead. Neither call site should need a `className` carrying
+  chrome afterwards; if it does, the variant is wrong. Their stories keep
+  passing unchanged, and the axe checks stay clean.
+- **Risk:** Low-medium — it touches a shared primitive every list in the panel
+  renders through, so land it tests-first, one call site at a time, per the
+  working agreement.
+- **Status:** open
+- **Related:** `I-019` (added both), `ADR-0029`, `I-016`, `I-017`
+
+### I-044 · Raw spacing values in three rows that otherwise use the roles
+
+- **Category:** ux
+- **Priority:** P4
+- **Size:** S
+- **Files:** `src/sidepanel/components/groups/detail/GroupRulesSection.tsx`
+  (the inline "When" block), `src/sidepanel/components/users/comparison/ClauseGroupList.tsx`,
+  `src/sidepanel/components/policies/PolicyCard.tsx` (the disclosure body)
+- **Verified:** 2026-09-02 — raised by `ui-reviewer` over this pass's diff.
+- **Problem:** Three rows mix the sanctioned spacing roles with raw Tailwind
+  steps in the same element or the same block — `py-1.5` beside
+  `gap-(--sp-inline)`, `px-2 py-1` where `--sp-row-x`/`--sp-row-y` apply, and a
+  disclosure body carrying `space-y-3 px-4 pb-4 pt-3`. `docs/design-system.md`
+  is explicit that a raw spacing value is a defect the same way a raw `150ms`
+  is, and a role token sitting next to a raw step in one `className` is the
+  clearest form of it.
+- **Done when:** each raw value is either replaced by the role that fits or, if
+  none does, the exception is stated in a comment saying why — the same standard
+  `--sp-toolbar` was held to when `I-022` argued for a seventh role rather than
+  hard-coding three call sites.
+- **Risk:** Low — spacing only, covered by stories. Check the density variants,
+  since a role token and a raw step diverge at the wider settings, which is
+  exactly the drift `I-022` measured.
+- **Status:** open
+- **Related:** `I-022` (the seventh role and its reasoning), `I-015`, `I-031`,
+  `I-023`
 
 ## Archive
 

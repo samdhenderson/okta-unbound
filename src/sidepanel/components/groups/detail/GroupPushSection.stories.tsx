@@ -88,8 +88,9 @@ export const Default: Story = {
 
 /**
  * A mapping with **no `appName`**. The gap is stated rather than papered over with
- * the id, and the id itself is still copyable — the only thing a render-time fix
- * can honestly offer, since this section fetches nothing.
+ * the id, the id itself is copyable, and — since a valid id is a valid destination
+ * whether or not a name came with it — the app still opens (I-017). The stated
+ * absence stays un-chipped: a chip is a proven answer, and this is not one.
  */
 export const UnnamedApp: Story = {
   args: { mappings: [unnamedMapping] },
@@ -99,8 +100,15 @@ export const UnnamedApp: Story = {
     await expect(
       canvas.getByRole('button', { name: `Copy application id ${unnamedMapping.appId}` }),
     ).toBeInTheDocument();
-    // Nothing claims to open an app whose name was never resolved.
-    await expect(canvas.queryByRole('button', { name: /^Open app/ })).not.toBeInTheDocument();
+    // The name is missing; the destination is not. Retargeted from "nothing claims to
+    // open an app whose name was never resolved" — that was the capability gap I-017
+    // closed, not a property worth keeping (ADR-0022). The un-named row is still never
+    // presented *as* a name: "App name not loaded" above is what pins that.
+    await expect(
+      canvas.getByRole('button', {
+        name: `App name not loaded — open app ${unnamedMapping.appId}`,
+      }),
+    ).toBeInTheDocument();
   },
 };
 

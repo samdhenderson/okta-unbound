@@ -210,9 +210,17 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-(--sp-inline)">
+            {/*
+              `title` carries the untruncated name for a hover/focus reveal —
+              the name is already in the accessibility tree via the visible
+              text, so this is purely for the visual reader when `truncate`
+              clips it. Omitted rather than set to `""` when the name is
+              empty (I-011).
+            */}
             <h3
               id={nameId}
               className="min-w-0 truncate text-sm font-semibold text-neutral-900 group-hover/row:text-primary-text"
+              title={group.name || undefined}
             >
               {group.name}
             </h3>

@@ -174,6 +174,35 @@ export const EmptyOrg: Story = {
   args: { boxes: boxes(read(), read(), read(), read()) },
 };
 
+/**
+ * An org with exactly one of everything — the case that made the denominators
+ * read *of 1 applications* (I-024). Each finding's note agrees with its own
+ * number, and the singular is derived from the plural noun the collection is
+ * declared with, so no call site had to restate it.
+ *
+ * The totals caption underneath still says `1 groups`: it names the collection
+ * rather than a count of anything, and it is rendered by the card, not by the
+ * findings builder this story exercises.
+ */
+export const SingleItemOrg: Story = {
+  args: {
+    boxes: boxes(read({ count: 1 }), read({ count: 1 }), read({ count: 1 }), read({ count: 1 }), {
+      empty: 1,
+      unruled: 1,
+      inactive: 1,
+      idlePush: 1,
+      paused: 1,
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByText('of 1 group')).toHaveLength(2);
+    await expect(canvas.getAllByText('of 1 application')).toHaveLength(2);
+    await expect(canvas.getByText('of 1 group rule')).toBeInTheDocument();
+    await expect(canvas.queryByText(/of 1 \w+s\b/)).not.toBeInTheDocument();
+  },
+};
+
 /** The first read is still in flight: a skeleton per row, never a zero. */
 export const Reading: Story = {
   args: {

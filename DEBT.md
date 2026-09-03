@@ -923,6 +923,475 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Status:** open
 - **Related:** `I-009`, `I-010`, `D-103`
 
+### D-108 · The non-answer register fails AA contrast, at half the required ratio
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/comparison/AppScopeIndicator.tsx`
+  (`nonAnswerClasses`), `src/sidepanel/components/users/comparison/GroupSourceIndicator.tsx`
+  (the same treatment), and any later adopter of the register
+- **Verified:** 2026-09-02 — measured while scoping `I-017`.
+- **Problem:** Both indicators render their non-answer states as
+  `italic text-neutral-400`. `--color-neutral-400` is `#aeaeae`, which computes
+  to **2.22:1 on white and 2.02:1 on `--color-neutral-50`** — under half the
+  4.5:1 WCAG AA floor for normal text. These are not decorative strings: they
+  are the states that tell a reader the app does _not_ know something
+  (`Source unknown`, `Source not compared`, a deduction that must not be read
+  as proven), so they are exactly the text a reader most needs to notice.
+
+  The story gate did not catch it. `a11y.test` is `'error'` in
+  `.storybook/preview.tsx` and `tailwind.css` is imported by the preview, so
+  axe both ran and had the styles. The likely explanation is that axe reports
+  `incomplete` rather than `violation` when it cannot resolve the background
+  behind inline text, and `incomplete` does not fail a run — **this is
+  unproven and worth proving**, because if it holds, every colour-contrast
+  guarantee the story suite appears to give is weaker than it looks.
+
+  `I-017`'s three unresolved-entity chips deliberately chose `text-neutral-600`
+  (4.64:1 on neutral-50, 5.10:1 on white) _over_ this precedent, and its filing
+  worried that was a deviation. It is not a deviation; it is the correction.
+
+- **Done when:** the non-answer register clears 4.5:1 on the backgrounds it
+  actually renders against — `text-neutral-600` is the register `I-017` already
+  settled on and the cheap route. Both indicators use it, their stories still
+  pass, and the axe-`incomplete` hypothesis above is either confirmed (and
+  recorded, since it weakens a gate the repo trusts) or disproven.
+- **Risk:** Low to change per site. The finding it makes is that a green gate
+  proved less than it appeared to.
+- **Scope is wider than the two files above — measured 2026-09-02.** The register
+  is not confined to the two indicators: `text-neutral-400` appears **58 times
+  across 42 files** and `text-neutral-500` (3.02:1 on neutral-50, also under the
+  floor) **168 times**. Not all are violations, and the item must not be worked
+  as though they are:
+  - **5** sit on `disabled:` variants (`Button`, `IconButton`). WCAG 1.4.3
+    explicitly exempts disabled controls — leave them.
+  - **13** are on icon/`svg` lines. Decorative graphics carrying `aria-hidden`
+    are out of scope; an icon that is the _only_ carrier of meaning is not.
+  - The remaining **~40** are candidates on real text, of which only the two
+    named above have actually been measured against their rendered background.
+    So the deliverable is an **audit with a rule**, not a find-and-replace: decide
+    what the muted register is allowed to be, at what size, on which backgrounds,
+    and record it in `docs/design-system.md` so the next muted string does not
+    re-derive it. A blanket `400`→`600` sweep would flatten a deliberate two-step
+    hierarchy (`500` for secondary, `400` for tertiary) into one tone, which is a
+    visual-design decision and not this item's to make alone.
+- **Worth pairing with the coming design-polish pass.** Retuning a colour
+  register is exactly that pass's kind of work, and doing it there gets the
+  hierarchy re-designed rather than merely made compliant.
+- **Status:** open
+- **Related:** `I-017` (chose the correct value and doubted itself), `I-015`
+  (its raw id uses `text-neutral-500`, same register), ADR-0010, ADR-0014
+
+### D-109 · `AppListItem`'s header is click-to-expand but not keyboard-operable
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/components/apps/AppListItem.tsx:197-203`
+- **Verified:** 2026-09-02 — read directly while scoping `I-023`.
+- **Problem:** The card body is a raw `<div className="press-subtle …"
+onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
+  anywhere in its header; a keyboard user cannot reach that target at all. The
+  file says so itself at :199-202 — _"No keyboard affordance on this body …
+  giving the row itself one means a `StretchedButton` overlay. Deliberately out
+  of scope here."_ The disclosure is still reachable via the adjacent
+  `IconButton`, so this is a missing parallel affordance rather than a trapped
+  control, which is why it was survivable to defer.
+
+  It stopped being survivable when it became the pattern. `I-023` was filed as
+  "make `PolicyCard`'s header toggle **like its siblings**" — and of the two
+  siblings, `RuleCard` uses `StretchedButton` correctly while this one does not.
+  A consistency item pointed at the wrong neighbour propagates the defect
+  instead of the pattern. `I-023` was implemented against `RuleCard` for exactly
+  this reason.
+
+- **Done when:** `AppListItem`'s header is operable by keyboard, via the shared
+  `StretchedButton` overlay the file's own comment names, with the trailing
+  `IconButton` still working and `aria-expanded` on exactly one control. A story
+  covers the keyboard path. The `PolicyCard` implementation shipped under
+  `I-023` is the reference.
+- **Risk:** Low — one file, and a landed sibling to copy.
+- **Status:** open
+- **Related:** `I-023` (fixed the same defect on `PolicyCard`), `D-103`
+
+### D-110 · The `Icon` catalog story does not show six registry glyphs
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/shared/Icon.stories.tsx` (the `AllIcons`
+  grid), `src/sidepanel/components/shared/Icon.tsx` (the `IconType` union, for
+  reference)
+- **Verified:** 2026-09-02 — enumerated the union against the story: 37 registry
+  entries, 6 absent.
+- **Problem:** `AllIcons` is the catalog a component author reads to find out
+  what glyphs exist before hand-rolling one. It is missing `clock`, `close`,
+  `external-link`, `filter`, `pin` and `terminal` — so the browsing surface
+  under-reports the registry by 16%, and the failure mode is precisely the one
+  `I-021` existed to fix: someone inlines an `<svg>` for a glyph that was
+  already there. Predates `I-021`, which added its two new entries to the grid
+  correctly and did not widen scope to the pre-existing gap.
+- **Done when:** the catalog renders every member of `IconType`, derived from
+  the union rather than hand-listed — a hand-maintained copy of a type is what
+  drifted in the first place.
+- **Risk:** Low — story-only.
+- **Status:** open
+- **Related:** `I-021`
+
+### D-111 · A year-old timestamp reads "0 year ago" for five days of every year
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/ruleUtils.ts:218-228` (the relative-time formatter)
+- **Verified:** 2026-09-02 — reproduced by executing the branch arithmetic over
+  a day sweep; the boundary is exact.
+- **Problem:** The formatter buckets months as `floor(days / 30)` and years as
+  `floor(days / 365)`. Those two divisors do not meet. `diffMonths` reaches 12
+  at **day 360**, which fails the `diffMonths < 12` guard and falls through to
+  the year branch — where `floor(360 / 365)` is still `0`. So days 360 through
+  364 render **"0 year ago"**.
+
+  ```
+  359 days → 11 months ago
+  360 days → 0 year ago      ← wrong
+  364 days → 0 year ago      ← wrong
+  365 days → 1 year ago
+  ```
+
+  This surfaces wherever a rule or snapshot timestamp is shown, and "0 year ago"
+  reads as _no elapsed time_ — the opposite of the truth, on data that is nearly
+  a year stale. That inversion is why this is correctness and not polish.
+
+- **Diagnosis note, because the obvious reading is wrong.** The line also uses
+  `diffYears > 1 ? 's' : ''`, and it is tempting to call this a plural bug. It is
+  not: `> 1` merely renders "0 year" rather than "0 years", and both are wrong
+  because the **number** is wrong. Fixing the suffix would leave "0 years ago"
+  shipping. The same `> 1` predicate on the four branches above it (`min`,
+  `hour`, `day`, `month`) is **not independently reachable at zero** — each is
+  guarded by the branch before it (`diffMins < 1` returns `just now`), so they
+  are cosmetically inconsistent with `pluralSuffix` and nothing more.
+  `RuleCard.tsx:214`'s `> 1` is likewise guarded by `hasConflicts`.
+- **Done when:** no elapsed duration renders a leading `0`. Deriving both buckets
+  from one calendar-aware source is the honest fix; if the 30-day month is kept
+  for simplicity, the year branch must use the same divisor so the buckets abut.
+  A test sweeps the boundaries (359/360/364/365) rather than sampling one value —
+  sampling is what missed this.
+- **Risk:** Low. Display-only, one function, no API or cache behaviour.
+- **Status:** open
+- **Related:** `I-024` (the shared `pluralSuffix` these predicates should adopt
+  once the number is right), `D-112`
+
+### D-112 · Forty-odd inline plural ternaries outlive the shared helper
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/shared/utils/plural.ts` (the helper to adopt); the call sites
+  enumerated below
+- **Verified:** 2026-09-02 — enumerated by the `I-024` writer, which shipped the
+  helper and deliberately did not retrofit them.
+- **Problem:** `I-024` added `src/shared/utils/plural.ts` (`pluralSuffix`,
+  `pluralNoun`, `pluralize`, `NounForms` for irregulars) and converted its own
+  call sites only. Three private helpers and roughly forty inline
+  `=== 1 ? '' : 's'` ternaries remain, which is the exact condition — a recipe
+  written many times — that the helper exists to end. Left un-retrofitted on
+  purpose: it is a mechanical mass change, it would have collided with four
+  agents working in parallel, and it belongs in its own commit.
+
+  Private helpers: `groups/groupSourceSummary.ts:129`,
+  `groups/detail/GroupOverviewPane.tsx:79-80`, `shared/utils/dateFormat.ts:64-65`.
+
+  Inline ternaries span `AuthPoliciesTab` (the `Policy`/`Policies` irregular,
+  which is why `NounForms` exists), `RuleImpactModal`, `AuditLogViewer`,
+  `AuditLogUndoModal`, `RuleConsolidationModal`, `GroupMergeModal`,
+  `BulkOperationsPanel`, `CrossGroupSearch`, `GroupCleanupPanel`,
+  `GroupCollections`, `memberSourceBuckets`, `AttributeHealthCard`,
+  `ClauseChecklist`, `MemberSourceNotes`, `GroupActionBar`, `CompareGroupModal`,
+  `GroupMembersSection`, `GroupInsightsPane`, `MemberSourceMeter`,
+  `ProfileSaveModal`, `RulesListActionBar`, `RulesDuplicatesPanel`,
+  `MemberSourceFilterBar`, `ExportPreviewTable`, `AppListItem`,
+  `useRuleConsolidation`, `useGroupMerge`, `profileOperations`, `undoManager`.
+
+- **Done when:** no `? '' : 's'` / `? 's' : ''` ternary remains in `src/`, and the
+  three private helpers are deleted rather than merely unused. **Do not sweep
+  `ruleUtils.ts:218-228` or `RuleCard.tsx:214` as part of this** — those use a
+  `> 1` predicate and `D-111` owns them; converting them here would bury a
+  behaviour change inside a mechanical diff.
+- **Risk:** Low per site, but wide. Mechanical mass change, so exempt from the
+  plan gate (`CLAUDE.md`) — it still wants its own PR, because a diff this broad
+  hides anything non-mechanical mixed into it.
+- **Status:** open
+- **Related:** `I-024` (shipped the helper), `D-111`
+
+### D-113 · Home's totals caption still says "1 groups"
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/home/OrgSnapshotCard.tsx` (the `OrgBox`
+  caption), `src/sidepanel/components/home/orgFigures.ts` (`OrgBox`'s type)
+- **Verified:** 2026-09-02 — found by the `I-024` writer and left visible
+  rather than silently half-fixed; the `SingleItemOrg` story's docblock states it.
+- **Problem:** `I-024` fixed the _findings_ denominator, so a one-app org now
+  reads "of 1 application". The **totals caption** above it is a separate
+  string: `OrgBox.noun` is a bare plural rendered directly, so a single-group org
+  still reads **"1 groups"** on the panel's landing surface. Same defect, one
+  component over, outside `I-024`'s allowlist.
+- **Done when:** the totals caption pluralises on its own count, using
+  `pluralize` from `shared/utils/plural.ts` — `OrgBox` taking the same optional
+  `singular` that `NamedSource` now carries is the consistent shape. The
+  `SingleItemOrg` story asserts it, and its docblock note about the known
+  residue is removed because the residue is gone.
+- **Risk:** Low — display string, no API or cache behaviour.
+- **Status:** open
+- **Related:** `I-024` (fixed the sibling string and filed this one)
+
+### D-114 · An attribute the profile lacks reads as "nobody matches"
+
+- **Category:** correctness
+- **Priority:** P1
+- **Size:** M
+- **Files:** `src/shared/ruleEvaluator.ts` (`resolveMember`),
+  `src/shared/ruleEvaluator.test.ts`
+- **Verified:** 2026-09-02 — found by the `I-026` writer while checking demo
+  rules against the real evaluator, then re-confirmed at `resolveMember`'s
+  source. Affects live orgs, not only the demo fixture.
+- **Problem:** `resolveMember` collapses two different facts into one answer:
+
+  ```ts
+  const raw = (options.user.profile as Record<string, unknown>)[property.name];
+  if (raw === undefined || raw === null) return null;
+  ```
+
+  An attribute **absent from the profile** and one **explicitly set to null**
+  both resolve to `null`. Only the second licenses an answer; the first is the
+  evaluator failing to understand the expression, which the module header says
+  it must never report as `no-match`.
+
+  The consequence is not subtle. `user.status` is a top-level Okta user field,
+  not a profile field, so `user.status == "ACTIVE"` — an ordinary, common rule
+  expression — reduces to `null == "ACTIVE"` → `false` for **every** user. The
+  evaluator states with confidence that nobody matches a rule that in fact
+  matches the whole org. The same holds for every `user.*` reference outside the
+  profile object: `id`, `created`, `lastLogin`, `type`.
+
+- **Done when:** an attribute missing from the profile returns `UNRESOLVED`
+  (reaching the existing unevaluable path with a reason), while an attribute
+  present and explicitly `null` keeps returning `null`. Tests pin the two apart,
+  including `user.status == "ACTIVE"` specifically, since that is the shape that
+  exposed it. The demo fixture's `EVALUATOR_CANNOT_REPRODUCE` single-entry
+  allow-list in `src/sidepanel/demo/demoRuleCoverage.test.ts` is deleted as part
+  of this fix and the ordinary equality check takes over — the test's failure
+  message already says so.
+- **Risk:** Medium — this moves answers, by design. Surfaces reading the
+  evaluator (blast radius, member-source classification, the rule-impact
+  preview) will show `unevaluable` where they previously showed a confident
+  `no-match`. That is the honest reading and the reason the change is worth
+  making, but it is a visible behaviour change on live data, so it wants the
+  `okta-claim-check` skill run over a real org's rules before it lands.
+- **Status:** open
+- **Related:** `I-026` (found it), `ADR-0017` (parse, never guess)
+
+### D-115 · One `error` field serves two independent loads
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useGroupSource.ts`,
+  `src/sidepanel/components/groups/detail/GroupDetailView.tsx`
+- **Verified:** 2026-09-02 — found by the `I-032` writer; the hook's rules load
+  and member analysis both write the single `error` field.
+- **Problem:** `useGroupSource` runs two independent loads — the cheap rules
+  read and the gated member-source walk — and both report into one `error`
+  string. Whichever fails last wins the message, so a member-walk failure can
+  overwrite a rules failure that is still true, and the sections downstream can
+  only disambiguate by their own status field. `I-032` had to work around this
+  directly: `refreshRules` deliberately does **not** clear `error` on entry,
+  because doing so would erase a member failure the reader is still looking at.
+- **Done when:** the hook exposes `rulesError` and `memberError` separately,
+  each cleared by its own load, and `GroupDetailView` routes each to the section
+  that owns it. The `refreshRules` workaround comment goes away because the
+  hazard it names no longer exists.
+- **Risk:** Low — internal hook shape with one consumer.
+- **Status:** open
+- **Related:** `I-032` (found it and worked around it)
+
+### D-116 · The blast radius predicts additions into app-mastered groups
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/shared/membership/blastRadius.ts` (`additionEffect`)
+- **Verified:** 2026-09-02 — found by the `I-029` writer, and now exercised by
+  the demo org: `I-026` gave `Datadog - Engineering` a rule, and the reel's
+  Ledger plate duly named that `APP_GROUP` as a predicted addition.
+- **Problem:** `additionEffect` has no `APP_GROUP` gate, so it predicts a user
+  will be **added** to a group that is mastered by an application. A group rule
+  cannot add anyone to an app-mastered group — the upstream directory owns that
+  roster — so the prediction is structurally impossible, not merely uncertain.
+  The removal path enforces the distinction correctly; only the addition path
+  does not. The gap is already recorded in the function's own docblock, with the
+  reason: a group's type is unreachable for a group the user does not yet hold,
+  because the type comes from the membership record being predicted.
+- **Done when:** an addition into an `APP_GROUP` target is either suppressed or
+  labelled as not-modelled, rather than presented beside ordinary predictions
+  with equal confidence. Whichever is chosen, the reason is recorded in the
+  docblock, since the next reader will otherwise re-derive the same dead end.
+  Resolving the type lookup is the substance of the work — a fix that merely
+  hides the row without knowing the type would suppress real predictions too.
+  The demo org exercises this, so `demoRuleCoverage`-adjacent expectations and
+  the reel's Ledger row count both move when it lands.
+- **Risk:** Medium — this changes what a prediction surface claims, and the
+  surface steers membership edits. It also re-films the Users and Rules
+  chapters.
+- **Status:** open
+- **Related:** `I-029` (found it), `I-026` (made the demo exercise it)
+
+### D-117 · `GroupsTab.tsx` is 731 lines, well over the ~300-line bar
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** L
+- **Files:** `src/sidepanel/components/GroupsTab.tsx`
+- **Verified:** 2026-09-02 — 731 lines after `I-019`, which added 18 and
+  reported the overrun rather than absorbing it.
+- **Problem:** The tab holds list state, the cached/live mode switch, filter
+  and search state, the working set, the deep-link effect, the detail-view
+  push and the rung wrapper. `I-019` needed nine lines of that effect to make a
+  deep link land on a named pane, and there was nothing to trim in exchange —
+  every remaining line is load-bearing for a different concern. That is the
+  signal the file is doing too many jobs, not that the last change was
+  careless. It is now the largest component in the repo bar `App.tsx`.
+- **Done when:** the deep-link/navigation effect and the cached-vs-live mode
+  switch move into hooks beside the existing ones, leaving the component to
+  compose. Land it tests-first, one concern per change, per the working
+  agreement — `GroupsTab.test.tsx` (78) and `GroupsTab.navigation.test.tsx`
+  (12) are the safety net and must stay green throughout without retargeting.
+- **Risk:** Medium — no behaviour should change, but this is the tab with the
+  most state and the deep-link path is easy to break silently. Pure refactor:
+  if an assertion needs rewriting, the extraction is wrong.
+- **Status:** open
+- **Related:** `I-019` (grew it and reported it), `D-091`, `ADR-0024`
+
+### D-118 · `App.tsx` is 732 lines and mounts its provider stack inline
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/App.tsx`
+- **Verified:** 2026-09-02 — 732 lines after `I-033`, which added 10 for a
+  provider wrapper and reported the overrun rather than absorbing it.
+- **Problem:** `App` composes four providers inline
+  (`SchedulerProvider`, `ProgressProvider`, `NavigationProvider`,
+  `OrgEntityIndexProvider`) around a render body that is already the largest
+  component in the repo. Every new cross-cutting concern costs another nesting
+  level in the file least able to afford one, and the reindent makes each such
+  change look far larger in review than it is — `I-033`'s ten substantive lines
+  showed up as 306 changed lines until read with `git diff -w`.
+- **Done when:** the provider stack moves into an `AppProviders` component
+  (its own file) taking the values it needs and rendering `children`, so
+  `App.tsx` nests one level and adding a provider stops touching it at all.
+  Pure refactor: no provider's `enabled` semantics change, and ADR-0018 gating
+  stays bit-for-bit — `App.tabpersistence`, `App.contextengine` and the palette
+  suites must pass untouched. If an assertion needs rewriting, the extraction
+  is wrong.
+- **Risk:** Low-medium. No behaviour change, but it moves the tree's root; the
+  reindent hides mistakes, so review with `git diff -w`.
+- **Status:** open
+- **Related:** `I-033` (grew it and proposed this), `D-117`, `D-091`
+
+### D-119 · Nothing checks the docs' context inventory against the code
+
+- **Category:** tooling
+- **Priority:** P4
+- **Size:** S
+- **Files:** `scripts/check-cited-paths.mjs`, `docs/state-management.md`,
+  `docs/architecture.md`
+- **Verified:** 2026-09-02 — found by the `I-033` writer: both docs asserted
+  "exactly two contexts" and had been wrong since ADR-0030 added
+  `NavigationContext`. Corrected in that commit; the absence of a check is not.
+- **Problem:** Two specs state a closed inventory of React contexts, and a
+  third context existed for months without either noticing. A closed list with
+  nothing enforcing it is worse than no list: readers trust it, and it silently
+  decays. The repo already has a path checker that fails the build on a stale
+  citation — this is the same class of rot, unguarded.
+- **Done when:** the checker counts `src/sidepanel/contexts/*Context.tsx`
+  against the inventory the docs claim and fails when they disagree, so adding
+  a context forces the doc update in the same commit. Prove it non-vacuously by
+  adding a throwaway context file and confirming the check goes red.
+- **Risk:** Low — build tooling; the failure mode is a false red, which is
+  visible immediately.
+- **Status:** open
+- **Related:** `I-033` (found it), `ADR-0030`
+
+### D-120 · `useExportTab.ts` carries every concern the Export tab has
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** L
+- **Files:** `src/sidepanel/hooks/useExportTab.ts`
+- **Verified:** 2026-09-02 — 486 lines before `I-020`, which adds the
+  snapshot-source branch on top. Found by that item's writer while scoping it.
+- **Problem:** The hook owns descriptor selection, column selection and
+  presets, the filter state, the debounced match-count probe, the export run
+  and its progress, and the download. `I-020` adds a seventh concern — a row
+  source that resolves synchronously from the org snapshot rather than
+  fetching — and every one of those concerns has to know whether it is in the
+  endpoint world or the snapshot world. That is the point at which a hook stops
+  being a hook and becomes the tab.
+- **Done when:** the probe and the run/download are separate hooks composed by
+  a thin `useExportTab`, with the source distinction resolved once at the top
+  rather than branched at each concern. Land it tests-first, one concern per
+  change, per the working agreement. Behaviour must not move: the existing
+  suites are the safety net and must pass without retargeting. If an assertion
+  needs rewriting, the extraction is wrong.
+- **Risk:** Medium — the Export tab is the surface where a mistake writes a
+  wrong file rather than showing a wrong number, and the escaping and audit
+  paths run through here. Pure refactor only; no change to what a cell
+  contains.
+- **Status:** open
+- **Related:** `I-020` (found it and added to it), `ADR-0065`, `D-118`, `D-117`
+
+### D-121 · Two demo chapters cannot be filmed
+
+- **Category:** tooling
+- **Priority:** P2
+- **Size:** M
+- **Files:** `.storybook/scripts/capture/walks/users-cause.mjs`,
+  `.storybook/scripts/capture/walks/rules.mjs`,
+  `.storybook/scripts/capture/selectors.mjs` (`readRuleStats`)
+- **Verified:** 2026-09-02 — `npm run capture` fails on both, and **both
+  reproduce identically on `main` at `be78181`**, so this is pre-existing and
+  not caused by the `improve/2026-09-02-backlog-pass` work. Confirmed by
+  checking out `main` and filming each chapter alone.
+- **Problem:** Two of the ten chapters abort:
+  - `users-cause`, beat `cause` — _"Fix a profile attribute" accounts for no
+    groups_. The walk asserts the cause analysis attributes at least one group
+    to the attribute it is about to fix, and it attributes none.
+  - `rules`, beat `load` — _readRuleStats: no stats grid on screen (saw )_. The
+    "saw" list is **empty**, meaning no title/value pair was found at all, so
+    the stats grid is absent rather than merely slow or differently worded.
+
+  Filed as one item because both sit on the rule-attribution path and are
+  likely one root cause; split it if investigation shows otherwise. Note
+  `rules-impact` — a new chapter over the same tab, added by `I-029` — films
+  clean, which bounds the problem: the Rules tab loads and renders, so the
+  failure is narrower than "the tab is broken".
+
+- **Done when:** both chapters film, and the walks fail loudly on the _cause_
+  rather than on a downstream symptom — an empty `saw` list should say the grid
+  never mounted, not report a read that found nothing. Whatever the root cause,
+  add the assertion that would have caught it at its origin.
+- **Risk:** Medium. `npm run capture` is not in the verification ladder, so
+  this does not fail CI — which is exactly why it went unnoticed. The reel
+  cannot be rendered complete until it is fixed, and a demo that silently films
+  nine of ten chapters is the failure mode `ADR-0045` and the capture rig's
+  own judging step exist to prevent.
+- **Status:** open
+- **Related:** `ADR-0045`, `ADR-0043`, `I-029` (filmed clean alongside these)
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk

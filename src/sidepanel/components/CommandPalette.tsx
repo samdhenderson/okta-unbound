@@ -13,29 +13,27 @@
  * This component is mounted at the shell for the whole session, next to the
  * modal layer, because the ⌘K listener has to be. That makes it the one place in
  * the panel where "mounted" says nothing at all about whether the user is
- * looking at it, so both costs are gated on `isOpen` explicitly:
+ * looking at it, so its cost is gated on `isOpen` explicitly:
  *
  * - **`enabled: isOpen`** on the resolver. Without it, a query left in the field
  *   keeps fanning out over the org from a closed dialog (ADR-0018's rule,
  *   applied to a surface that is never "the active tab").
- * - **`oktaOrigin: hasOpened ? … : null`** on the index. `useOrgEntityIndex`
- *   opens four IndexedDB reads and registers four `snapshotUpdated` listeners,
- *   and Home already pays for one set. A palette that is never summoned should
- *   not pay for a second, so nothing is read until the first ⌘K — after which
- *   the latch stays down, because re-reading on every open would be worse.
- *
- * The duplicate index is a known cost, not an oversight: two mounts of the same
- * four collections for one org. Lifting it into a provider both Home and this
- * share is real work with its own blast radius, tracked as `I-033` rather than
- * smuggled into this change.
+ * - **`isOpen` again, at the shell**, feeding
+ *   {@link module:sidepanel/contexts/OrgEntityIndexContext}'s `enabled`. The
+ *   snapshot index is no longer mounted here at all: `App` mounts it once and
+ *   Home and this palette read the same one (`I-033`). The old
+ *   `oktaOrigin: hasOpened ? … : null` latch existed to stop a never-summoned
+ *   palette opening a *second* set of four IndexedDB reads; with one set there
+ *   is no second set to defer, and Home has always opened that one at panel
+ *   open, so nothing is read now that was not read then.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import TabJumpPalette, { type SectionMeta } from './TabJumpPalette';
 import { useOktaApi } from '../hooks/useOktaApi';
-import { useOrgEntityIndex } from '../hooks/useOrgEntityIndex';
 import { useEntitySearchSources } from '../hooks/useEntitySearchSources';
 import { useJumpResolver, JUMP_SEARCH_MIN_CHARS, type JumpKind } from '../hooks/useJumpResolver';
 import { useEntityNavigation } from '../contexts/NavigationContext';
+import { useOrgEntityIndex } from '../contexts/OrgEntityIndexContext';
 import { navigationTarget } from './home/jumpDestinations';
 import type { JumpResult } from '../hooks/useJumpResolver';
 import type { TabType } from '../tabs';
@@ -92,23 +90,16 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
   targetTabId,
   oktaOrigin,
 }) => {
-  // Latched, never released: the snapshot is read from the first ⌘K onward, and
-  // not at all before it. Releasing it on close would re-open four IndexedDB
-  // reads on every summon, which is the opposite of the saving.
-  const [hasOpened, setHasOpened] = useState(false);
-  if (isOpen && !hasOpened) setHasOpened(true);
-
   const nav = useEntityNavigation();
 
   // No `onResult`/`onProgress`: the facade memoizes its operations on those
   // callbacks' identities, and this surface has nowhere to render either.
   const api = useOktaApi({ targetTabId, oktaOrigin: oktaOrigin ?? undefined });
 
-  const index = useOrgEntityIndex({
-    oktaOrigin: hasOpened ? oktaOrigin : null,
-    targetTabId,
-    enabled: isOpen,
-  });
+  // The shell's one mount, read here rather than opened here — `App` passes this
+  // palette's `isOpen` into the provider's `enabled`, so a closed palette still
+  // drives no sync of its own (ADR-0018).
+  const index = useOrgEntityIndex();
 
   const { searchers, fetchers } = useEntitySearchSources({
     api,

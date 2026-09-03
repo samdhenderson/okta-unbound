@@ -73,7 +73,7 @@ import GroupSearchBar from './groups/GroupSearchBar';
 import GroupFilterPanel from './groups/GroupFilterPanel';
 import GroupsListActionBar, { type ActivePanel } from './groups/GroupsListActionBar';
 import GroupsListPanel from './groups/GroupsListPanel';
-import GroupDetailView from './groups/detail/GroupDetailView';
+import GroupDetailView, { type GroupDetailTab } from './groups/detail/GroupDetailView';
 import GroupMergeModal from './groups/GroupMergeModal';
 import { downloadCSV, getDateForFilename } from '../../shared/utils/csvUtils';
 import { buildGroupsListCsv } from './groups/groupsListCsv';
@@ -87,6 +87,12 @@ interface GroupsTabProps {
   onNavigateToRule?: (ruleId: string) => void;
   /** Group id to scroll to and highlight when navigated here from the Rules tab. */
   selectedGroupId?: string | null;
+  /**
+   * Set when the arrival asked for a *rung* rather than a row: the group is pushed
+   * straight to that pane instead of being highlighted in the list. Home's MFA
+   * launcher is the first caller (`'insights'`).
+   */
+  selectedGroupPane?: GroupDetailTab;
   /** Called once the highlighted group has been shown, so the parent can clear it. */
   onGroupSelected?: () => void;
   /**
@@ -142,6 +148,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   oktaOrigin,
   onNavigateToRule,
   selectedGroupId,
+  selectedGroupPane,
   onGroupSelected,
   isActive = true,
   scrollRootRef,
@@ -199,9 +206,10 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   /* `useScrollPreservation` wants a ref; the caller may not have given us one. A
      stable local stand-in keeps the hook's contract without a conditional call. */
   const noScroller = useRef<HTMLElement | null>(null);
-  // Set when a push was requested *in order to* analyze member source, so the
-  // pushed detail view runs that analysis instead of waiting for a second click.
-  const [autoAnalyzeGroupId, setAutoAnalyzeGroupId] = useState<string | null>(null);
+  // Set when a push was requested *in order to* read one pane: the detail view
+  // opens there rather than on its landing tab, and Members additionally runs its
+  // gated analysis instead of waiting for a second click.
+  const [panePush, setPanePush] = useState<{ groupId: string; pane: GroupDetailTab } | null>(null);
   const nav = useViewStack<GroupSummary>({
     rootLabel: 'Groups',
     getLabel: groupCrumbLabel,
@@ -252,7 +260,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     (group: GroupSummary) => {
       // `display: none` destroys the scroll box, so bank scrollTop before the push.
       captureListScroll();
-      setAutoAnalyzeGroupId(null);
+      setPanePush(null);
       pushView(group);
     },
     [captureListScroll, pushView],
@@ -264,7 +272,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   const handleAnalyzeSource = useCallback(
     (group: GroupSummary) => {
       captureListScroll();
-      setAutoAnalyzeGroupId(group.id);
+      setPanePush({ groupId: group.id, pane: 'members' });
       pushView(group);
     },
     [captureListScroll, pushView],
@@ -283,7 +291,8 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
       return;
     }
     if (navHandledRef.current === selectedGroupId) return;
-    if (!groups.some((g) => g.id === selectedGroupId)) {
+    const target = groups.find((g) => g.id === selectedGroupId);
+    if (!target) {
       // Target isn't in the loaded list (fresh session, live-search mode, or a
       // never-loaded list). Kick a cached load once so it can appear, then wait
       // for `groups`/`loading` to update and re-run this effect — mirroring the
@@ -296,6 +305,15 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
       return;
     }
     navHandledRef.current = selectedGroupId;
+
+    // Arrived asking for a rung, not a row: push at that pane and leave the list
+    // alone — nothing below applies, since a hidden list has no row to scroll to.
+    if (selectedGroupPane) {
+      setPanePush({ groupId: target.id, pane: selectedGroupPane });
+      pushView(target);
+      onGroupSelected?.();
+      return;
+    }
 
     // The deep-link contract targets a *row*, so pop any pushed detail view first —
     // otherwise the list is hidden and the scroll-to-row below has nothing to find.
@@ -320,7 +338,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     // enough; re-running only on id/groups/loading changes avoids the
     // unstable-filters-identity churn while still reacting when a load completes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGroupId, groups, loading]);
+  }, [selectedGroupId, selectedGroupPane, groups, loading]);
 
   // A pre-filtered view requested from the Home card.
   //
@@ -537,15 +555,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             searchRow
           )}
 
-          {/*
-            Deliberately tighter than the rung around it (raw `space-y-3`, not
-            `--sp-rung`): filters, panels and alerts read as one toolbar zone, and
-            none of ADR-0048's six roles names "gap inside a toolbar cluster" —
-            forcing it into `--sp-field` or `--sp-inline` would misdescribe the
-            relationship. Matching the rung here would also erase the visual
-            distinction between this zone and the card stack below it.
-          */}
-          <div className="space-y-3">
+          <div className="space-y-(--sp-toolbar)">
             {/* Expandable Filter Panel */}
             {searchMode === 'cached' && showFilters && (
               <GroupFilterPanel
@@ -672,7 +682,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
               targetTabId={targetTabId}
               oktaOrigin={oktaOrigin}
               onNavigateToRule={onNavigateToRule}
-              autoAnalyze={autoAnalyzeGroupId === detailGroup.id}
+              initialPane={panePush?.groupId === detailGroup.id ? panePush.pane : undefined}
               isActive={isActive}
               onExportGroup={onExportGroup}
             />

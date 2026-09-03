@@ -15,6 +15,8 @@
 import type { z } from 'zod';
 import type { OktaAdminEntityType } from '@/shared/utils/oktaUrl';
 import type { IconType } from '@/sidepanel/components/shared/Icon';
+import type { CountResolution } from '@/sidepanel/components/home/orgFigures';
+import type { OrgSnapshotView } from './snapshot';
 
 /** Column grouping bucket shown in the picker (base identity vs. profile vs. org-custom). */
 export type ColumnGroup = 'base' | 'profile' | 'custom';
@@ -110,6 +112,75 @@ export type FilterSupport =
       placeholder: string;
     };
 
+/**
+ * What a snapshot-sourced descriptor produced: the rows, and the verdict on
+ * whether they may be published at all.
+ *
+ * The resolution is not advisory. `status: 'unavailable'` (equivalently
+ * `value === null`) means **there is no export** — not an empty CSV and not a
+ * partial one — and the source returns no rows in that state, so an
+ * `unavailable` verdict cannot leak a list of names even if a caller ignored it
+ * (ADR-0065, "The honesty rules travel with the rows").
+ *
+ * @typeParam Row - The row shape this descriptor's columns read.
+ */
+export interface SnapshotRows<Row> {
+  /** Every matching row. Uncapped: `REPORT_PREVIEW_LIMIT` is a Home rule and does not follow the rows. */
+  rows: Row[];
+  /**
+   * The {@link module:sidepanel/components/home/orgFigures.resolveCount} verdict
+   * over the collections behind these rows. One function, two surfaces — Home's
+   * row and this export apply the identical rule.
+   */
+  resolution: CountResolution;
+  /** Snapshot rows dropped for failing schema validation (ADR-0065 §4). */
+  dropped: number;
+}
+
+/**
+ * Where a descriptor's rows come from.
+ *
+ * **Absent means `{ kind: 'endpoint' }`.** Row acquisition is an explicit arm on
+ * {@link EntityExport} rather than a new {@link EntityContextMode}, because
+ * `context` answers *what is this export scoped to* and drives a picker, while
+ * this answers *where do the rows arrive from*. They are orthogonal: a future
+ * snapshot-sourced export scoped to one app needs both axes at once, and folding
+ * them into one union would make that unexpressible (ADR-0065 §1).
+ *
+ * @typeParam Row - The row shape this descriptor's columns read.
+ */
+export type EntityRowSource<Row> =
+  | {
+      /** Rows are walked from `endpoint` over the rate-limited scheduler path. */
+      kind: 'endpoint';
+    }
+  | {
+      /** Rows are joined out of the mounted org snapshot. Zero requests. */
+      kind: 'snapshot';
+      /**
+       * The `columnCatalog` id of the column carrying the resolution's own
+       * completeness `note`.
+       *
+       * The engine appends this column whenever the resolution is `partial`,
+       * **even if the reader deselected it**: the incompleteness of the answer
+       * is not a column preference, and a CSV outlives the screen that would
+       * have caveated it.
+       */
+      completenessColumnId: string;
+      /**
+       * Join the rows out of the snapshot, synchronously.
+       *
+       * Read-only by construction — {@link module:sidepanel/export/snapshot.OrgSnapshotView}
+       * exposes no `sync`. Declared as a method (not an arrow property) for the
+       * same bivariance reason as {@link ExportColumn.accessor}: the registry is
+       * a heterogeneous collection of `EntityExport<unknown>`.
+       *
+       * @param snapshot - The already-mounted collections.
+       * @returns The rows and the verdict over them.
+       */
+      read(snapshot: OrgSnapshotView): SnapshotRows<Row>;
+    };
+
 /** Deep-link configuration for turning a row into an "Open in Okta" link. */
 export interface IdLinkify {
   /** Entity kind passed to {@link module:shared/utils/oktaUrl.oktaAdminEntityUrl}. */
@@ -136,6 +207,13 @@ export interface EntityExport<Row = unknown> {
 
   /** How the entity is scoped before fetching. */
   context: EntityContextMode;
+
+  /**
+   * Where the rows come from. **Omit for a list endpoint** — absent is
+   * `{ kind: 'endpoint' }`, which is why widening this contract changed no
+   * existing descriptor (ADR-0065).
+   */
+  source?: EntityRowSource<Row>;
 
   /**
    * Base list endpoint for `whole-org` entities. Ignored for `search-to-select`,

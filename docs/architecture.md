@@ -103,7 +103,8 @@ for decomposing other large areas — extend it, don't reinvent it.
 
 ## State
 
-Pure React — hooks + two contexts (`SchedulerContext`, `ProgressContext`). No
+Pure React — hooks + four contexts (`SchedulerContext`, `ProgressContext`,
+`NavigationContext`, `OrgEntityIndexContext`). No
 Redux/Zustand/React Query. See [state-management.md](./state-management.md) for the
 hook-vs-context-vs-local decision and how the god components were decomposed.
 

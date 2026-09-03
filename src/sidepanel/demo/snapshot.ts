@@ -197,6 +197,13 @@ function rule(
  * `String.stringContains` forms, so the rule cards render the same structure
  * they would against a live org. Rule 3 deliberately overlaps rule 2's
  * population — that overlap is what the rule-impact scene previews.
+ *
+ * **This list and `memberships.RULE_FED` are one list stated twice**, and
+ * `demoRuleCoverage.test.ts` holds them to it: every rule-fed group either
+ * declares its predicate here, verbatim, or carries a written exemption naming
+ * the invisible maintainer that fills it instead (`Everyone`, `Workday - All
+ * Workers`). Adding a predicate to `RULE_FED` without adding its rule here fails
+ * that test by name.
  */
 export const demoRules: OktaGroupRule[] = [
   rule(1, 'Everyone → VPN', 'user.status == "ACTIVE"', [fakeId('00g', 14)]),
@@ -229,6 +236,27 @@ export const demoRules: OktaGroupRule[] = [
     [fakeId('00g', 21)],
     'INACTIVE',
   ),
+  // Rules 10-21 close the gap `demoRuleCoverage.test.ts` now guards: every
+  // remaining department and office group was fed by a predicate the org never
+  // declared, so the panel could see the membership and not the reason for it.
+  rule(10, 'Customer Success by department', 'user.department == "Customer Success"', [
+    fakeId('00g', 4),
+  ]),
+  rule(11, 'Marketing by department', 'user.department == "Marketing"', [fakeId('00g', 5)]),
+  rule(12, 'Finance by department', 'user.department == "Finance"', [fakeId('00g', 6)]),
+  rule(13, 'People Ops by department', 'user.department == "People Ops"', [fakeId('00g', 7)]),
+  rule(14, 'IT by department', 'user.department == "IT"', [fakeId('00g', 8)]),
+  rule(15, 'Security by department', 'user.department == "Security"', [fakeId('00g', 9)]),
+  rule(16, 'Data by department', 'user.department == "Data"', [fakeId('00g', 10)]),
+  rule(17, 'Legal by department', 'user.department == "Legal"', [fakeId('00g', 11)]),
+  rule(18, 'Seattle office', 'user.city == "Seattle"', [fakeId('00g', 26)]),
+  rule(19, 'Austin office', 'user.city == "Austin"', [fakeId('00g', 27)]),
+  rule(20, 'Sydney office', 'user.city == "Sydney"', [fakeId('00g', 28)]),
+  // The third group the Users chapter's blast radius could not name. Its
+  // membership always was `user.department == "Engineering"`; only the
+  // declaration was missing, so correcting a department moved a group the
+  // preview had no way to predict.
+  rule(21, 'Engineering → Datadog', 'user.department == "Engineering"', [fakeId('00g', 34)]),
 ];
 
 /**

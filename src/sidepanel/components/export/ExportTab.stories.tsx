@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import ExportTab from './ExportTab';
+import { OrgEntityIndexProvider } from '../../contexts/OrgEntityIndexContext';
 
 /**
  * The Export tab: a descriptor-driven hub for downloading Okta reports. The `pick`
@@ -23,6 +24,17 @@ const meta = {
       },
     },
   },
+  // The tab reads the shell's org snapshot for its report descriptors
+  // (ADR-0065), so a story has to mount the same provider the shell does. With
+  // a null origin it reads nothing and syncs nothing, which is the state a
+  // disconnected panel is in — exactly what these stories want.
+  decorators: [
+    (Story) => (
+      <OrgEntityIndexProvider oktaOrigin={null} targetTabId={null} enabled={false}>
+        <Story />
+      </OrgEntityIndexProvider>
+    ),
+  ],
   argTypes: {
     targetTabId: {
       description:

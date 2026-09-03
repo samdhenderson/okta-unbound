@@ -36,14 +36,15 @@
  * Group names are tenant data and are rendered through React's escaping. This
  * component logs nothing.
  */
-import React, { useId, useState } from 'react';
+import React from 'react';
 import Eyebrow from '../shared/Eyebrow';
-import Icon from '../shared/Icon';
 import Skeleton from '../shared/Skeleton';
-import StretchedButton from '../shared/StretchedButton';
+import { EntityChoiceRow, type EntityChoice } from './EntityChooser';
 import FigureNumber from './FigureNumber';
+import MfaCoverageLauncher from './MfaCoverageLauncher';
+import { RowDisclosure, RowLines } from './ReportRow';
 import type { HomeReport } from './homeReports';
-import type { GroupFinding } from '../groups/ruleOrphans';
+import type { OrgFigureStatus } from './orgFigures';
 
 /** Props for {@link ReportsCard}. */
 export interface ReportsCardProps {
@@ -51,78 +52,42 @@ export interface ReportsCardProps {
   reports: HomeReport[];
   /** Open one of the named groups on the Groups tab. */
   onOpenGroup: (groupId: string) => void;
+  /**
+   * Every group the org snapshot holds, for the MFA launcher's chooser. Already
+   * in memory: this card never asks for them, and the chooser never searches
+   * (see {@link module:sidepanel/components/home/EntityChooser}).
+   */
+  groupChoices: EntityChoice[];
+  /**
+   * Read state of the collection behind {@link ReportsCardProps.groupChoices},
+   * which decides whether the launcher offers a chooser, a caveat beside one, or
+   * nothing at all — the same honesty ladder the report rows follow.
+   */
+  groupChoicesStatus: OrgFigureStatus;
+  /**
+   * Open a group's Insights pane with its MFA-coverage scan armed and un-run.
+   *
+   * A verb, not a route: this card knows that picking a group *starts nothing*,
+   * and deliberately not which pane on which tab that lands on.
+   */
+  onScanGroupMfa: (groupId: string) => void;
 }
-
-/** The title and the line under it — the same two lines a finding shows. */
-const ReportLines: React.FC<{ report: HomeReport; id: string }> = ({ report, id }) => (
-  <span className="flex min-w-0 flex-1 flex-col gap-px text-left">
-    <span
-      id={id}
-      className={`text-sm ${
-        report.value === null ? 'font-medium text-neutral-600' : 'font-semibold text-neutral-900'
-      }`}
-    >
-      {report.label}
-    </span>
-    {report.note && (
-      <span
-        className={`text-xs ${
-          report.status === 'partial' ? 'text-warning-text' : 'text-neutral-600'
-        }`}
-      >
-        {report.note}
-      </span>
-    )}
-  </span>
-);
-
-/**
- * One named entity inside an opened report.
- *
- * A {@link StretchedButton} rather than a wrapping `<button>`, so the name and
- * its explanation stay plain text and the row keeps its flush padding. `hover`
- * lands on white because the panel it sits in is already `neutral-50`.
- */
-const FindingRow: React.FC<{ finding: GroupFinding; onOpen: (id: string) => void }> = ({
-  finding,
-  onOpen,
-}) => {
-  const nameId = useId();
-  return (
-    // Padding stays a raw `px-2 py-1.5` rather than the row roles: this is a
-    // nested row inside an already-padded disclosure panel, deliberately
-    // denser than a top-level row so the hierarchy reads. No `.press` on the
-    // row itself — `StretchedButton` carries the response layer's press
-    // feedback on its own `:active` (ADR-0046), since the overlay has no
-    // visible box for a scale to read on.
-    <li className="relative flex items-center gap-2 rounded-sm px-2 py-1.5 transition-colors duration-(--dur-instant) hover:bg-white">
-      <StretchedButton
-        label="Open this group"
-        describedBy={nameId}
-        onClick={() => onOpen(finding.id)}
-      />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span id={nameId} className="truncate text-sm font-medium text-neutral-900">
-          {finding.name}
-        </span>
-        <span className="truncate text-xs text-neutral-600">{finding.detail}</span>
-      </span>
-      <Icon type="chevron-right" size="xs" className="shrink-0 text-neutral-400" />
-    </li>
-  );
-};
 
 /** The opened body: the caveat, the names, and — when capped — how many are missing. */
 const ReportPanel: React.FC<{
   report: HomeReport;
-  id: string;
   onOpenGroup: (id: string) => void;
-}> = ({ report, id, onOpenGroup }) => (
-  <div id={id} className="border-t border-neutral-100 bg-neutral-50 p-(--sp-card)">
+}> = ({ report, onOpenGroup }) => (
+  <>
     <p className="text-xs text-neutral-600">{report.caveat}</p>
     <ul className="mt-2 space-y-px">
       {report.findings.map((finding) => (
-        <FindingRow key={finding.id} finding={finding} onOpen={onOpenGroup} />
+        <EntityChoiceRow
+          key={finding.id}
+          choice={finding}
+          actionLabel="Open this group"
+          onChoose={onOpenGroup}
+        />
       ))}
     </ul>
     {report.value !== null && report.value > report.findings.length && (
@@ -134,25 +99,18 @@ const ReportPanel: React.FC<{
         {report.value.toLocaleString()}.
       </p>
     )}
-  </div>
+  </>
 );
 
 /**
  * One report row: a disclosure when there is something to open, plain text when
  * there is not.
- *
- * The header is a real `<button>` wrapping the row's own content, which is valid
- * here and is not in the org card: a report has no controls of its own until it
- * is open, and everything that *is* a control lives in the panel, outside the
- * button. That buys `aria-expanded`/`aria-controls` with no extra element.
  */
 const Report: React.FC<{ report: HomeReport; onOpenGroup: (id: string) => void }> = ({
   report,
   onOpenGroup,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
   const labelId = `home-report-${report.key}`;
-  const panelId = `home-report-panel-${report.key}`;
 
   if (report.status === 'reading') {
     return (
@@ -172,38 +130,27 @@ const Report: React.FC<{ report: HomeReport; onOpenGroup: (id: string) => void }
         }`}
       >
         <FigureNumber value={report.value} />
-        <ReportLines report={report} id={labelId} />
+        <RowLines
+          label={report.label}
+          note={report.note}
+          id={labelId}
+          recessed={report.value === null}
+          warn={report.status === 'partial'}
+        />
       </li>
     );
   }
 
   return (
-    <li>
-      {/* `.press press-subtle` (ADR-0046): this button IS the row, so `:active`
-          applies directly — the same treatment `ListRow` now gives an
-          interactive row, and the `active:brightness-90` step `Button`/
-          `IconButton` add for the third, darker press state Odyssey specifies
-          beyond hover. Its own transition replaces `transition-colors` so the
-          two don't fight over the `transition` longhands. */}
-      <button
-        type="button"
-        aria-expanded={isOpen}
-        aria-controls={panelId}
-        onClick={() => setIsOpen((open) => !open)}
-        className="press press-subtle flex w-full items-stretch gap-3 px-(--sp-row-x) py-(--sp-row-y) hover:bg-neutral-50 active:brightness-90 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
-      >
-        <FigureNumber value={report.value} />
-        <ReportLines report={report} id={labelId} />
-        <Icon
-          type="chevron-down"
-          size="xs"
-          className={`shrink-0 self-center text-neutral-400 transition-transform duration-(--dur-quick) ${
-            isOpen ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
-      {isOpen && <ReportPanel report={report} id={panelId} onOpenGroup={onOpenGroup} />}
-    </li>
+    <RowDisclosure
+      rowKey={report.key}
+      figure={<FigureNumber value={report.value} />}
+      label={report.label}
+      note={report.note}
+      warn={report.status === 'partial'}
+    >
+      <ReportPanel report={report} onOpenGroup={onOpenGroup} />
+    </RowDisclosure>
   );
 };
 
@@ -212,13 +159,26 @@ const Report: React.FC<{ report: HomeReport; onOpenGroup: (id: string) => void }
  *
  * @param props - See {@link ReportsCardProps}.
  */
-const ReportsCard: React.FC<ReportsCardProps> = ({ reports, onOpenGroup }) => (
+const ReportsCard: React.FC<ReportsCardProps> = ({
+  reports,
+  onOpenGroup,
+  groupChoices,
+  groupChoicesStatus,
+  onScanGroupMfa,
+}) => (
   <section aria-label="Reports" className="space-y-2">
     <Eyebrow as="h3">Reports</Eyebrow>
     <ul className="divide-y divide-neutral-100 overflow-hidden rounded-md border border-neutral-200 bg-white">
       {reports.map((report) => (
         <Report key={report.key} report={report} onOpenGroup={onOpenGroup} />
       ))}
+      {/* Last, and deliberately: the two rows above are answers, this one is a
+          question the reader has to scope before it can be answered. */}
+      <MfaCoverageLauncher
+        choices={groupChoices}
+        status={groupChoicesStatus}
+        onScan={onScanGroupMfa}
+      />
     </ul>
   </section>
 );

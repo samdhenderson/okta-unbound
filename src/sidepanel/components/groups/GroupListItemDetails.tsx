@@ -22,8 +22,7 @@
  * load already had it, and invented otherwise never.
  */
 import React from 'react';
-import { CopyableId, CopyButton, EntityLink } from '../shared';
-import Icon from '../shared/Icon';
+import { CopyButton, EntityLink } from '../shared';
 import MemberSourceMeter from './detail/MemberSourceMeter';
 import type { GroupSummary } from '../../../shared/types';
 import type { MemberSourceBreakdown } from '../../../shared/membership/groupSource';
@@ -36,28 +35,6 @@ interface GroupListItemDetailsProps {
   /** An already-computed member-source split, or `null` when none is cached. */
   breakdown: MemberSourceBreakdown | null;
 }
-
-/**
- * A push target this panel knows only by id.
- *
- * Deliberately not an `EntityLink`: that chip needs a name, and passing the id in
- * as the name is the defect being fixed. The absence is stated in the muted-italic
- * non-answer register, and the id goes through `CopyableId` so it reads as an
- * identifier and can be pasted into a search.
- */
-const UnnamedPushApp: React.FC<{
-  /** The Okta app id the mapping pushes into. */
-  appId: string;
-}> = ({ appId }) => (
-  <span
-    className="inline-flex max-w-full items-center gap-1 text-xs"
-    title="Okta returned no name for this application, so only its id is known here."
-  >
-    <Icon type="app" size="xs" className="shrink-0 text-neutral-500" />
-    <span className="shrink-0 italic text-neutral-600">App name not loaded</span>
-    <CopyableId value={appId} label={`Copy application id ${appId}`} />
-  </span>
-);
 
 /** One label-above-value field. */
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -121,7 +98,12 @@ const GroupListItemDetails: React.FC<GroupListItemDetailsProps> = ({ group, brea
                     copyIdLabel={`Copy application id ${mapping.appId}`}
                   />
                 ) : (
-                  <UnnamedPushApp appId={mapping.appId} />
+                  <EntityLink
+                    type="app"
+                    id={mapping.appId}
+                    unresolvedReason="Okta returned no name for this application, so only its id is known here."
+                    copyIdLabel={`Copy application id ${mapping.appId}`}
+                  />
                 )}
                 {mapping.targetGroupName && (
                   <div className="truncate text-xs text-neutral-600">

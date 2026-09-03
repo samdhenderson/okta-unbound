@@ -146,6 +146,26 @@ describe('useOrgFigures', () => {
     expect(syncs).toEqual([]);
   });
 
+  it('agrees with a denominator of one — the nouns are declared plural (I-024)', () => {
+    // End to end, because the fix lives in `orgFigures` while the nouns are
+    // declared here: an org with a single application rendered "of 1
+    // applications" on the panel's landing surface. The singular is derived
+    // from the declared plural, so this passes with the literals untouched.
+    const base = makeIndex();
+    const index = {
+      ...base,
+      apps: stub('apps', [{ id: 'a1', status: 'INACTIVE' }], {}),
+    } as unknown as OrgEntityIndex;
+    const { result } = render(index);
+    expect(sub(result.current.boxes, 'apps-inactive')).toMatchObject({
+      value: 1,
+      note: 'of 1 application',
+    });
+    // The collections with more than one of them are untouched.
+    expect(sub(result.current.boxes, 'groups-empty')?.note).toBe('of 2 groups');
+    expect(sub(result.current.boxes, 'rules-paused')?.note).toBe('of 3 group rules');
+  });
+
   it('counts paused rules out of the rows already held', () => {
     const { result } = render(makeIndex({ ruleStatuses: ['ACTIVE', 'ACTIVE'] }));
     expect(sub(result.current.boxes, 'rules-paused')?.value).toBe(0);

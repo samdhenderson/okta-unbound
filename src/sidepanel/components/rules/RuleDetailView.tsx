@@ -67,24 +67,15 @@ export interface RuleDetailViewProps {
 }
 
 /**
- * A target group this view knows only by id.
- *
- * Carried over from `RuleCard` unchanged, and for its original reason (I-003): passing the
- * id in as an `EntityLink`'s name puts an id in the name's slot, indistinguishable from a
- * resolved one. The missing name is *stated* instead, and the id renders through
- * {@link sidepanel/components/shared/CopyableId} so it reads as an identifier and can be
- * pasted into a search. Nothing here fetches, so nothing can turn the id into a name at
- * render time.
- */
-/**
  * A target id the org has no group for — a rule assigning users into a group
  * that was deleted (D-061).
  *
- * Distinct from {@link UnnamedGroupChip}, and the distinction is the point: one
- * says *this view has not learned the name*, the other says *there is nothing
+ * Distinct from the id-only mode of {@link sidepanel/components/shared/EntityLink},
+ * which is what an unresolved target renders as, and the distinction is the point:
+ * one says *this view has not learned the name*, the other says *there is nothing
  * left to name*. The second is only ever rendered when the group walk finished,
  * so it is a proven answer and takes a warning's weight; the first is a
- * non-answer and keeps its dashed, un-chipped register.
+ * non-answer and keeps its muted, un-chipped register.
  */
 const MissingGroupChip: React.FC<{ groupId: string }> = ({ groupId }) => (
   <span
@@ -93,17 +84,6 @@ const MissingGroupChip: React.FC<{ groupId: string }> = ({ groupId }) => (
   >
     <Icon type="alert" size="xs" className="shrink-0 text-warning-text" />
     <span className="shrink-0 text-warning-text">Group no longer exists</span>
-    <CopyableId value={groupId} label={`Copy group id ${groupId}`} />
-  </span>
-);
-
-const UnnamedGroupChip: React.FC<{ groupId: string }> = ({ groupId }) => (
-  <span
-    className="inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2 py-0.5 text-xs"
-    title="This rule assigns to this group id. No name for it was loaded into this view."
-  >
-    <Icon type="users" size="xs" className="shrink-0 text-neutral-500" />
-    <span className="shrink-0 italic text-neutral-600">Group name not loaded</span>
     <CopyableId value={groupId} label={`Copy group id ${groupId}`} />
   </span>
 );
@@ -272,7 +252,18 @@ const RuleDetailView: React.FC<RuleDetailViewProps> = ({
                   copyIdLabel={`Copy group id ${groupId}`}
                 />
               ) : (
-                <UnnamedGroupChip key={groupId} groupId={groupId} />
+                /*
+                  Known only by id. `EntityLink` with no `name` states the absence in
+                  the non-answer register, shows the id, and — unlike the local chip
+                  this replaced (I-017) — still opens the group, since a valid id is a
+                  valid destination whether or not this view learned its name.
+                */
+                <EntityLink
+                  key={groupId}
+                  type="group"
+                  id={groupId}
+                  unresolvedReason="This rule assigns to this group id. No name for it was loaded into this view."
+                />
               );
             })}
           </div>

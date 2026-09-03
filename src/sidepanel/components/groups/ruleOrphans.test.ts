@@ -14,10 +14,22 @@
 import { describe, it, expect } from 'vitest';
 import {
   appNamesByGroup,
+  dormantAccessCaveat,
+  dormantAccessLabel,
+  dormantAnchorNote,
   findCleanupCandidates,
+  findDormantAccess,
   findRulesWithMissingTargets,
   findUnmaintainedAppAccess,
   groupIdsFilledByRules,
+  resolveDormantAnchor,
+  APP_SOURCED_NOTE,
+  DORMANT_ACCESS_CAVEAT_UNANCHORED,
+  DORMANT_ACCESS_DAYS,
+  DORMANT_ANCHOR_MAX_AGE_DAYS,
+  DORMANT_MAINTAINERS,
+  INVISIBLE_MAINTAINERS,
+  PUSH_APPS_ONLY,
   type OrphanCandidateGroup,
 } from './ruleOrphans';
 
@@ -196,5 +208,203 @@ describe('findRulesWithMissingTargets', () => {
       true,
     );
     expect(found).toEqual([]);
+  });
+});
+
+/**
+ * The dormant join makes the strongest claim on the Home tab — *nothing wrote
+ * to this group* rather than *we see nothing filling it* — so ADR-0067's three
+ * bounds are each pinned here: the clock is the anchor and never `now`, the
+ * threshold is this report's own, and an `APP_GROUP` is labelled rather than
+ * dropped.
+ */
+describe('findDormantAccess', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  // Deliberately long past. Every date below is written relative to it, so a
+  // join that reached for `Date.now()` instead would compute a different age on
+  // every row and this suite would say so.
+  const ANCHOR = Date.UTC(2020, 0, 1);
+  const daysBefore = (days: number) => new Date(ANCHOR - days * DAY).toISOString();
+
+  const apps = new Map([
+    ['00gFAKE1', ['Salesforce', 'Jira']],
+    ['00gFAKE2', ['Salesforce']],
+  ]);
+
+  const member = (over: Partial<OrphanCandidateGroup> & { id: string }): OrphanCandidateGroup =>
+    group({ memberCount: 12, ...over });
+
+  it('names a group whose membership has been silent since before the anchor', () => {
+    const found = findDormantAccess(
+      [member({ id: '00gFAKE1', name: 'Sales tools', lastMembershipUpdated: daysBefore(730) })],
+      new Set(),
+      apps,
+      ANCHOR,
+    );
+    expect(found).toEqual([
+      {
+        id: '00gFAKE1',
+        name: 'Sales tools',
+        detail: '12 members · Salesforce, Jira · no membership change in 2 years',
+      },
+    ]);
+  });
+
+  it('labels an app-sourced row rather than dropping it', () => {
+    // ADR-0067 §2: an app group granting access from a dead source directory is
+    // one of the more serious findings here, and excluding it would narrow this
+    // population relative to the report it sits beside.
+    const found = findDormantAccess(
+      [
+        member({
+          id: '00gFAKE2',
+          name: 'SFDC Users',
+          type: 'APP_GROUP',
+          lastMembershipUpdated: daysBefore(400),
+        }),
+      ],
+      new Set(),
+      apps,
+      ANCHOR,
+    );
+    expect(found[0].detail).toBe(
+      '12 members · Salesforce · no membership change in 1 year · app-sourced',
+    );
+  });
+
+  it('takes the threshold at exactly DORMANT_ACCESS_DAYS and not a day sooner', () => {
+    const at = (days: number) =>
+      findDormantAccess(
+        [member({ id: '00gFAKE1', lastMembershipUpdated: daysBefore(days) })],
+        new Set(),
+        apps,
+        ANCHOR,
+      );
+    expect(at(DORMANT_ACCESS_DAYS)).toHaveLength(1);
+    expect(at(DORMANT_ACCESS_DAYS)[0].detail).toContain('no membership change in 6 months');
+    expect(at(DORMANT_ACCESS_DAYS - 1)).toEqual([]);
+  });
+
+  it('measures from the anchor, never from now', () => {
+    // The whole of ADR-0067 §3 in one case: a group silent for a decade in real
+    // time, read against an anchor taken a week after its last write, is not a
+    // finding. A `Date.now()` clock would report it as dormant with confidence.
+    const found = findDormantAccess(
+      [member({ id: '00gFAKE1', lastMembershipUpdated: daysBefore(7) })],
+      new Set(),
+      apps,
+      ANCHOR,
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('treats a missing or unparseable date as no evidence, not as silence', () => {
+    const found = findDormantAccess(
+      [
+        member({ id: '00gFAKE1' }),
+        member({ id: '00gFAKE2', lastMembershipUpdated: 'whenever Okta feels like it' }),
+      ],
+      new Set(),
+      apps,
+      ANCHOR,
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('keeps the population of its sibling: members, no rule, and an app', () => {
+    const rows = [
+      member({ id: '00gFAKE1', lastMembershipUpdated: daysBefore(730) }),
+      member({ id: '00gFAKE2', lastMembershipUpdated: daysBefore(730) }),
+      member({ id: '00gFAKE3', memberCount: 0, lastMembershipUpdated: daysBefore(730) }),
+      member({ id: '00gFAKE4', lastMembershipUpdated: daysBefore(730) }),
+    ];
+    // `00gFAKE2` is filled by a rule, `00gFAKE3` is empty, `00gFAKE4` carries no
+    // app access at all.
+    const found = findDormantAccess(rows, new Set(['00gFAKE2']), apps, ANCHOR);
+    expect(found.map((finding) => finding.id)).toEqual(['00gFAKE1']);
+  });
+
+  it('leads with the longest silence, then the widest reach, then the name', () => {
+    const rows = [
+      member({ id: '00gFAKE1', name: 'Zed', lastMembershipUpdated: daysBefore(200) }),
+      member({ id: '00gFAKE2', name: 'Alpha', lastMembershipUpdated: daysBefore(900) }),
+    ];
+    const found = findDormantAccess(rows, new Set(), apps, ANCHOR);
+    expect(found.map((finding) => finding.name)).toEqual(['Alpha', 'Zed']);
+  });
+});
+
+describe('resolveDormantAnchor', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const NOW = Date.UTC(2026, 8, 1);
+
+  it('uses a walk that finished inside the window', () => {
+    expect(resolveDormantAnchor(NOW - 5 * DAY, NOW)).toEqual({ usable: true, at: NOW - 5 * DAY });
+  });
+
+  it('refuses a collection that has never been fully walked', () => {
+    // Not a softer claim, a withheld one: with no complete walk behind it every
+    // stored membership date could be frozen at any age (`D-076`).
+    expect(resolveDormantAnchor(null, NOW)).toEqual({
+      usable: false,
+      at: null,
+      reason: 'never-walked',
+    });
+  });
+
+  it('refuses a walk older than the window, and keeps its date for the copy', () => {
+    const at = NOW - (DORMANT_ANCHOR_MAX_AGE_DAYS + 1) * DAY;
+    expect(resolveDormantAnchor(at, NOW)).toEqual({ usable: false, at, reason: 'stale' });
+  });
+
+  it('takes the boundary itself as usable', () => {
+    const at = NOW - DORMANT_ANCHOR_MAX_AGE_DAYS * DAY;
+    expect(resolveDormantAnchor(at, NOW)).toEqual({ usable: true, at });
+  });
+});
+
+describe('the dormant report’s copy', () => {
+  it('states its own threshold in the label, derived from the constant', () => {
+    expect(dormantAccessLabel()).toBe('App access with no membership change in 6 months');
+    expect(DORMANT_ACCESS_DAYS).toBe(180);
+  });
+
+  it('narrows INVISIBLE_MAINTAINERS instead of repeating it', () => {
+    // ADR-0067 §1's rejected-wordings table: pasting the sibling caveat in would
+    // say "anything could be filling this invisibly" under a finding that
+    // specifically rules that out.
+    const caveat = dormantAccessCaveat('Aug 1, 2026');
+    expect(caveat).not.toContain(INVISIBLE_MAINTAINERS);
+    expect(caveat).toContain(DORMANT_MAINTAINERS);
+    expect(caveat).toContain(APP_SOURCED_NOTE);
+    expect(caveat).toContain(PUSH_APPS_ONLY);
+  });
+
+  it('names the clock it is anchored to', () => {
+    expect(dormantAccessCaveat('Aug 1, 2026')).toContain(
+      'Measured from the last complete read of your groups, Aug 1, 2026 — not from today.',
+    );
+  });
+
+  it('never uses a wording the ADR rejected', () => {
+    const copy = [
+      dormantAccessCaveat('Aug 1, 2026'),
+      dormantAccessLabel(),
+      DORMANT_ACCESS_CAVEAT_UNANCHORED,
+      dormantAnchorNote('never-walked', 'Aug 1, 2026'),
+      dormantAnchorNote('stale', 'Aug 1, 2026'),
+    ].join(' ');
+    for (const banned of ['abandoned', 'orphaned', 'unused', 'touched', 'safe to revoke']) {
+      expect(copy.toLowerCase()).not.toContain(banned);
+    }
+  });
+
+  it('points at the read that is missing, and says how old the stale one is', () => {
+    expect(dormantAnchorNote('never-walked', 'Aug 1, 2026')).toBe(
+      'Needs a complete read of your groups, which has not finished yet.',
+    );
+    expect(dormantAnchorNote('stale', 'Aug 1, 2026')).toBe(
+      'Needs a complete read of your groups from the last 30 days. The last one finished Aug 1, 2026.',
+    );
   });
 });

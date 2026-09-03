@@ -15,6 +15,7 @@ import groups from '../../captures/groups.json';
 import home from '../../captures/home.json';
 import reporting from '../../captures/reporting.json';
 import rules from '../../captures/rules.json';
+import rulesImpact from '../../captures/rules-impact.json';
 import usersCause from '../../captures/users-cause.json';
 import usersFix from '../../captures/users-fix.json';
 import usersGap from '../../captures/users-gap.json';
@@ -84,6 +85,7 @@ const MANIFESTS = {
   groups,
   apps,
   rules,
+  'rules-impact': rulesImpact,
   attributes,
   reporting,
 } as const;

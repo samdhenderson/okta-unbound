@@ -39,13 +39,65 @@
  * None of the card's write verbs are wired here — this section cannot activate or
  * deactivate a rule, and since the verbs moved to the rung there is no control here that
  * could (ADR-0039).
+ *
+ * ## The one question, answered in place (I-031, decided)
+ *
+ * Losing the disclosure meant "what does that rule actually say?" cost a tab change, and
+ * the reader lost their place in the group they were studying. The decision is a
+ * **read-only `When` line under each row**, printing the rule's condition expression
+ * through the shared {@link sidepanel/components/shared/RuleExpressionText} — the same
+ * renderer the rung uses, reused rather than copied, so group ids read as named badges
+ * here too. It is a line of code, not prose: the answer is meant to be *seen*, not
+ * explained.
+ *
+ * Two alternatives were rejected and are named here so the question does not re-open.
+ * **Accept it and document the deep link** was cheapest but left the trade unpaid — the
+ * answer stayed one navigation away. **Pushing the rule's rung onto the group stack**
+ * would have dragged the rung's four write verbs onto a surface that deliberately wires
+ * none, so it needed a read-only mode for `RuleDetailView` to be safe (ADR-0039). The
+ * inline line needs neither: it renders no control of its own, and the deep link to the
+ * full rung stays exactly as it was.
  */
-import React from 'react';
-import { AlertMessage, DetailSection, LoadingSpinner } from '../../shared';
+import React, { useMemo } from 'react';
+import { AlertMessage, DetailSection, LoadingSpinner, RuleExpressionText } from '../../shared';
 import RuleCard from '../../RuleCard';
 import type { FeedingRule, SourceStatus } from '../../../hooks/useGroupSource';
 import type { ReferencingRule } from '../../../hooks/useGroupRuleReferences';
 import type { FormattedRule } from '../../../../shared/types';
+
+/**
+ * The rule's condition, stated under its row and readable without a navigation.
+ *
+ * Read-only by construction: a label, the expression, and nothing pressable except the
+ * group badges {@link RuleExpressionText} already resolves. It wraps rather than scrolls
+ * — a horizontal scroller in a side panel this narrow hides the end of the very line the
+ * block exists to show.
+ */
+const RuleConditionLine: React.FC<{ rule: FormattedRule }> = ({ rule }) => {
+  const names = rule.allGroupNamesMap;
+  /*
+    The resolver is derived from the names the caller already holds — this component
+    fetches nothing, and an id with no known name stays verbatim in the expression.
+  */
+  const resolveGroupName = useMemo(
+    () => (names ? (groupId: string) => names[groupId] : undefined),
+    [names],
+  );
+
+  const expression = rule.conditionExpression || rule.condition;
+  if (!expression) return null;
+
+  return (
+    <div className="mt-1 flex items-baseline gap-(--sp-inline) rounded-md border border-neutral-200 bg-neutral-50 px-(--sp-inline) py-1.5">
+      <span className="shrink-0 text-xs font-medium text-neutral-500">When</span>
+      <RuleExpressionText
+        text={expression}
+        resolveGroupName={resolveGroupName}
+        className="min-w-0 flex-1 font-mono text-xs whitespace-pre-wrap text-neutral-900"
+      />
+    </div>
+  );
+};
 
 /** One headed rule list with its own async triad. */
 const RuleRelationList: React.FC<{
@@ -73,11 +125,16 @@ const RuleRelationList: React.FC<{
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (
-            /* `onOpenInRulesTab`, never `onOpenRule`: this tab's view stack is showing
-               a *group*, so it has no rule rung of its own to push. With neither handler
-               the row is inert by design — the same "no control without a handler"
-               discipline the card applied to its writes (ADR-0039). */
-            <RuleCard key={rule.id} rule={rule} onOpenInRulesTab={onNavigateToRule} />
+            <div key={rule.id}>
+              {/* `onOpenInRulesTab`, never `onOpenRule`: this tab's view stack is showing
+                  a *group*, so it has no rule rung of its own to push. With neither handler
+                  the row is inert by design — the same "no control without a handler"
+                  discipline the card applied to its writes (ADR-0039). */}
+              <RuleCard rule={rule} onOpenInRulesTab={onNavigateToRule} />
+              {/* Outside the row, never inside it: the row is covered by a stretched
+                  button, and a badge under that overlay would be unreachable. */}
+              <RuleConditionLine rule={rule} />
+            </div>
           ))}
         </div>
       )}

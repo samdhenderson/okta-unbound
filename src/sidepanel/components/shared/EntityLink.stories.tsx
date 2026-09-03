@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, within } from 'storybook/test';
 import EntityLink from './EntityLink';
 import { NavigationProvider } from '../../contexts/NavigationContext';
 
@@ -23,6 +23,8 @@ const meta = {
           '**Not every name can be linked.** A rule condition\'s `isMemberOfGroupName("sales")` carries a name and no id, and one name can match an Okta group *and* a Workday group. `PushGroupMapping.targetGroupName` names a group inside the downstream app, which is not an Okta entity at all. Omit `id` for those and the name renders as plain text with a tooltip saying why, rather than as a control that cannot work.\n\n' +
           'The same fallback covers an entity kind the current build cannot reach, so a link is never dead.\n\n' +
           '**`copyId` adds the third affordance.** Set it and the chip gains a *sibling* ghost copy control for the raw Okta id, so one import gives a call site the resolved name badge, copy-id, and open-in-detail together. It is a sibling rather than a child because the chip is a `<button>`. It appears only when an `id` is present — nothing to copy, no control — but it is independent of navigability: an id this build cannot open is still an id worth copying.\n\n' +
+          '**Known only by an id.** The mirror image: an id is in hand and no name is. Omit `name` and the reference renders as a stated absence ("Group name not loaded") beside the raw id in the identifier register — and still opens the entity when the id is navigable, because a valid id is a valid destination whether or not this view learned its name. That last part is what three hand-rolled local copies of this state could not do (I-017).\n\n' +
+          "Its chrome follows the house non-answer convention `AppScopeIndicator` and `GroupSourceIndicator` state explicitly: **a chip is a proven answer, a non-answer is muted italic text and is never chipped**. What survives from the pill one of those copies wore is the glyph and the chevron, which say *what kind* and *this goes somewhere* — information rather than weight. A reference whose entity is *gone* is a different thing: that is a proven answer, and it keeps its warning chip (`RuleDetailView`'s `MissingGroupChip`).\n\n" +
           'Related internals: `sidepanel/contexts/NavigationContext`.',
       },
     },
@@ -42,7 +44,17 @@ const meta = {
       description:
         "The entity's Okta id. **Omit when the reference carries only a name**; the chip then renders as plain text.",
     },
-    name: { description: 'The visible name. Truncates rather than overflowing.' },
+    name: {
+      description:
+        'The visible name. Truncates rather than overflowing. **Omit it** when this view loaded only the id — never pass the id here.',
+    },
+    unresolvedLabel: {
+      description:
+        'The words shown in place of a missing name, in the id-only mode. Defaults to “<Type> name not loaded”.',
+    },
+    unresolvedReason: {
+      description: 'Tooltip on that stated absence — why the name is missing here.',
+    },
     unlinkableReason: {
       description:
         'Why this reference cannot be opened, shown as the tooltip on the plain-text fallback. Defaults to a generic "no id available" sentence.',
@@ -205,6 +217,108 @@ export const DuplicateNamesStayDistinguishable: Story = {
     <div className="flex flex-col items-start gap-2">
       <EntityLink type="group" id="00gFAKEGROUP0001" name="Engineering" copyId />
       <EntityLink type="group" id="00gFAKEGROUP0002" name="Engineering" copyId />
+    </div>
+  ),
+};
+
+/**
+ * **Known only by an id.** No name was loaded, so the absence is stated where the
+ * name would be, the id sits beside it in the identifier register — and the group
+ * still opens, because the id is a valid destination on its own.
+ */
+export const KnownOnlyByAnId: Story = {
+  args: { type: 'group', id: '00gFAKEGROUP0001', name: undefined },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole('button', { name: 'Group name not loaded — open group 00gFAKEGROUP0001' }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole('button', { name: 'Copy group id 00gFAKEGROUP0001' }),
+    ).toBeInTheDocument();
+  },
+};
+
+/**
+ * The case I-017 exists for: **resolved and unresolved references in one list**. The
+ * chip is a proven answer and carries an answer's weight; the un-chipped muted italic
+ * row is a non-answer and must never be mistaken for a name at a glance. Both open.
+ */
+export const ResolvedAndUnresolvedInOneList: Story = {
+  render: () => (
+    <ul className="flex w-72 flex-col gap-2">
+      <li className="flex min-w-0">
+        <EntityLink type="group" id="00gFAKEGROUP0001" name="Sales — West" copyId />
+      </li>
+      <li className="flex min-w-0">
+        <EntityLink type="group" id="00gFAKEGROUP0002" />
+      </li>
+      <li className="flex min-w-0">
+        <EntityLink type="group" id="00gFAKEGROUP0003" name="Sales — EMEA" copyId />
+      </li>
+      <li className="flex min-w-0">
+        <EntityLink type="group" id="00gFAKEGROUP0004" />
+      </li>
+    </ul>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole('button', { name: 'Open group Sales — West' }),
+    ).toBeInTheDocument();
+    // Two unresolved rows, and no name to tell them apart — so the id does that job here.
+    await expect(
+      canvas.getByRole('button', { name: 'Group name not loaded — open group 00gFAKEGROUP0002' }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole('button', { name: 'Group name not loaded — open group 00gFAKEGROUP0004' }),
+    ).toBeInTheDocument();
+  },
+};
+
+/**
+ * An unresolved reference to a kind this build cannot reach. The stated absence stays,
+ * the id stays copyable, and nothing pretends to be a control — the same split the
+ * named case makes between `copyId` (follows the id) and opening (follows navigability).
+ */
+export const KnownOnlyByAnIdNotNavigable: Story = {
+  render: () => (
+    <NavigationProvider handlers={{}}>
+      <EntityLink type="app" id="0oaFAKEAPP000001" />
+    </NavigationProvider>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('App name not loaded')).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: /open app/i })).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * The wording is a prop. "Okta returned no name" and "this view never asked" are
+ * different facts, and a caller that knows which one applies should say it — as long
+ * as what it says is still an absence, not something that could read as a name.
+ */
+export const UnresolvedWordingOverridden: Story = {
+  args: {
+    type: 'app',
+    id: '0oaFAKEAPP000002',
+    name: undefined,
+    unresolvedLabel: 'Name not returned by Okta',
+    unresolvedReason: 'Okta returned no name for this application, so only its id is known here.',
+    copyIdLabel: 'Copy application id 0oaFAKEAPP000002',
+  },
+};
+
+/** One unresolved reference per entity kind, so the glyphs can be compared. */
+export const KnownOnlyByAnIdEveryType: Story = {
+  render: () => (
+    <div className="flex flex-col items-start gap-2">
+      <EntityLink type="rule" id="0prFAKERULE00001" />
+      <EntityLink type="group" id="00gFAKEGROUP0001" />
+      <EntityLink type="user" id="00uFAKEUSER00001" />
+      <EntityLink type="app" id="0oaFAKEAPP000001" />
+      <EntityLink type="policy" id="00pFAKEPOLICY001" />
     </div>
   ),
 };

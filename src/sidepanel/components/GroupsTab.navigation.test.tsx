@@ -367,6 +367,28 @@ describe('GroupsTab sub-navigation', () => {
     expect(screen.getByLabelText('Select Engineering').closest('div.hidden')).toBeNull();
   });
 
+  it('pushes straight to the named pane when a deep-link asks for a rung, not a row', async () => {
+    seedCache([cachedGroup()]);
+    const onGroupSelected = vi.fn();
+    render(
+      <GroupsTab
+        targetTabId={1}
+        oktaOrigin={ORIGIN}
+        selectedGroupId="g1"
+        selectedGroupPane="insights"
+        onGroupSelected={onGroupSelected}
+      />,
+    );
+    await act(async () => {});
+
+    // The detail view is pushed rather than the list row highlighted, and it
+    // lands on the pane the arrival asked for.
+    const detail = within(await screen.findByTestId('group-detail-view'));
+    expect(detail.getByRole('tab', { name: 'Insights' })).toHaveAttribute('aria-selected', 'true');
+    // One-shot: the request is reported consumed so it cannot re-push later.
+    expect(onGroupSelected).toHaveBeenCalled();
+  });
+
   it('shows the group id, dates and push state in the detail view', async () => {
     const uev = userEvent.setup();
     await renderCached([

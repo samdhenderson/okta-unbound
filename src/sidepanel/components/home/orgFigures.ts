@@ -50,6 +50,7 @@
  * as "you are not allowed to", because every other failure could just as
  * easily be transient.
  */
+import { pluralize, singularOf, type NounForms } from '../../../shared/utils/plural';
 import type { IconType } from '../shared/Icon';
 import type { ListViewRequest, ListViewTab } from '../../listViewRequest';
 
@@ -182,6 +183,14 @@ export interface NamedSource {
   source: FigureSource;
   /** Plural, lowercase: `groups`, `applications`, `group rules`. */
   noun: string;
+  /**
+   * The singular, for the one sentence that takes a count — *of 1
+   * application*. Optional: it is derived from {@link NamedSource.noun} with
+   * {@link module:shared/utils/plural.singularOf} when absent, which is right
+   * for every regular plural the snapshot names. State it only for a noun that
+   * derivation would mangle.
+   */
+  singular?: string;
 }
 
 /**
@@ -289,6 +298,11 @@ export interface CountInput {
   count: number;
 }
 
+/** Both forms of a named collection's noun, deriving the singular when unstated. */
+function nounForms(named: NamedSource): NounForms {
+  return { one: named.singular ?? singularOf(named.noun), other: named.noun };
+}
+
 /**
  * The line under a count: what the number is out of, or why there is none.
  *
@@ -303,7 +317,11 @@ function countNote(
   floors: NamedSource[],
 ): string | undefined {
   if (status === 'reading') return undefined;
-  if (status === 'ok') return `of ${counted.source.count.toLocaleString()} ${counted.noun}`;
+  // The only branch whose noun follows a count, and so the only one that
+  // pluralises. The other three are plural regardless of any number — they
+  // speak about the collection ("Needs group rules, which have not been read"),
+  // and singularising them would produce a sentence that does not agree.
+  if (status === 'ok') return `of ${pluralize(counted.source.count, nounForms(counted))}`;
   if (status === 'partial') {
     // Name the collection that actually fell short, which with a floor in play
     // is not always the one being counted.
