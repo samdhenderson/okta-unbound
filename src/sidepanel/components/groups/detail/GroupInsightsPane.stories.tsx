@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import GroupInsightsPane from './GroupInsightsPane';
 import type { FeedingRule } from '../../../hooks/useGroupSource';
 import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
@@ -197,3 +197,53 @@ export const MfaError: Story = {
 
 /** No Okta tab connected — both gate buttons disable. */
 export const Disabled: Story = { args: { canAnalyze: false } };
+
+/**
+ * Forty members over nine cost centres — more distinct values than a card's
+ * summary keeps, so three of them get folded into `Other (3 values)`.
+ */
+const wideMembers: OktaUser[] = Array.from({ length: 40 }, (_, i) => ({
+  id: `wide${i + 1}`,
+  status: 'ACTIVE',
+  profile: {
+    login: `wide${i + 1}@example.com`,
+    email: `wide${i + 1}@example.com`,
+    firstName: `First${i + 1}`,
+    lastName: `Last${i + 1}`,
+    department: i % 2 === 0 ? 'Engineering' : 'Product',
+    costCenter: `CC-${100 + (i % 9)}`,
+  },
+}));
+
+/**
+ * The aggregated tail is reachable.
+ *
+ * A card keeps only its leading values and folds the rest into one
+ * `Other (N values)` row, which used to be inert text — the card stated a count
+ * and then refused to say what was in it, which is exactly where drift hides.
+ * The row now opens the same `BreakdownDetailsModal` the Members tab uses, over
+ * the full distribution `computeDimensionBreakdown` re-derives from the roster
+ * already in hand. **No second fetch**, and the long list is computed only when
+ * somebody opens it.
+ *
+ * Read-only: this tab has no member list, so no row is wired to a filter and the
+ * modal does not offer one.
+ */
+export const OtherRowRevealsHiddenValues: Story = {
+  args: { members: wideMembers, memberCount: wideMembers.length, memberStatus: 'done' },
+  play: async ({ canvas, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+
+    // The card names the tail's size and nothing in it.
+    await expect(canvas.getByText('costCenter')).toBeVisible();
+    await expect(canvas.queryByText('CC-108')).toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: /Other \(3 values\)/ }));
+
+    const dialog = await body.findByRole('dialog');
+    await expect(within(dialog).getByText('CC-108')).toBeVisible();
+    // Every value, not just the hidden three.
+    await expect(within(dialog).getByText('CC-100')).toBeVisible();
+    await expect(within(dialog).queryByText(/filter the member list/)).toBeNull();
+  },
+};
