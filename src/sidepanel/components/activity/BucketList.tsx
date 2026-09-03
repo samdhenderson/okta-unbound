@@ -1,38 +1,53 @@
 /**
  * @module sidepanel/components/activity/BucketList
  * @description The bucket **rack** of the expanded activity bar: every Okta
- * rate-limit family that has actually been exercised, as parallel lanes of
- * identical geometry.
+ * rate-limit family the scheduler is tracking, as parallel lanes of identical
+ * geometry.
  *
- * ## Why the filter is no longer "strained only"
+ * ## Every known bucket is a lane, always
  *
- * The rack used to admit a bucket only while it was under strain, because a
- * bucket that finished its work stopped being emitted by the scheduler seconds
- * later anyway — the row was going to vanish regardless, and the filter merely
- * chose which of three unrelated clocks it vanished on.
+ * The rack used to filter. First to buckets under strain, then — once ADR-0070
+ * gave a bucket ten minutes of memory after its work drained — to strain *or*
+ * recent use, with the remainder collapsed onto a "3 buckets idle · meta, zones"
+ * summary line.
  *
- * ADR-0070 removed that: a bucket's row now survives for ten minutes after its
- * queue drains, its plan is reaped and its header observation expires. Keeping a
- * strained-only filter on top of that would defeat the feature exactly, because
- * a bucket stops being strained on its **last settle** — the precise instant the
- * memory exists to cover. The user would watch a family work and then watch its
- * row disappear the moment it finished, which is the behaviour the ADR was
- * written to end.
+ * Both filters were solving a problem that no longer exists. The scheduler's
+ * published set is already the answer to "which buckets matter": `getState()`
+ * emits a lane only for a family that has been observed, has work against it, is
+ * planned for, or settled a request inside the memory window, and ADR-0070 §5
+ * bounds that at twelve with LRU eviction. Filtering it again in the view meant
+ * the rack answered a *second*, differently-shaped question, and the two answers
+ * disagreed at exactly the wrong moment — a bucket stops being strained on its
+ * last settle, so a strain filter deleted the row at the precise instant the
+ * memory existed to preserve it.
  *
- * So a lane is earned by strain **or by recent use** ({@link deservesTrack}).
- * What still collapses to one line is a bucket the scheduler is merely aware of
- * and that has never settled a request in this worker's lifetime — the rack
- * lists what has been exercised, not everything reachable. Retention is the
- * scheduler's decision, on one clock, and the rack simply renders it.
+ * So: no filter, no row cap, no summary line. A lane appears when the scheduler
+ * starts tracking a bucket and disappears when the scheduler forgets it, on one
+ * clock, decided in one place. The rack renders retention; it does not have a
+ * retention policy of its own (ADR-0072).
+ *
+ * ## Why the height is bounded anyway
+ *
+ * Twelve two-line lanes would be most of a side panel. The rack is therefore
+ * scrollable rather than truncated: every lane stays reachable, and none is
+ * hidden behind a line of prose that a reader has to expand something to
+ * resolve. Truncating would reintroduce exactly the filter this module just
+ * removed, one layer down.
+ *
+ * The expanded bar is opt-in on a panel this narrow — `ActivityBar` collapses
+ * below 640px and a Chrome side panel is ~400px — so a reader who has the rack
+ * on screen asked for it.
  *
  * @see `ADR-0060` §4 — the per-bucket state, already sorted by pressure.
  * @see `ADR-0070` §5–6 — remembered buckets, and what they are allowed to say.
+ * @see `ADR-0072` — the lane's denominator, and why the rack stopped filtering.
  */
 import React from 'react';
 import type { BucketState } from '@/shared/scheduler/types';
-import BucketRow, { deservesTrack } from './BucketRow';
+import BucketRow from './BucketRow';
+import RackLegend from './RackLegend';
 
-/** Props for {@link BucketList}. */
+/** Props for {@link BucketListProps}. */
 export interface BucketListProps {
   /** Buckets as published by the scheduler, most-pressured first. */
   buckets: BucketState[];
@@ -40,76 +55,34 @@ export interface BucketListProps {
   lowThresholdPercent: number;
   /** Shared clock tick, so every countdown in the bar moves together. */
   now: number;
-  /**
-   * Cap on lanes. The scheduler already bounds its memory at twelve buckets, but
-   * twelve lanes would be half the panel; the overflow is **named** in the
-   * summary line rather than dropped silently, and because the list arrives in
-   * pressure order the lanes that survive the cap are the ones under strain.
-   */
-  maxRows?: number;
-}
-
-/** Short bucket label: `/api/v1/users` reads as `users`. */
-function bucketLabel(bucket: string): string {
-  return bucket.replace(/^\/api\/v1\//, '');
-}
-
-/** Comma-joined short labels, for the summary line. */
-function names(buckets: BucketState[]): string {
-  return buckets.map((bucket) => bucketLabel(bucket.bucket)).join(', ');
 }
 
 /**
- * Render the bucket rack, or nothing at all when no bucket has been observed.
+ * Render the bucket rack, or nothing at all when no bucket is being tracked.
+ *
+ * The empty case stays `null` rather than becoming an empty-state message: a
+ * scheduler that has not touched Okta yet is not a condition to report, and
+ * mounting a placeholder would grow the bar for no information (ADR-0008).
  *
  * @param props - See {@link BucketListProps}.
  */
-const BucketList: React.FC<BucketListProps> = ({
-  buckets,
-  lowThresholdPercent,
-  now,
-  maxRows = 6,
-}) => {
+const BucketList: React.FC<BucketListProps> = ({ buckets, lowThresholdPercent, now }) => {
   if (buckets.length === 0) return null;
-
-  const earned = buckets.filter((bucket) => deservesTrack(bucket, lowThresholdPercent));
-  const shown = earned.slice(0, maxRows);
-  // Two distinct remainders, and they must not be conflated: buckets that earned
-  // a lane but lost it to the cap, and buckets that never did anything. Calling
-  // the first group "idle" would be the same class of error as letting a memory
-  // pass for a reading.
-  const overflow = earned.slice(maxRows);
-  const untouched = buckets.filter((bucket) => !earned.includes(bucket));
 
   return (
     <div data-testid="activity-buckets" className="flex flex-col border-t border-neutral-100 py-1">
-      {shown.map((bucket) => (
-        <BucketRow
-          key={bucket.bucket}
-          bucket={bucket}
-          lowThresholdPercent={lowThresholdPercent}
-          now={now}
-        />
-      ))}
+      <div className="flex max-h-56 flex-col overflow-y-auto">
+        {buckets.map((bucket) => (
+          <BucketRow
+            key={bucket.bucket}
+            bucket={bucket}
+            lowThresholdPercent={lowThresholdPercent}
+            now={now}
+          />
+        ))}
+      </div>
 
-      {(overflow.length > 0 || untouched.length > 0) && (
-        <div
-          data-testid="activity-buckets-quiet"
-          className="flex items-baseline gap-2 px-(--sp-gutter) py-1 text-xs text-neutral-500"
-        >
-          {overflow.length > 0 && (
-            <span className="truncate">
-              {overflow.length} more · {names(overflow)}
-            </span>
-          )}
-          {untouched.length > 0 && (
-            <span className="truncate">
-              {untouched.length} {untouched.length === 1 ? 'bucket' : 'buckets'} idle ·{' '}
-              {names(untouched)}
-            </span>
-          )}
-        </div>
-      )}
+      <RackLegend />
     </div>
   );
 };

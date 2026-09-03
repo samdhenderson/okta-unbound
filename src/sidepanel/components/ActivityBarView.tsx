@@ -3,8 +3,8 @@
  * @description Pure presentation of the unified activity bar.
  *
  * Renders the merged scheduler + operation state ({@link ActivityView}) as one
- * fixed bottom bar with a deliberately STABLE layout: the status region, the
- * summary line and the action area are always mounted, so values coming and
+ * fixed bottom bar with a deliberately STABLE layout: the identity cluster, the
+ * standing slot and the action area are always mounted, so values coming and
  * going swap text in place instead of adding and removing DOM (which is what
  * made the old two-bar design reflow). All state comes in as props; timers and
  * context wiring live in {@link useActivityBar}.
@@ -17,12 +17,31 @@
  *
  * ## What the expanded bar is, top to bottom
  *
- * One status/summary row, then the operation ledger, then the reset timeline,
- * then the **bucket rack** — every rate-limit family that has been exercised, as
- * parallel lanes of identical geometry (`activity/BucketList`). Four boxed
- * metric tiles used to sit where the summary line is; three of them held one
- * number each and the fourth, **Active**, held a scheduler-internal that changed
- * several times a second and that the rack already draws. It is gone.
+ * One header row, then the operation ledger, then the reset timeline, then the
+ * **bucket rack** — every rate-limit family the scheduler is tracking, as
+ * parallel lanes of identical geometry (`activity/BucketList`).
+ *
+ * The header carries two clusters and the actions, and nothing else. On the
+ * left, *what is happening*: the status dot, the operation's name (or the
+ * scheduler's status), and how far through it we are. On the right, *the
+ * standing*: the ETA range while an operation runs, the cooldown countdown while
+ * one is armed, and otherwise the number of buckets the rack below is
+ * accounting for.
+ *
+ * Three things used to live between them and no longer do, each for the same
+ * reason — the rack says it better:
+ *
+ * - **Four boxed metric tiles**, then the `Queue · Rate · ETA` line that replaced
+ *   them. `Rate` was one org-wide pair standing in for a per-family quantity,
+ *   which is the confusion ADR-0059 exists to end; every lane now draws its own.
+ *   `Queue` is the sum of the lanes' queued segments. `ETA` moved right.
+ * - **The `N done · N active` breakdown.** `done` is `current / total` restated,
+ *   and `active` is a scheduler-internal that changes several times a second and
+ *   that every lane draws. Only `N failed` survives, because a failure is the one
+ *   thing here a reader has to act on.
+ * - **The processed tally.** A lifetime counter no decision depends on. It is
+ *   still on the condensed line, which is the at-a-glance surface; the expanded
+ *   bar's job is detail, and its detail is the rack.
  *
  * ## Motion policy: values animate, layout does not
  *
@@ -47,7 +66,6 @@
  */
 import React from 'react';
 import { Button, IconButton } from './shared';
-import ActivitySummary from './activity/ActivitySummary';
 import BucketList from './activity/BucketList';
 import CondensedBar from './activity/CondensedBar';
 import OperationList from './activity/OperationList';
@@ -100,6 +118,18 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
   // "Cancel" no longer says which. It becomes "Cancel all" — the button's
   // behaviour has always been to drain the whole queue.
   const cancelsEverything = view.operations.length > 1;
+
+  // The right-hand slot answers "when does this end?" while anything is running,
+  // and "what is the rack accounting for?" when nothing is. Ordered by urgency,
+  // and never empty when there is something to say — but deliberately allowed to
+  // be empty on a cold panel, because "0 buckets" is noise, not information.
+  const standing = view.operationActive
+    ? (view.eta?.label ?? null)
+    : (view.cooldownLabel ?? null) !== null
+      ? `resuming in ${view.cooldownLabel}`
+      : view.buckets.length > 0
+        ? `${view.buckets.length} ${view.buckets.length === 1 ? 'bucket' : 'buckets'}`
+        : null;
 
   const actions = (
     <>
@@ -154,8 +184,8 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
       <div
         className={`flex items-center gap-(--sp-inline) px-(--sp-gutter) py-2.5 text-xs ${collapsible ? 'flex-wrap' : ''}`}
       >
-        {/* Status region — always present */}
-        <div className="flex min-w-0 items-center gap-2">
+        {/* Identity: what is happening, and how far through it we are. */}
+        <div className="flex min-w-0 items-baseline gap-2">
           <StatusDot busy={view.busy} colorVar={view.statusColorVar} />
           {view.operationActive && view.operationName ? (
             <span
@@ -165,41 +195,34 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
               {view.operationName}
             </span>
           ) : (
-            <span className="font-bold text-neutral-900">{view.statusLabel}</span>
+            <span data-testid="activity-status-label" className="font-bold text-neutral-900">
+              {view.statusLabel}
+            </span>
+          )}
+          {view.operationActive && view.total > 0 && (
+            <span
+              data-testid="activity-progress-counter"
+              className="shrink-0 tabular-nums text-neutral-600"
+            >
+              {view.current} / {view.total}
+            </span>
           )}
         </div>
 
-        {/* One summary line, not a grid of tiles. Always mounted. */}
-        <ActivitySummary view={view} />
-
-        {/* Operation breakdown — the full "X done · Y active" story */}
-        {view.operationActive && view.total > 0 && (
-          <div
-            data-testid="activity-op-breakdown"
-            className="ms-auto flex items-center gap-2 font-medium text-neutral-600"
-          >
-            <span data-testid="activity-progress-counter" className="text-neutral-900">
-              {view.current} / {view.total}
+        {/* Standing: when this ends, or — with nothing running — how much of the
+            rate-limit surface the rack below is accounting for. One slot, always
+            mounted, so a value arriving never reflows the row (ADR-0008). */}
+        <div
+          data-testid="activity-standing"
+          className="ms-auto flex shrink-0 items-baseline gap-2 text-neutral-600"
+        >
+          {view.opFailed > 0 && (
+            <span data-testid="activity-failed" className="font-semibold text-danger-text">
+              {view.opFailed} failed
             </span>
-            <span aria-hidden="true" className="text-neutral-300">
-              |
-            </span>
-            <span className="text-success-text">{view.opCompleted} done</span>
-            <span className="text-info">{view.opActive} active</span>
-            {view.opFailed > 0 && <span className="text-danger-text">{view.opFailed} failed</span>}
-          </div>
-        )}
-
-        {/* Processed tally — fills the flexible gap when idle */}
-        {!view.operationActive && view.processed > 0 && (
-          <div className="ms-auto flex items-center gap-1.5 text-neutral-600">
-            <span>Processed:</span>
-            <span className="font-bold text-neutral-900">{view.processed}</span>
-            {view.failed > 0 && (
-              <span className="font-semibold text-danger-text">({view.failed} failed)</span>
-            )}
-          </div>
-        )}
+          )}
+          <span className="tabular-nums">{standing}</span>
+        </div>
 
         {/* Action area — always present so the right edge never shifts */}
         <div

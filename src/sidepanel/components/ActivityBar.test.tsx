@@ -58,13 +58,13 @@ describe('ActivityBar', () => {
     render(<ActivityBar />, { wrapper });
 
     await waitFor(() => expect(screen.getByTestId('activity-rate-compact')).toBeInTheDocument());
-    // Condensed: the boxed metric slots are hidden.
-    expect(screen.queryByTestId('activity-queue')).not.toBeInTheDocument();
+    // Condensed: the expanded header's clusters are not mounted.
+    expect(screen.queryByTestId('activity-standing')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /show all activity stats/i }));
 
-    // Expanded: the full slots are back.
-    expect(screen.getByTestId('activity-queue')).toBeInTheDocument();
+    // Expanded: the header is back.
+    expect(screen.getByTestId('activity-standing')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /hide extra activity stats/i })).toBeInTheDocument();
   });
 
@@ -72,7 +72,14 @@ describe('ActivityBar', () => {
     setWidth(1200);
     render(<ActivityBar />, { wrapper });
 
-    await waitFor(() => expect(screen.getByTestId('activity-queue')).toHaveTextContent('6'));
+    // Waits on the precondition these cases actually need — a queue of 6 makes
+    // `canCancel` true — rather than on the `Queue` slot that used to print it.
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId('activity-actions')).getByRole('button', { name: /cancel/i }),
+      ).toBeEnabled(),
+    );
+    expect(screen.getByTestId('activity-standing')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /activity stats/i })).not.toBeInTheDocument();
   });
 
@@ -81,7 +88,13 @@ describe('ActivityBar', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<ActivityBar />, { wrapper });
 
-    await waitFor(() => expect(screen.getByTestId('activity-queue')).toHaveTextContent('6'));
+    // Waits on the precondition these cases actually need — a queue of 6 makes
+    // `canCancel` true — rather than on the `Queue` slot that used to print it.
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId('activity-actions')).getByRole('button', { name: /cancel/i }),
+      ).toBeEnabled(),
+    );
     const actions = screen.getByTestId('activity-actions');
     fireEvent.click(within(actions).getByRole('button', { name: /cancel/i }));
 
@@ -97,7 +110,13 @@ describe('ActivityBar', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<ActivityBar />, { wrapper });
 
-    await waitFor(() => expect(screen.getByTestId('activity-queue')).toHaveTextContent('6'));
+    // Waits on the precondition these cases actually need — a queue of 6 makes
+    // `canCancel` true — rather than on the `Queue` slot that used to print it.
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId('activity-actions')).getByRole('button', { name: /cancel/i }),
+      ).toBeEnabled(),
+    );
     fireEvent.click(
       within(screen.getByTestId('activity-actions')).getByRole('button', { name: /cancel/i }),
     );

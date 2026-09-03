@@ -1,42 +1,64 @@
 /**
  * @module sidepanel/components/activity/BucketRow
- * @description One track in the activity bar's bucket **rack**: an Okta
- * rate-limit family rendered as a single horizontal lane, with its state folded
- * onto the lane rather than sitting beside it.
+ * @description One lane in the activity bar's bucket **rack**: an Okta
+ * rate-limit family drawn as a label line above a full-width track, where the
+ * track is that family's *remaining rate-limit budget*.
  *
  * Okta enforces quotas per endpoint family, so "the rate limit" was never one
  * number — `/api/v1/apps` can be exhausted while `/api/v1/groups` sits untouched
- * (ADR-0059). Stacking the families as parallel lanes of identical geometry is
- * what makes them comparable at a glance; a column of differently-shaped cards
- * is not.
+ * (ADR-0059). Stacking the families as lanes of identical geometry is what makes
+ * them comparable at a glance; a column of differently-shaped cards is not.
+ *
+ * ## The track is the budget, not the shape of the work
+ *
+ * This is the whole point of the lane, and it is the thing an earlier build got
+ * backwards (ADR-0072). The fill used to be `n / (active + queued + planned)` —
+ * a composition of the *current work*, which meant the track read 100% full
+ * whenever anything was running, whether that was four requests against an
+ * untouched quota or four hundred against an exhausted one. Headroom, the only
+ * quantity a reader can act on, appeared as text riding on the bar.
+ *
+ * Now the denominator is `remaining`. Running requests fill from the left in
+ * solid indigo, queued and planned work continues as a dashed extension, and the
+ * pale tail is the headroom that will still be there once this work drains. When
+ * the declared work exceeds the remaining budget the track saturates and the
+ * tail disappears — which is exactly the picture worth having, because it says
+ * *this will not fit*, before the cooldown says it for you.
  *
  * ## A memory must never pass for a reading
  *
- * ADR-0070 keeps a bucket's row alive for ten minutes after its work drains, and
- * retains **only the row's existence** — a remembered-idle bucket reports true
- * zero counts and a `null` budget. So this row draws an *empty* lane, prints the
- * words **at rest**, and prints no budget figure at all. The one number it may
- * add is how long ago the bucket last settled a request, which is a duration and
- * is labelled as one. When `lastActiveAt` is `null` — the service worker was
- * evicted, and the activity a timestamp would describe did not survive it either
- * — the lane says "at rest" and nothing more. It never invents a timestamp.
+ * ADR-0070 keeps a bucket's lane alive for ten minutes after its work drains and
+ * retains **only the lane's existence** — a remembered-idle bucket reports true
+ * zero counts and a `null` budget. So there are four mutually exclusive forms
+ * here, and two of them draw no scale at all:
+ *
+ * | Form                    | Track                              | Words                         |
+ * | ----------------------- | ---------------------------------- | ----------------------------- |
+ * | gated                   | {@link COOLDOWN_HATCH}, whole      | `cooling down · 24s`          |
+ * | working, budget known   | running → queued → pale headroom   | `4 running · 61 queued`       |
+ * | working, budget unknown | {@link UNKNOWN_HATCH}, whole       | `2 running · 8 queued`        |
+ * | at rest                 | empty                              | `at rest · 40s ago`           |
+ *
+ * No lane ever prints a `remaining/limit` pair. The track carries the budget;
+ * the exact figures are on the track's accessible name, where they inform
+ * without competing with the shape.
  *
  * ## Colour is not the carrier
  *
  * A gated lane is hatched *and* carries a countdown in words; a low lane carries
- * a literal `low` chip; the planned share of a lane is hatched rather than
- * merely paler; and the in-flight / queued / planned magnitudes are printed on
- * the lane in words as well as drawn. Nothing here needs hue to be legible.
- *
- * Both hatches are static — there is no marching-ants animation to suppress
- * under `prefers-reduced-motion`, and no fill transition either, so the lane has
- * exactly one form.
+ * a literal `low` badge; queued work is separated from running work by pattern
+ * axis rather than by tint; and every magnitude on the track is also stated in
+ * words on the label line. Nothing here needs hue to be legible, and every
+ * pattern is static — one form, no reduced-motion variant.
  *
  * @see `ADR-0060` — the per-bucket state this renders.
  * @see `ADR-0070` — remembered buckets and `lastActiveAt`.
+ * @see `ADR-0072` — why the denominator is `remaining`.
  */
 import React from 'react';
 import type { BucketState } from '@/shared/scheduler/types';
+import { Badge } from '../shared';
+import { COOLDOWN_HATCH, QUEUED_DASHES, UNKNOWN_HATCH } from './hatches';
 
 /** Props for {@link BucketRow}. */
 export interface BucketRowProps {
@@ -51,28 +73,6 @@ export interface BucketRowProps {
   /** Milliseconds since the epoch, supplied by the bar's clock so every lane ticks together. */
   now: number;
 }
-
-/**
- * Diagonal hatch marking a gated lane.
- *
- * Built from two existing Odyssey tokens rather than a literal, and deliberately
- * a *pattern*: a viewer who cannot separate the danger hue from the warning one
- * can still separate hatched from solid.
- */
-const COOLDOWN_STRIPES =
-  'repeating-linear-gradient(135deg, var(--color-danger) 0 3px, var(--color-danger-light) 3px 8px)';
-
-/**
- * Hatch for the *planned* part of a lane — work a plan has declared but not yet
- * enqueued (ADR-0060).
- *
- * Hatched rather than tinted because every fill on this lane has to stay pale
- * enough for the badge text riding on top of it to remain legible, which leaves
- * too little tonal room to separate three solid fills. Form does the separating
- * instead, and it happens to say the right thing: hatched reads as provisional.
- */
-const PLANNED_HATCH =
-  'repeating-linear-gradient(135deg, var(--color-neutral-200) 0 3px, transparent 3px 6px)';
 
 /** Short bucket label: `/api/v1/users` reads as `users`. */
 function bucketLabel(bucket: string): string {
@@ -121,19 +121,6 @@ export function headroomPercent(bucket: BucketState): number | null {
 }
 
 /**
- * Whether a bucket is under enough strain to deserve a lane of its own.
- *
- * A bucket earns one by being gated, by having work against it, or by sitting at
- * or below the org's warning threshold.
- */
-export function isStrained(bucket: BucketState, lowThresholdPercent: number): boolean {
-  if (bucket.gatedUntil !== null) return true;
-  if (bucket.queued > 0 || bucket.active > 0 || bucket.planned > 0) return true;
-  const percent = headroomPercent(bucket);
-  return percent !== null && percent <= lowThresholdPercent;
-}
-
-/**
  * Whether this bucket carries an activity timestamp we can actually subtract.
  *
  * `BucketState.lastActiveAt` is typed `number | null`, so in this repo the only
@@ -150,29 +137,50 @@ export function isStrained(bucket: BucketState, lowThresholdPercent: number): bo
  * lane: **a memory must never be able to pass for a reading**, and neither may
  * a broken one.
  */
-function activeAt(bucket: BucketState): number | null {
+export function activeAt(bucket: BucketState): number | null {
   return typeof bucket.lastActiveAt === 'number' && Number.isFinite(bucket.lastActiveAt)
     ? bucket.lastActiveAt
     : null;
 }
 
 /**
- * Whether a bucket earns a lane in the rack.
+ * The denominator the track is drawn against, or `null` when there is none.
  *
- * Strain earns one, and so does **recent use**: ADR-0070 keeps a bucket's row
- * alive for ten minutes after its queue drains precisely so a family the user
- * just watched work does not vanish from under them the instant it finishes.
- * Gating the rack on strain alone would throw that away — a bucket stops being
- * strained on its last settle, which is the exact moment the memory exists to
- * cover.
- *
- * A bucket that has never settled a request in this worker's lifetime and is
- * doing nothing now still collapses into the summary line, so the rack lists
- * what has actually been exercised rather than everything the scheduler is aware
- * of.
+ * Deliberately `remaining` and not `limit`: the question a reader is asking of
+ * this lane is "will the work I have queued fit in what is left", and scaling to
+ * the full quota would answer a different one. A non-positive or unreadable
+ * remainder yields `null` — an exhausted bucket has no room to draw work
+ * against, and drawing it against zero would divide by it.
  */
-export function deservesTrack(bucket: BucketState, lowThresholdPercent: number): boolean {
-  return isStrained(bucket, lowThresholdPercent) || activeAt(bucket) !== null;
+export function budgetDenominator(bucket: BucketState): number | null {
+  const { remaining } = bucket;
+  if (typeof remaining !== 'number' || !Number.isFinite(remaining) || remaining <= 0) return null;
+  return remaining;
+}
+
+/** The four mutually exclusive forms a lane can take. */
+export type LaneForm = 'gated' | 'working' | 'unmeasured' | 'at-rest';
+
+/**
+ * Widths of the two drawn segments, as CSS percentage strings.
+ *
+ * Clamped so the pair can never exceed the track: work that overruns the
+ * remaining budget saturates the lane and leaves no pale tail, which is the
+ * lane's way of saying the declared work does not fit. Returned as strings
+ * because they are applied as inline styles — which is also what makes them
+ * assertable, since the story runner loads no CSS and a Tailwind class would be
+ * invisible to it.
+ */
+export function laneWidths(
+  bucket: BucketState,
+  denominator: number,
+): { running: string; queued: string } {
+  const running = Math.min(Math.max(bucket.active, 0) / denominator, 1);
+  const queued = Math.min(
+    (Math.max(bucket.queued, 0) + Math.max(bucket.planned, 0)) / denominator,
+    1 - running,
+  );
+  return { running: `${running * 100}%`, queued: `${queued * 100}%` };
 }
 
 /**
@@ -187,95 +195,110 @@ const BucketRow: React.FC<BucketRowProps> = ({ bucket, lowThresholdPercent, now 
   const gated = gatedFor > 0;
 
   const work = bucket.active + bucket.queued + bucket.planned;
-  const atRest = work === 0 && !gated;
+  const denominator = budgetDenominator(bucket);
 
-  // Lane fill. Deliberately zero-width for a remembered-idle bucket: an empty
-  // lane is the honest picture of true zero counts, not a missing reading.
-  const share = (n: number) => (work > 0 ? `${(n / work) * 100}%` : '0%');
+  const form: LaneForm = gated
+    ? 'gated'
+    : work === 0
+      ? 'at-rest'
+      : denominator === null
+        ? 'unmeasured'
+        : 'working';
 
-  const budget =
-    bucket.limit === null || bucket.remaining === null
-      ? // Never "0/0", and never a resurrected figure: a bucket whose window has
-        // expired reads exactly like one Okta has never spoken about.
-        'not reported'
-      : `${bucket.remaining}/${bucket.limit}`;
+  const widths =
+    form === 'working' && denominator !== null ? laneWidths(bucket, denominator) : null;
 
   const activeSince = activeAt(bucket);
-  const lastActive = atRest && activeSince !== null ? sinceLabel(now - activeSince) : null;
+  const label = bucketLabel(bucket.bucket);
+
+  // The words. Every magnitude the track draws is also stated here, so the lane
+  // is readable with the patterns ignored entirely.
+  const words =
+    form === 'gated'
+      ? `cooling down · ${countdown(gatedFor)}`
+      : form === 'at-rest'
+        ? `at rest${activeSince !== null ? ` · ${sinceLabel(now - activeSince)}` : ''}`
+        : [
+            `${bucket.active} running`,
+            bucket.queued > 0 ? `${bucket.queued} queued` : null,
+            bucket.planned > 0 ? `${bucket.planned} planned` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+
+  // The exact figures live on the track's accessible name rather than on the
+  // lane, so precision is available without a `480/600` pair competing with the
+  // shape the track exists to show. "not reported" is never a resurrected
+  // reading: a bucket whose window has expired reads exactly like one Okta has
+  // never spoken about.
+  const budgetPhrase =
+    bucket.limit === null || bucket.remaining === null
+      ? 'budget not reported'
+      : `${bucket.remaining} of ${bucket.limit} requests remaining`;
 
   return (
     <div
       data-testid={`activity-bucket-${bucket.bucket}`}
       data-low={low ? 'true' : undefined}
       data-gated={gated ? 'true' : undefined}
-      data-state={gated ? 'gated' : atRest ? 'at-rest' : 'working'}
-      className="flex items-center gap-(--sp-inline) px-(--sp-gutter) py-0.5"
+      data-state={form}
+      className="flex flex-col gap-1 px-(--sp-gutter) py-1.5"
     >
-      <span className="w-20 shrink-0 truncate text-xs font-medium text-neutral-900">
-        {bucketLabel(bucket.bucket)}
-      </span>
+      <div className="flex items-baseline gap-2 text-xs">
+        <span className="shrink-0 truncate font-medium text-neutral-900">{label}</span>
+        <span
+          data-testid={`activity-bucket-words-${bucket.bucket}`}
+          className={`ms-auto min-w-0 truncate ${gated ? 'text-danger-text' : 'text-neutral-600'}`}
+        >
+          {words}
+        </span>
+        {low && (
+          <Badge variant="danger" testId={`activity-bucket-low-${bucket.bucket}`}>
+            low
+          </Badge>
+        )}
+      </div>
 
       <div
-        className={`relative h-6 min-w-0 flex-1 overflow-hidden rounded-md ${
-          atRest ? 'bg-neutral-50' : 'bg-white ring-1 ring-neutral-200 ring-inset'
-        }`}
+        role="img"
+        aria-label={`${label}: ${words}, ${budgetPhrase}`}
+        data-testid={`activity-bucket-track-${bucket.bucket}`}
+        className="relative h-2.5 w-full overflow-hidden rounded-full bg-primary-light"
       >
-        {gated ? (
+        {form === 'gated' && (
           <div
             aria-hidden="true"
             className="absolute inset-0"
-            style={{ backgroundImage: COOLDOWN_STRIPES }}
+            style={{ backgroundImage: COOLDOWN_HATCH }}
           />
-        ) : (
+        )}
+
+        {form === 'unmeasured' && (
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-neutral-50"
+            style={{ backgroundImage: UNKNOWN_HATCH }}
+          />
+        )}
+
+        {form === 'at-rest' && (
+          <div aria-hidden="true" className="absolute inset-0 bg-neutral-100" />
+        )}
+
+        {widths !== null && (
           <div aria-hidden="true" className="absolute inset-y-0 left-0 flex w-full">
             <div
-              className="h-full"
-              style={{ width: share(bucket.active), backgroundColor: 'var(--color-info-light)' }}
+              data-testid={`activity-bucket-running-${bucket.bucket}`}
+              className="h-full bg-primary"
+              style={{ width: widths.running }}
             />
             <div
+              data-testid={`activity-bucket-queued-${bucket.bucket}`}
               className="h-full"
-              style={{ width: share(bucket.queued), backgroundColor: 'var(--color-neutral-200)' }}
-            />
-            <div
-              className="h-full"
-              style={{ width: share(bucket.planned), backgroundImage: PLANNED_HATCH }}
+              style={{ width: widths.queued, backgroundImage: QUEUED_DASHES }}
             />
           </div>
         )}
-
-        {/* Badges ride on the lane rather than beside it, so every family keeps
-            the same geometry and the rack stays scannable down its columns. */}
-        <div className="absolute inset-0 flex items-center gap-1.5 px-1.5 text-xs">
-          {gated ? (
-            <span
-              data-testid={`activity-bucket-cooldown-${bucket.bucket}`}
-              className="shrink-0 rounded-md bg-white px-2 py-0.5 text-xs font-medium text-danger-text"
-            >
-              {countdown(gatedFor)}
-            </span>
-          ) : atRest ? (
-            <span className="min-w-0 truncate text-neutral-600">
-              at rest{lastActive ? ` · last active ${lastActive}` : ''}
-            </span>
-          ) : (
-            <span className="min-w-0 truncate text-neutral-600">
-              {bucket.active} in flight
-              {bucket.queued > 0 ? ` · ${bucket.queued} queued` : ''}
-              {bucket.planned > 0 ? ` · ${bucket.planned} planned` : ''}
-            </span>
-          )}
-
-          <span
-            className={`ms-auto shrink-0 tabular-nums ${low ? 'text-danger-text' : 'text-neutral-600'}`}
-          >
-            {budget}
-          </span>
-          {low && (
-            <span className="shrink-0 rounded-md bg-danger-light px-2 py-0.5 text-xs font-medium text-danger-text">
-              low
-            </span>
-          )}
-        </div>
       </div>
     </div>
   );

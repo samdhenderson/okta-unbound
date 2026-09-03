@@ -3,8 +3,8 @@ import BucketList from './BucketList';
 import type { BucketState } from '@/shared/scheduler/types';
 
 /**
- * The bucket **rack**: every Okta rate-limit family that has been exercised, as
- * parallel lanes of identical geometry.
+ * The bucket **rack**: every Okta rate-limit family the scheduler is tracking,
+ * as parallel lanes of identical geometry, keyed by one legend.
  *
  * The lanes are identical on purpose. Okta meters per endpoint family, so the
  * question is always comparative — which family is the one holding everything
@@ -21,8 +21,9 @@ const meta = {
       description: {
         component:
           'The bucket rack of the expanded activity bar.\n\n' +
-          'A lane is earned by **strain or by recent use**. The filter used to be strain alone, which was defensible only while the scheduler stopped emitting a bucket seconds after its work finished. ADR-0070 keeps a bucket for ten minutes after that, and a bucket stops being strained on its *last settle* — so a strained-only filter would delete the row at the exact instant the memory exists to preserve it.\n\n' +
-          'What still collapses to one line is a family the scheduler is merely aware of and that has never settled a request in this worker’s lifetime. Overflow past the lane cap is **named** separately from the never-used set: calling a capped-out busy bucket "idle" would be the same class of error as letting a memory pass for a reading.',
+          '**Every published bucket gets a lane** (ADR-0072). The rack used to filter — first to buckets under strain, then to strain *or* recent use, with the remainder collapsed onto a "3 buckets idle · meta, zones" line. Both filters answered a second, differently-shaped question from the one the scheduler had already answered, and the two disagreed at exactly the wrong moment: a bucket stops being strained on its *last settle*, so a strain filter deleted the row at the instant ADR-0070’s memory existed to preserve it.\n\n' +
+          'So there is no filter, no row cap and no summary line. A lane appears when the scheduler starts tracking a bucket and disappears when the scheduler forgets it, on one clock, decided in one place — bounded at twelve with LRU eviction by ADR-0070 §5. The rack renders retention; it has no retention policy of its own.\n\n' +
+          'Height is bounded by **scrolling, not truncating**: every lane stays reachable, and none is hidden behind prose a reader has to expand something to resolve. Truncating would reintroduce the filter one layer down.',
       },
     },
   },
@@ -33,7 +34,6 @@ const meta = {
         'The org-learned percentage at which the scheduler backs off. Lanes mark "low" at the line the scheduler acts on, not one of their own.',
     },
     now: { description: 'Shared clock tick in epoch ms, so every countdown in the bar agrees.' },
-    maxRows: { description: 'Cap on lanes. Overflow is named in the summary line, never dropped.' },
   },
 } satisfies Meta<typeof BucketList>;
 
@@ -151,18 +151,22 @@ export const OneFamilyGated: Story = {
   },
 };
 
-/** Past the cap: the lanes that lost their seat are named, and never called idle. */
-export const OverflowNamed: Story = {
+/**
+ * Seven families at once — the case the old lane cap truncated at six and named
+ * in prose. Every one keeps its lane; the rack scrolls rather than summarising.
+ */
+export const EveryBucketKeepsItsLane: Story = {
   args: {
     buckets: [
-      bucket({ bucket: '/api/v1/users', queued: 5, lastActiveAt: NOW - 100 }),
-      bucket({ bucket: '/api/v1/groups', queued: 4, lastActiveAt: NOW - 200 }),
-      bucket({ bucket: '/api/v1/apps', queued: 3, lastActiveAt: NOW - 300 }),
+      bucket({ bucket: '/api/v1/users', limit: 600, remaining: 90, active: 4, queued: 120 }),
+      bucket({ bucket: '/api/v1/groups', limit: 600, remaining: 410, active: 2, queued: 18 }),
+      bucket({ bucket: '/api/v1/apps', limit: 300, remaining: 22, gatedUntil: NOW + 24_000 }),
       bucket({ bucket: '/api/v1/zones', queued: 2, lastActiveAt: NOW - 400 }),
+      bucket({ bucket: '/api/v1/policies', lastActiveAt: NOW - 40_000 }),
+      bucket({ bucket: '/api/v1/meta', limit: null, remaining: null, resetAt: null, active: 1 }),
       bucket({ bucket: '/api/v1/idps' }),
     ],
     lowThresholdPercent: 10,
     now: NOW,
-    maxRows: 2,
   },
 };
