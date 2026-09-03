@@ -76,6 +76,7 @@
 import React, { useMemo } from 'react';
 import { AlertMessage, Button, DetailSection, EmptyState, Modal, Skeleton } from '../../shared';
 import MemberExplorer, { type MemberSourceContext } from '../../members/MemberExplorer';
+import type { MemberFilter } from '../../members/memberAnalytics';
 import MemberSourceNotes from './MemberSourceNotes';
 import { toMemberSourceSegments } from '../memberSourceBuckets';
 import type {
@@ -162,6 +163,12 @@ export interface GroupMembersSectionProps {
    * Absent ⇒ the explorer draws no pointer at all (ADR-0039).
    */
   onOpenInsights?: () => void;
+  /**
+   * A filter the Insights tab has asked the roster to apply. Passed straight
+   * through to the explorer, which treats it as a one-shot request rather than
+   * a controlled value — see {@link MemberExplorer}.
+   */
+  pendingFilter?: MemberFilter | null;
 }
 
 /**
@@ -193,6 +200,7 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
   removeStatus,
   removeError,
   onOpenInsights,
+  pendingFilter,
 }) => {
   const hasMembers = memberCount > 0;
   const readOnlyReason = READ_ONLY_REASON[groupType];
@@ -274,6 +282,7 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
           }
           onProveMemberSource={proveMemberSource}
           onOpenInsights={onOpenInsights}
+          pendingFilter={pendingFilter}
           /* Withheld, not disabled, on the read-only group types (ADR-0039). */
           onRemoveMember={readOnlyReason ? undefined : onRequestRemove}
         />

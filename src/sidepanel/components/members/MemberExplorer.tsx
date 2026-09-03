@@ -45,6 +45,7 @@ import type { GroupMembership } from '../../../shared/types';
 import type { MemberSourceIndex } from '../../../shared/membership/memberSourceIndex';
 import type { MemberSourceBucket } from '../groups/memberSourceBuckets';
 import {
+  type MemberFilter,
   type SortField,
   computeDimensionBreakdown,
   discoverAttributeBreakdowns,
@@ -133,6 +134,20 @@ interface MemberExplorerProps {
    * Insights should not claim there is one (ADR-0039).
    */
   onOpenInsights?: () => void;
+  /**
+   * A filter a neighbouring surface is asking to have applied — the Insights
+   * tab's attribute reveal handing a value over.
+   *
+   * A **request**, not a controlled value: it is applied once, when the object
+   * reference changes, and the reader is then free to remove the chip it
+   * produced. Consumers with nothing to hand over omit it and the explorer
+   * stays fully uncontrolled. See
+   * {@link module:sidepanel/hooks/useMemberFilters} for why it is neither an
+   * `initialFilters` (the tab is already mounted when the jump happens) nor a
+   * `filters`/`onChange` pair (every other consumer would have to own state it
+   * does not care about).
+   */
+  pendingFilter?: MemberFilter | null;
 }
 
 /** Number of member rows revealed per page / "Load more". */
@@ -156,6 +171,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   onRemoveMember,
   onProveMemberSource,
   onOpenInsights,
+  pendingFilter,
 }) => {
   const drawerId = useId();
   const [query, setQuery] = useState('');
@@ -164,7 +180,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
     surface has a reason to reach, so it is the piece that lives in a hook —
     see `hooks/useMemberFilters` for the grammar it owns.
   */
-  const memberFilters = useMemberFilters();
+  const memberFilters = useMemberFilters({ pendingFilter });
   const { filters } = memberFilters;
   const [visibleCount, setVisibleCount] = useState(PAGE);
   const [drawerOpen, setDrawerOpen] = useState(false);

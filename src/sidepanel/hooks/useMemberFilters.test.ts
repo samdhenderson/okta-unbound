@@ -13,7 +13,11 @@
 import { describe, it, expect } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { useMemberFilters } from './useMemberFilters';
-import { filterMembers, type BreakdownRow } from '../components/members/memberAnalytics';
+import {
+  filterMembers,
+  type BreakdownRow,
+  type MemberFilter,
+} from '../components/members/memberAnalytics';
 import type { OktaUser, UserStatus } from '../../shared/types';
 
 const row = (value: string, label = value): BreakdownRow => ({ value, label, count: 1, pct: 10 });
@@ -223,5 +227,64 @@ describe('useMemberFilters', () => {
 
       expect(result.current.key).toBe('status:ACTIVE');
     });
+  });
+});
+
+describe('a filter requested by another surface', () => {
+  const request = { dimension: 'department', value: 'Support', label: 'Department: Support' };
+
+  it('applies one already in hand on the first render', () => {
+    const { result } = renderHook(() => useMemberFilters({ pendingFilter: request }));
+
+    expect(result.current.filters).toEqual([request]);
+  });
+
+  it('applies one that arrives later, against a live set', () => {
+    const { result, rerender } = renderHook(
+      ({ pendingFilter }: { pendingFilter: MemberFilter | null }) =>
+        useMemberFilters({ pendingFilter }),
+      { initialProps: { pendingFilter: null as MemberFilter | null } },
+    );
+
+    act(() => result.current.toggleStatus(row('ACTIVE')));
+    rerender({ pendingFilter: request });
+
+    // Added to what was already there, not replacing it.
+    expect(result.current.valuesFor('status')).toEqual(new Set(['ACTIVE']));
+    expect(result.current.valuesFor('department')).toEqual(new Set(['Support']));
+  });
+
+  it('applies each request once, so a re-render does not re-add a removed chip', () => {
+    const { result, rerender } = renderHook(
+      ({ pendingFilter }: { pendingFilter: MemberFilter | null }) =>
+        useMemberFilters({ pendingFilter }),
+      { initialProps: { pendingFilter: request as MemberFilter | null } },
+    );
+
+    act(() => result.current.remove(result.current.filters[0]));
+    expect(result.current.filters).toEqual([]);
+
+    // Same object, same request — already honoured.
+    rerender({ pendingFilter: request });
+    expect(result.current.filters).toEqual([]);
+  });
+
+  it('is a jump, not a toggle — asking for a filter already applied leaves it on', () => {
+    const { result, rerender } = renderHook(
+      ({ pendingFilter }: { pendingFilter: MemberFilter | null }) =>
+        useMemberFilters({ pendingFilter }),
+      { initialProps: { pendingFilter: request as MemberFilter | null } },
+    );
+
+    // A second click over on Insights builds a new object for the same value.
+    rerender({ pendingFilter: { ...request } });
+
+    expect(result.current.filters).toEqual([request]);
+  });
+
+  it('leaves the set alone when nobody is asking', () => {
+    const { result } = renderHook(() => useMemberFilters({ pendingFilter: null }));
+
+    expect(result.current.filters).toEqual([]);
   });
 });

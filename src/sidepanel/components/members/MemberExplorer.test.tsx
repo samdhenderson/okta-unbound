@@ -400,3 +400,45 @@ describe('the filter drawer', () => {
     expect(onOpenInsights).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('a filter handed over by a neighbouring surface', () => {
+  it('applies it to the live list and states it as a removable chip', () => {
+    const { rerender } = render(<MemberExplorer {...base} />);
+    expect(shownOfTotal()).toBe('6 of 6');
+
+    rerender(
+      <MemberExplorer
+        {...base}
+        pendingFilter={{
+          dimension: 'department',
+          value: 'Engineering',
+          label: 'Department: Engineering',
+        }}
+      />,
+    );
+
+    expect(shownOfTotal()).toBe('3 of 6');
+    // Legible without opening the drawer, which is the whole point of the line.
+    expect(screen.getByText('Department: Engineering')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Remove Department: Engineering filter' }),
+    ).toBeInTheDocument();
+  });
+
+  it('does not put the filter back when the reader removes it', async () => {
+    const user = userEvent.setup();
+    const pendingFilter = {
+      dimension: 'department',
+      value: 'Engineering',
+      label: 'Department: Engineering',
+    };
+    const { rerender } = render(<MemberExplorer {...base} pendingFilter={pendingFilter} />);
+
+    await user.click(screen.getByRole('button', { name: 'Remove Department: Engineering filter' }));
+    expect(shownOfTotal()).toBe('6 of 6');
+
+    // Any unrelated re-render must not resurrect an honoured request.
+    rerender(<MemberExplorer {...base} pendingFilter={pendingFilter} isReloading={false} />);
+    expect(shownOfTotal()).toBe('6 of 6');
+  });
+});
