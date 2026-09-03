@@ -130,15 +130,21 @@ export const NamedTargetGroups: Story = {
  * The same rule with **no names resolved**. The view states the gap — "Group name not
  * loaded" — and puts the raw id in the identifier register beside its copy control, rather
  * than printing the id where a name belongs (I-003). Nothing here fetches, so the name
- * cannot be filled in at render time.
+ * cannot be filled in at render time; the group can still be **opened** by its id, which
+ * is the capability the local chip this replaced was missing (I-017).
  */
 export const UnresolvedTargetGroups: Story = {
   args: { rule: rule({ groupNames: undefined, allGroupNamesMap: {} }) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getAllByText('Group name not loaded')).toHaveLength(2);
-    // No name, so nothing claims to open the group.
-    await expect(canvas.queryByRole('button', { name: /^Open group/ })).not.toBeInTheDocument();
+    // Retargeted (ADR-0022): the old assertion was that nothing claimed to open an
+    // unresolved target, which was the capability gap I-017 closed. What still holds
+    // — and is what I-003 cared about — is that no chip presents the id as a name;
+    // the "Group name not loaded" count above pins that.
+    await expect(
+      canvas.getAllByRole('button', { name: /^Group name not loaded — open group 00g/ }),
+    ).toHaveLength(2);
   },
 };
 

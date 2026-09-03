@@ -59,6 +59,40 @@ already displaying some other way (`EntityLink`'s `copyId`); `CopyableId` delega
 so the glyph swap and the ~1.5s `"Copied!"` accessible-name flip are decided in one place
 (D-015).
 
+`EntityLink` is the **one** way to reference another entity — "that rule / that group /
+that user / that app" — and it has three modes, picked by which of `name` and `id` you
+pass. Never hand-roll any of them:
+
+| You have         | Pass          | You get                                                                                                                         |
+| ---------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| a name and an id | `name` + `id` | a chip with the type glyph and a chevron that opens the entity on its own tab                                                   |
+| a name, no id    | `name` only   | plain text with a tooltip saying why it cannot be opened — a link is never a control that does nothing                          |
+| an id, no name   | `id` only     | the missing name **stated** in the non-answer register, the raw id beside it via `CopyableId`, and the entity still opens by id |
+
+The id-only mode is the shared home for "this reference is known only by an id" (I-017).
+Three views had each grown their own local chip for it, and none could open the entity —
+a capability regression against the resolved chip beside it in the same list, since a
+valid id is a valid destination whether or not the view learned a name. **Never pass the
+id in as the `name`**: an id in a name's slot is indistinguishable from a group actually
+called `00gFAKE…` (I-003).
+
+Its chrome follows the house **non-answer convention** that `AppScopeIndicator` and
+`GroupSourceIndicator` state explicitly and that applies well beyond `EntityLink`: **a
+chip is a proven answer; a non-answer is muted italic text and is never chipped**, so a
+missing answer can never carry an answer's weight at a glance. A reference whose entity
+is _gone_ ("no group in this org has this id") is a proven answer and keeps its warning
+chip — `RuleDetailView`'s `MissingGroupChip` is that, and is deliberately not the same
+thing.
+
+Four props parameterise the unresolved state, all with sane defaults so no caller passes
+Tailwind to make it fit: `unresolvedLabel` (the words, default `"<Type> name not loaded"`),
+`unresolvedReason` (the tooltip — "Okta returned no name" and "this view never asked" are
+different facts), `copyIdLabel` (default `"Copy <type> id <id>"`), and `type`, which picks
+the glyph. Whether it links is not a prop and should not become one: it follows the id's
+navigability, so a chevron appears only where it can be honoured. Sizing is likewise fixed
+at `text-xs` on purpose — a resolved and an unresolved reference share one slot in a list,
+and letting a caller size one of them was the type-size mismatch I-003 had to fix.
+
 `ListRow` is the **row chrome** primitive (ADR-0029): border, radius, hover,
 `density` (`compact` | `comfortable`), `state` (`default` | `selected` |
 `highlighted`) and `as` (`div` | `li` | `a` | `button`). It owns the box and

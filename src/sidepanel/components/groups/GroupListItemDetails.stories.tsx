@@ -104,8 +104,10 @@ export const NamedPushTarget: Story = {
 
 /**
  * The same mapping with **no `appName`**. The gap is stated rather than papered
- * over with the id, and the id itself is still copyable — which is the only thing
- * a render-time fix can honestly offer, since nothing on this panel fetches.
+ * over with the id, the id itself is copyable, and the app still **opens** — a
+ * valid id is a valid destination whether or not a name came with it (I-017).
+ * The stated absence stays un-chipped: a chip is a proven answer, and this is not
+ * one.
  */
 export const UnnamedPushTarget: Story = {
   args: { group: { ...baseGroup, pushMappings: [unnamedMapping] } },
@@ -115,8 +117,15 @@ export const UnnamedPushTarget: Story = {
     await expect(
       canvas.getByRole('button', { name: `Copy application id ${unnamedMapping.appId}` }),
     ).toBeInTheDocument();
-    // Nothing claims to open an app whose name was never resolved.
-    await expect(canvas.queryByRole('button', { name: /^Open app/ })).not.toBeInTheDocument();
+    // Retargeted (ADR-0022): the old assertion was that nothing claimed to open an
+    // app whose name was never resolved — the capability gap I-017 closed. What still
+    // holds, and is what I-003 cared about, is that the id is never presented as a
+    // name; the "App name not loaded" assertion above pins that.
+    await expect(
+      canvas.getByRole('button', {
+        name: `App name not loaded — open app ${unnamedMapping.appId}`,
+      }),
+    ).toBeInTheDocument();
   },
 };
 
