@@ -9,20 +9,49 @@
  * costs **zero additional IndexedDB reads and zero additional broadcast
  * listeners** — it takes the same handles and derives numbers from them.
  *
- * ## The sub-counts are the point
+ * ## The row budget — read this before adding a row
  *
- * A headline count is trivia. What an admin can act on is the slice under it —
- * empty groups, groups no rule feeds, paused rules, deactivated apps, push apps
- * pushing nothing — and each of those is a join over rows already on disk, so
- * every one of them is free.
+ * There are **two** findings, and that is a budget rather than an accident.
+ * A row must pass all four of these tests; a row that fails one does not go on
+ * the card, however interesting it is.
  *
- * Two of them are computed by *subtraction* — "groups no rule feeds" removes the
- * groups some rule targets, "pushing nothing" removes the apps with a stored
- * assignment — and that is where the honesty rules bite. A rule list missing
- * half its pages does not under-report those; it reports every group those
- * missing rules fed as unfed. So `subCountStatus` holds the subtracted-from
- * collection to a stricter bar than the counted one, and suppresses the number
- * rather than publishing a wrong one.
+ * 1. **It costs no walk of its own.** Groups and group rules are already on
+ *    disk for the jump bar. Applications are not, and an apps walk plus a
+ *    per-app assignment read is the tightest rate budget in the org — it must
+ *    never be spent merely because a tab opened.
+ * 2. **It names a subject.** Pressing it opens a list of the actual entities.
+ * 3. **A verb exists, here.** Resume the rule, delete the group. If the only
+ *    response is "noted", the row is trivia.
+ * 4. **It is not a superset.** When one row is another plus noise, ship the
+ *    sharp one. A count reached by subtraction needs a complete walk of what it
+ *    subtracts, or it shows an em dash.
+ *
+ * The eight findings this card and the reports under it once carried, and where
+ * each of them went:
+ *
+ * | Was | Verdict | Why |
+ * | --- | --- | --- |
+ * | Paused group rules | **Row 1** | An access freeze nobody chose to keep. One collection, no subtraction, verb one press away. |
+ * | Empty groups nothing fills | **Row 2** | The only defensible group claim: nothing in it, nothing on its way in. Promoted from a report. |
+ * | Groups with no members | Merged into row 2 | An empty group a rule fills is a cohort waiting for its first hire. Survives as a Groups-tab filter pill. |
+ * | Groups no rule fills | Merged into row 2 | 208 of 412 implies half the org is broken; SCIM, IdPs, Workflows and humans are legitimate maintainers. Filter pill. |
+ * | App access no rule maintains | Costed report | Needs apps plus every app's group assignments. Stays in `ReportsCard`, which states its scope. |
+ * | Push apps pushing nothing | One level deeper | A per-app configuration fact; it belongs in that app's Group Push section, where its reads are already paid for. |
+ * | Dormant app access | Cut | "Dormant" is a threshold this panel does not own, and it needs system-log reads on top of the apps fan-out. It survives on the Groups tab's cleanup panel and in the export. |
+ * | Deactivated applications | Cut | Inventory, not hygiene. No verb at the end of the row. |
+ *
+ * The next candidate, deliberately not shipped: *rules whose expression reads an
+ * attribute no user has*. It stays a report until it can be answered as a join
+ * over rows already on disk rather than a read per rule.
+ *
+ * ## Row 2 is computed by subtraction, and that is why it is gated
+ *
+ * "Groups with no members that no rule fills" removes the groups some rule
+ * targets, and that is where the honesty rules bite. A rule list missing half
+ * its pages does not under-report it; it reports every group those missing
+ * rules fed as unfilled. So `subCountStatus` holds group rules as a **gate**
+ * rather than a floor, and suppresses the number entirely rather than
+ * publishing a wrong one.
  *
  * ## What a visit to Home costs
  *
@@ -55,8 +84,6 @@ import {
   type OrgBox,
 } from '../components/home/orgFigures';
 import { countRulesByGroup } from '../../shared/rules/groupRuleIndex';
-import { isGroupPushApp } from '../../shared/schemas/okta';
-import { splitShardedId } from '../../shared/snapshot/types';
 import type { OrgEntityIndex } from './useOrgEntityIndex';
 
 /**
@@ -137,115 +164,81 @@ export function useOrgFigures({
   enabled,
   connected,
 }: UseOrgFiguresOptions): UseOrgFiguresResult {
-  const { groups, rules, apps, appGroups } = index;
+  // Two collections, not four. `apps` and `appGroups` are deliberately not read
+  // here — see the row budget in the module header: an apps walk is the org's
+  // tightest rate budget and no row on this card is allowed to depend on one.
+  const { groups, rules } = index;
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const groupSource = toSource(groups);
   const ruleSource = toSource(rules);
-  const appSource = toSource(apps);
-  const appGroupSource = toSource(appGroups);
 
   const pausedRules = useMemo(
     () => rules.rows.filter((rule) => rule.status === 'INACTIVE').length,
     [rules.rows],
   );
 
-  // `?? 0` matches `toGroupSummary` exactly, which is what the Groups tab's
-  // `sizeFilter: 'empty'` runs against. Reading it any other way here would put
-  // a number on the card that the list it opens then disagrees with.
-  const emptyGroups = useMemo(
-    () => groups.rows.filter((group) => (group._embedded?.stats?.usersCount ?? 0) === 0).length,
-    [groups.rows],
-  );
-
-  // "No rules" means no rule ASSIGNS anyone to the group — the same
-  // `hasRules` the Groups tab filters on. A group merely named in some other
-  // rule's condition still has nothing filling it, which is why this reads the
-  // assignment index rather than the reference one.
-  const unruledGroups = useMemo(() => {
+  // Row 2. Empty **and** unfilled, in one pass: the two old rows were a
+  // superset of this one apiece, and neither was defensible alone. An empty
+  // group a rule fills is a cohort waiting for its first hire; a filled group
+  // no rule maintains has SCIM, an IdP, Workflows or a human behind it. The
+  // intersection is the only claim this extension can make without guessing.
+  //
+  // `?? 0` on the member count matches `toGroupSummary` exactly, and "no rules"
+  // reads the *assignment* index (`assignUserToGroups`) rather than the
+  // reference one, because a group merely named in some rule's condition still
+  // has nothing filling it. Both match what the Groups tab filters on, so the
+  // number on the card and the list it opens cannot disagree.
+  const emptyUnfilledGroups = useMemo(() => {
     const assigned = countRulesByGroup(
       rules.rows.map((rule) => ({ groupIds: rule.actions?.assignUserToGroups?.groupIds ?? [] })),
     );
-    return groups.rows.filter((group) => (assigned.get(group.id) ?? 0) === 0).length;
+    return groups.rows.filter(
+      (group) =>
+        (group._embedded?.stats?.usersCount ?? 0) === 0 && (assigned.get(group.id) ?? 0) === 0,
+    ).length;
   }, [groups.rows, rules.rows]);
-
-  const inactiveApps = useMemo(
-    () => apps.rows.filter((app) => app.status?.toUpperCase() !== 'ACTIVE').length,
-    [apps.rows],
-  );
-
-  // Push apps with nothing stored against them. Scoped to `GROUP_PUSH` apps
-  // because those are exactly the apps the snapshot walks
-  // `/api/v1/apps/{id}/groups` for — for any other app an absent assignment
-  // means nobody asked, and counting those would report the whole inventory.
-  const idlePushApps = useMemo(() => {
-    const withAssignments = new Set<string>();
-    for (const record of appGroups.records) {
-      const split = splitShardedId(record.id);
-      if (split) withAssignments.add(split.shardKey);
-    }
-    return apps.rows.filter((app) => isGroupPushApp(app.features) && !withAssignments.has(app.id))
-      .length;
-  }, [apps.rows, appGroups.records]);
 
   // The nouns the findings and the totals caption speak in. Declared once so a
   // sentence and the caption under it cannot end up calling the same collection
   // two different things.
   const groupsNamed = { source: groupSource, noun: 'groups' };
-  const appsNamed = { source: appSource, noun: 'applications' };
   const rulesNamed = { source: ruleSource, noun: 'group rules' };
-  const appGroupsNamed = { source: appGroupSource, noun: 'app group assignments' };
 
   const boxes = useMemo(
     () => [
-      buildBox(buildFigure('groups', 'Groups', 'users', groupSource), 'groups', 'groups', [
-        buildSubCount({
-          key: 'groups-empty',
-          label: 'Groups with no members',
-          counted: groupsNamed,
-          count: emptyGroups,
-          request: { tab: 'groups', view: 'empty' },
-        }),
-        buildSubCount({
-          key: 'groups-unruled',
-          label: 'Groups no rule fills',
-          counted: groupsNamed,
-          gates: [rulesNamed],
-          count: unruledGroups,
-          request: { tab: 'groups', view: 'no-rules' },
-        }),
-      ]),
-      buildBox(buildFigure('apps', 'Applications', 'app', appSource), 'apps', 'applications', [
-        buildSubCount({
-          key: 'apps-inactive',
-          label: 'Deactivated applications',
-          counted: appsNamed,
-          count: inactiveApps,
-          request: { tab: 'apps', view: 'inactive' },
-        }),
-        buildSubCount({
-          key: 'apps-idle-push',
-          label: 'Push apps pushing nothing',
-          counted: appsNamed,
-          gates: [appGroupsNamed],
-          count: idlePushApps,
-          request: { tab: 'apps', view: 'pushes-nothing' },
-        }),
-      ]),
+      // Row 1 first, and the box order is the row order: an access freeze
+      // nobody chose to keep outranks a group nobody has filled yet.
       buildBox(buildFigure('rules', 'Group rules', 'bolt', ruleSource), 'rules', 'group rules', [
         // A filter over the rules collection, so it inherits that collection's
         // trustworthiness rather than being judged on its own count — a paused
         // count of 0 from an unwalked org must not read as "none are paused".
         buildSubCount({
           key: 'rules-paused',
-          label: 'Paused group rules',
+          label: 'Group rules paused',
+          icon: 'pause',
           counted: rulesNamed,
           count: pausedRules,
           request: { tab: 'rules', view: 'paused' },
         }),
       ]),
+      buildBox(buildFigure('groups', 'Groups', 'users', groupSource), 'groups', 'groups', [
+        // Group rules are a **gate**, not a floor: this count is reached by
+        // subtracting the groups some rule targets, so anything short of a
+        // complete rule walk suppresses the number entirely rather than
+        // reporting every group those missing rules fed as unfilled.
+        buildSubCount({
+          key: 'groups-empty-unfilled',
+          label: 'Groups with no members that no rule fills',
+          icon: 'users',
+          counted: groupsNamed,
+          gates: [rulesNamed],
+          count: emptyUnfilledGroups,
+          request: { tab: 'groups', view: 'empty-no-rules' },
+        }),
+      ]),
     ],
-    // Rebuilt from the four sources, which are fresh objects each render; the
+    // Rebuilt from the two sources, which are fresh objects each render; the
     // members are what actually change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -255,37 +248,22 @@ export function useOrgFigures({
       groupSource.count,
       groupSource.error,
       groupSource.status,
-      appSource.isReading,
-      appSource.complete,
-      appSource.lastFullWalkAt,
-      appSource.count,
-      appSource.error,
-      appSource.status,
       ruleSource.isReading,
       ruleSource.complete,
       ruleSource.lastFullWalkAt,
       ruleSource.count,
       ruleSource.error,
       ruleSource.status,
-      appGroupSource.isReading,
-      appGroupSource.complete,
-      appGroupSource.lastFullWalkAt,
-      appGroupSource.count,
-      appGroupSource.error,
-      appGroupSource.status,
-      emptyGroups,
-      unruledGroups,
-      inactiveApps,
-      idlePushApps,
+      emptyUnfilledGroups,
       pausedRules,
     ],
   );
 
-  // `appGroups` is deliberately absent from the age: it is a derived collection
-  // that only re-walks every six hours, so quoting it would date the whole card
-  // by the slowest thing on it and send a reader to Refresh for numbers that are
-  // already current.
-  const readAt = oldestWalkAt([groupSource, appSource, ruleSource]);
+  // Exactly the two collections the card speaks about. Quoting a collection no
+  // row is drawn from would date the card by something the reader cannot see —
+  // which is how the apps walk used to send people to Refresh for numbers that
+  // were already current.
+  const readAt = oldestWalkAt([groupSource, ruleSource]);
 
   // One top-up per mount, on the first activation. Held in refs rather than
   // state because re-rendering on either would say nothing new — and because a
@@ -298,7 +276,7 @@ export function useOrgFigures({
   // Deciding then would top up a warm org on every single mount. So the
   // decision waits until a read has actually been observed to start.
   const sawReading = useRef(false);
-  const anyReading = groups.isReading || apps.isReading || rules.isReading || appGroups.isReading;
+  const anyReading = groups.isReading || rules.isReading;
   // One sync, not one per collection: `syncSnapshot` is org-wide — it walks
   // every collection and coalesces concurrent callers per origin — so asking
   // four times would send four messages to be answered by the same run.
@@ -330,7 +308,7 @@ export function useOrgFigures({
   return {
     boxes,
     readAt,
-    isRefreshing: isRefreshing || groups.isSyncing || apps.isSyncing || rules.isSyncing,
+    isRefreshing: isRefreshing || groups.isSyncing || rules.isSyncing,
     refresh,
     canRefresh: connected,
   };

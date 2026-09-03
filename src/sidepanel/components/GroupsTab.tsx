@@ -368,8 +368,10 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     nav.reset();
     setSearchMode('cached');
     filters.clearFilters();
-    if (listView === 'empty') filters.setSizeFilter('empty');
-    else filters.setRuleFilter('unruled');
+    // Both axes for `empty-no-rules`, which is the Home card's finding: the
+    // count it states is the intersection, so the list it opens has to be too.
+    if (listView !== 'no-rules') filters.setSizeFilter('empty');
+    if (listView !== 'empty') filters.setRuleFilter('unruled');
 
     if (groups.length === 0 && !loading) void loadAllGroups();
     onListViewConsumed?.();
