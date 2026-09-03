@@ -42,7 +42,7 @@
  * a region that opens, not a setting that is on.
  */
 import React from 'react';
-import Button from '../shared/Button';
+import { Button } from '../shared';
 import MemberFilterPanel from './MemberFilterPanel';
 import MemberSourceFilterBar from './MemberSourceFilterBar';
 import AttributeFilterList from './AttributeFilterList';

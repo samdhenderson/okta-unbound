@@ -143,7 +143,15 @@ export const RuleAttributionList: React.FC<RuleAttributionListProps> = ({
 
   return (
     <div>
-      <h3 className="text-xs font-medium text-neutral-600">Attributed to</h3>
+      {/*
+        `h5`, not `h3`. This renders as the explorer drawer's `sourceDetail`,
+        directly under that drawer's `<h4>Source</h4>` — and the outline
+        algorithm reads rank in document order, not DOM nesting, so an `h3` here
+        pops back up to the rank of the list's own "Members" heading and
+        misrepresents a subsection as a peer of the roster. One below its
+        parent section is what it actually is.
+      */}
+      <h5 className="text-xs font-medium text-neutral-600">Attributed to</h5>
       {rows.length === 0 ? (
         <p className="mt-1.5 text-sm text-neutral-500">
           No member was attributed to a specific rule.

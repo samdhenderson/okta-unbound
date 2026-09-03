@@ -18,8 +18,9 @@ const meta = {
   tags: ['autodocs'],
   parameters: {
     layout: 'padded',
-    // The "Attributed to" heading is an `<h3>` with no page heading above it in
-    // isolation; the pane that mounts this supplies the surrounding levels.
+    // The "Attributed to" heading is an `<h5>` — the right rank under the
+    // filter drawer's `<h4>Source</h4>`, where this is actually composed, but
+    // with nothing above it in isolation. The drawer supplies the levels.
     a11y: { config: { rules: [{ id: 'heading-order', enabled: false }] } },
     docs: {
       description: {

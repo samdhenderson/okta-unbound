@@ -25,7 +25,7 @@
  * handling and the active-value highlighting to drift.
  */
 import React from 'react';
-import ListRow from '../shared/ListRow';
+import { ListRow } from '../shared';
 import Icon from '../shared/Icon';
 import type { AttributeSummary } from './memberAnalytics';
 
