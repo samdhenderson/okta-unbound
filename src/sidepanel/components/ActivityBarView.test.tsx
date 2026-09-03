@@ -305,6 +305,7 @@ describe('per-bucket headroom', () => {
       active: 0,
       planned: 0,
       gatedUntil: null,
+      lastActiveAt: null,
       ...overrides,
     };
   }
@@ -409,6 +410,7 @@ describe('ActivityBarView operation ledger', () => {
       active: 0,
       planned: 0,
       gatedUntil: null,
+      lastActiveAt: null,
       ...overrides,
     };
   }
