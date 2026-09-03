@@ -316,3 +316,72 @@ field banding in webm. Recorded here as a reversal rather than quietly reverted.
   returns arguing **both verbs side by side** — deactivate, where nobody moves
   but N members become unattributed, and delete, where `removeUsers` chooses
   irreversibly between removing them and keeping them as manual members.
+
+## Amendment, 2026-09-02: the rule-impact chapter came back
+
+The 2026-08-27 amendment ended by holding the rule-impact scene out of the reel,
+because it narrated a product bug: `ruleImpact` modelled deactivation as
+retracting membership, and Okta does not work that way. That was filed as
+`D-052`, fixed there, and nothing recorded that the block had lifted — the
+knowledge lived only in a closed item's **Related** paragraph. `I-029` is that
+record, and this is the note the earlier amendment was waiting on.
+
+**It returns as the Rules chapter's second act, not as its own chapter.**
+ADR-0053 made a chapter a tab visited once, with acts inside it; the inventory
+and the consequence are two movements of one argument about rules, so they are
+labelled `The inventory` and `The consequence` and share a chapter card. The
+capture is `rules-impact`, its walk is `walks/rules-impact.mjs`, and its `films`
+list is `['rules']` — the act opens the rule detail rung and two modals, all of
+which hang off the `RulesTab` island, and it changes no rail tab.
+
+**It argues both verbs, which is what the earlier amendment asked for.** One
+population, read off the panel, and the difference between what each verb does
+to it: deactivate removes nobody and leaves them in the group with no rule left
+to explain them; delete is the only verb that can take them out, and
+`removeUsers` decides whether it does. Only the first is reversible.
+
+Three things this act does that the pulled scene did not:
+
+- **It reads the panel's own sentence in each mode and refuses a take without
+  it.** `RuleImpactModal`'s lead paragraph differs per mode, and those two
+  sentences _are_ the `D-052` fix. A cut of the fixed product and a cut of the
+  defective one are otherwise indistinguishable at playback speed, which is
+  precisely how the original defect survived a cut and a review. The assertion
+  lives in the walk, so a regression stops the shoot rather than shipping.
+- **It picks a subject with a non-empty solely-held set, and proves it.** The
+  pulled scene previewed `Engineering → GitHub`, whose target is an `APP_GROUP`;
+  group rules never attribute `APP_GROUP` membership, so `heldSolelyCount` there
+  is structurally zero. The scene was arguing about an empty set, which is the
+  other half of why nobody noticed. The subject is now `Engineering by
+department`, whose target is an ordinary group no other active rule assigns
+  into, and the walk throws if the count comes back below one.
+- **It writes nothing.** `Preview impact` is read-only by construction; the
+  deactivate confirmation is opened for its copy and then **cancelled**. The
+  demo org is genuinely writable (ADR-0052), and a confirmed deactivation would
+  leave the rule `INACTIVE` for the first act, which argues from the count of
+  inactive rules.
+
+### Two things `I-026` moved under the composition
+
+`I-026` declared twelve group rules whose memberships the demo org already
+had — eight departments, three offices, and `Datadog - Engineering`. Nothing in
+the reel states a figure directly, so no caption went wrong. Two pieces of prose
+and one piece of geometry did:
+
+- **The ledger set piece was built for exactly two line items.** Its row draw
+  cues were the literal pair `[24, 38]` and its column height was
+  `ROW_H * 2 + ROW_GAP`. With a third predicted group the third row clamped onto
+  the second's draw cue and overran the block by a full row, printing through the
+  totals plate underneath — on the one plate in the film whose whole argument is
+  that each line item was measured separately. Both are now derived from the
+  captured row count, and `readLedger` refuses more rows than the sheet can hold
+  rather than running off the bottom of the frame.
+- **`previewImpactFor()` in `selectors.mjs` had been stale since the rule detail
+  rung landed.** It looked for `Preview Impact` inside an open disclosure on a
+  rule card; the verb is `Preview impact` and it lives on `RuleActionBar`
+  (ADR-0039). Nothing caught it because no walk used it — the chapter that would
+  have was the one held out. Replaced by the selectors this act actually aims at.
+
+The reel's rule against writing a figure down held: every number on camera still
+comes off the panel through `figure()`, and the two things that broke were a
+comment and a layout constant, neither of which that rule covers.

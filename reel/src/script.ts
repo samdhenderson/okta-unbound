@@ -502,6 +502,7 @@ export const SCRIPT: Scene[] = [
     acts: [
       {
         capture: 'rules',
+        label: 'The inventory',
         plan: [
           { beat: 'load', speed: 'half', easeMs: 350, holdMs: 2800 },
           { beat: 'active', speed: 'natural', easeMs: 400, holdMs: 900 },
@@ -540,6 +541,80 @@ export const SCRIPT: Scene[] = [
                 ],
               });
             },
+          },
+        ],
+      },
+      /*
+       * The chapter ADR-0043 held out, back arguing both verbs (`I-029`).
+       *
+       * It was pulled because the product was making a claim that was not true:
+       * `ruleImpact` modelled deactivation as retracting membership, so the
+       * scene captioned an access loss over a modal that had counted something
+       * else (`D-052`). The model and the copy were fixed; the note in ADR-0043
+       * said what the scene should argue when it came back, and this is it.
+       *
+       * One population, two verbs, and the difference between them is the
+       * whole act. Nothing here states which verb does what from this file's
+       * own knowledge - `walks/rules-impact.mjs` reads the panel's own sentence
+       * in each mode and refuses a take where it stopped saying it, because a
+       * cut of the fix and a cut of the defect look identical at playback
+       * speed.
+       *
+       * `load` is filmed and not played, the same way Home's `report` is: the
+       * list has to be fetched before there is a rule to open, and the act
+       * above already spent the seconds on the ask. Naming the beat in this
+       * plan is all it would take to bring it back.
+       */
+      {
+        capture: 'rules-impact',
+        label: 'The consequence',
+        plan: [
+          { beat: 'open', speed: 'sprint', easeMs: 300, holdMs: 2800 },
+          { beat: 'holds', speed: 'dwell', easeMs: 400, holdMs: 3600 },
+          { beat: 'deactivate', speed: 'half', easeMs: 400, holdMs: 3600, tailMs: 3600 },
+        ],
+        marks: [
+          {
+            beat: 'open',
+            stage: 'home',
+            headline: 'Before you switch a rule off, find out what it is holding up.',
+            points: ['Open the rule. The preview is read only; it writes nothing.'],
+          },
+          {
+            beat: 'holds',
+            /*
+             * Held until the analysis has answered. The dialog spends its first
+             * moment on a spinner with two stat cards that do not exist yet,
+             * and a slide stating a count over that frame would be asserting a
+             * result before the result exists.
+             */
+            after: 'sole',
+            headline: 'The panel counts the members no other rule explains.',
+            points: [
+              (m) => {
+                const sole = figure<{ heldSolely: number; members: number }>(m, 'sole');
+                return `${sole.heldSolely} of ${sole.members} members are held by this rule alone.`;
+              },
+              (m) => `All of them in ${figure<{ group: string }>(m, 'target').group}.`,
+            ],
+            diagram: (m, plot, from) => {
+              const sole = figure<{ heldSolely: number; members: number }>(m, 'sole');
+              return React.createElement(Ratio, {
+                plot,
+                from,
+                before: { label: 'members', value: sole.members },
+                after: { label: 'held by this rule alone', value: sole.heldSolely },
+              });
+            },
+          },
+          {
+            beat: 'deactivate',
+            headline: 'One number, two verbs, two different outcomes.',
+            points: [
+              'Deactivate removes nobody. They stay, with no rule left to explain them.',
+              'Only delete can take them out, and removeUsers decides whether it does.',
+              'Deactivating is reversible. Neither branch of the delete is.',
+            ],
           },
         ],
       },

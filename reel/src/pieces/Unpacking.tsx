@@ -43,8 +43,12 @@
  * this piece has:
  *
  * - **eight to a row, split into blocks of four.** The eye counts fours without
- *   being asked to, so 37 reads as "four rows and a bit" and 28 reads as
- *   "three rows and a block" rather than as an area.
+ *   being asked to, so a grid of 37 reads as "four rows and a bit" and a lit
+ *   region reads as so many rows and a block rather than as an area. Both
+ *   numbers come off the capture and both have already moved once: `I-026`
+ *   declared twelve rules the org's memberships already implied, which took the
+ *   unruled count from 28 to 16 without changing a line of this file. That is
+ *   the design working, and it is why no count is written down here.
  * - **row-major fill.** The lit cells are the first `unruled` in reading order,
  *   so the lit region is one solid shape and the unlit remainder is one solid
  *   shape. Scattering them would be equally true and unreadable.

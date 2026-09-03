@@ -118,6 +118,22 @@ export const CHAPTERS = [
     ready: 'text=Load Rules',
     walk: () => import('./walks/rules.mjs'),
   },
+  // Rules is two acts on one tab (ADR-0053): the inventory, then what one rule
+  // is holding up. Split rather than lengthened because the second act opens a
+  // rung and two modals, and a beat that misses in there should end its own act
+  // instead of taking the tab's whole argument with it.
+  {
+    id: 'rules-impact',
+    films: ['rules'],
+    title: 'Rules',
+    tab: 'rules',
+    kind: 'deep',
+    story: 'demo-scenes--rule-impact',
+    // Same empty state, same reason as the act above: the Rules tab opens on
+    // "No Rules Loaded", which never clears the default content heuristic.
+    ready: 'text=Load Rules',
+    walk: () => import('./walks/rules-impact.mjs'),
+  },
   {
     id: 'attributes',
     films: ['groups'],

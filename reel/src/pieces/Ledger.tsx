@@ -28,21 +28,34 @@
  * ## The caveat is load-bearing
  *
  * The line at the foot of the plate is not "predictions are likely, not
- * certain". It is the specific truth `SCRIPT.md` settled on: **"Group rules
- * only. Pushed groups are not modelled."** The prediction names two groups and
- * the chapter's next beat goes from four groups to seven. The third arrives by
- * app group push, which `analyzeBlastRadius` structurally cannot see - it only
- * ever inventories the org's group rules, so a pushed group cannot appear in
+ * certain". It is the specific truth `SCRIPT.md` settled on, **reworded once**:
+ * `analyzeBlastRadius` only ever inventories the org's **group rules**, so a
+ * membership that arrives by an application pushing a group cannot appear in
  * any of its buckets, not even as "not predicted". Without that line the plate
- * claims more certainty than the product does, in the same chapter that shows
- * the gap. It is dimmer than the totals but it is not a footnote, and it docks
- * last so it is the thing on screen longest before the cut.
+ * claims more certainty than the product does. It is dimmer than the totals but
+ * it is not a footnote, and it docks last so it is the thing on screen longest
+ * before the cut.
+ *
+ * **The wording had to change, because the old one went false on camera.** It
+ * read "Pushed groups are not modelled", and it was true of the org it was
+ * written against. `I-026` then gave `Datadog - Engineering` the group rule its
+ * membership always implied, and that group is an `APP_GROUP` - so the plate
+ * would have printed a pushed group as a predicted row directly above a line
+ * saying pushed groups are not modelled. The limit being named is the **push**,
+ * not the group: a group an application pushes into is perfectly predictable
+ * when a group rule also feeds it, and that is what the footage now shows.
+ *
+ * (Worth knowing while reading that row: `blastRadius.additionEffect` has no
+ * `app-mastered-group` gate, which its own docblock records as a known gap -
+ * the group's type is not reachable for a group the user does not yet hold. The
+ * removal path enforces it fully. So the prediction naming an `APP_GROUP` is
+ * the product's documented behaviour, not a fault the reel is papering over.)
  *
  * ## Where `draw` is allowed, and where it is not
  *
  * This is the first set piece to use the seventh verb (`reel/pencil`), which is
  * governed: **`draw` only ever applies to something the product has not made
- * yet.** The two `WOULD ADD` rows are exactly that - a membership that does not
+ * yet.** Every `WOULD ADD` row is exactly that - a membership that does not
  * exist, a claim awaiting the Apply that would make it real - so each row's
  * frame is a `SketchBox` extruded on by `draw()`, and the captured group name
  * docks into the frame after it closes. Nothing else here is drawn: the cause
@@ -53,11 +66,13 @@
  * ## Figures, and the one thing `SCRIPT.md` asks for that was not shot
  *
  * Every string and number is from the `users-fix` manifest: `typo`
- * (`Enginering`), `added` (the two predicted group names), `groups`, `rules`
- * and `removed` (the report's two pill counts and the asserted-empty removal
- * section). `readLedger` refuses a manifest whose `groups` pill disagrees with
- * the number of names in `added`, because two rows under a plate reading "3
- * groups" is a rendered claim nobody measured.
+ * (`Enginering`), `added` (the predicted group names, one row each), `groups`,
+ * `rules` and `removed` (the report's two pill counts and the asserted-empty
+ * removal section). `readLedger` refuses a manifest whose `groups` pill
+ * disagrees with the number of names in `added`, because two rows under a
+ * plate reading "3 groups" is a rendered claim nobody measured - and it refuses
+ * more rows than the sheet has room for, because a receipt that runs off the
+ * bottom of the frame is the same lie told the other way.
  *
  * **The rule that carries each row is not printed, and cannot be.** `SCRIPT.md`
  * asks each `WOULD ADD` row to name its rule; no capture read those names, only
@@ -104,16 +119,37 @@ export const LEDGER_FRAMES = 240;
  * make rather than inherit.
  */
 const CAUSE_AT = 0;
-/** Each row's frame is sketched, then its captured name docks into it 10f later. */
-const ROW_DRAW_AT = [24, 38] as const;
+/**
+ * Each row's frame is sketched 14f after the one above it, then its captured
+ * name docks into it 10f later.
+ *
+ * **Written as a cadence, not as a list.** These were the literal pair
+ * `[24, 38]`, which was the org's own answer at the time and stopped being it
+ * the moment `I-026` gave a third group its rule: the third row clamped onto
+ * the second's frame and drew both at once, on the one plate in the film whose
+ * argument is that each line item was measured separately. Everything below
+ * that depends on where the rows end is derived from the row count for the
+ * same reason - at two rows every number here is exactly the number that was
+ * there before.
+ */
+const ROW_DRAW_AT = 24;
+const ROW_DRAW_STEP = 14;
 const ROW_DOCK_STEP = 10;
-/** The totals plate. */
-const TOTALS_AT = 74;
+/** The totals plate, once the last row has finished docking. */
+const TOTALS_GAP = 26;
 /** The three counts, 8f apart. `removed` sets rather than rolls, so its offset is only spacing. */
-const COUNT_AT = 88;
+const COUNT_GAP = 14;
 const COUNT_STEP = 8;
 /** The caveat, last in and longest on screen. */
-const CAVEAT_AT = 128;
+const CAVEAT_GAP = 40;
+
+/** When each part of the sheet arrives, for a receipt with `rows` line items. */
+function beats(rows: number) {
+  const lastRow = ROW_DRAW_AT + ROW_DRAW_STEP * (rows - 1) + ROW_DOCK_STEP;
+  const totalsAt = lastRow + TOTALS_GAP;
+  const countAt = totalsAt + COUNT_GAP;
+  return { totalsAt, countAt, caveatAt: countAt + CAVEAT_GAP };
+}
 /**
  * The whole sheet recedes, landing its last frame on the piece's last frame.
  *
@@ -151,21 +187,42 @@ const CAUSE_W = 600;
 const GUTTER = 56;
 const ROWS_W = SHEET_W - CAUSE_W - GUTTER;
 
-/** One `WOULD ADD` row, and the air between two of them. */
+/** One `WOULD ADD` row, and the air between any two of them. */
 const ROW_H = 118;
 const ROW_GAP = 26;
-/** The columns block: two rows deep, which is also the cause plate's height. */
-const COLS_H = ROW_H * 2 + ROW_GAP;
 
-/** The totals plate, under both columns. */
-const TOTALS_TOP = COLS_H + 56;
 const TOTALS_H = 172;
-/** The caveat strip, under the totals plate's own dock hairline. */
-const CAVEAT_TOP = TOTALS_TOP + TOTALS_H + 34;
 const CAVEAT_H = 64;
+/** Air above the totals plate, and between it and the caveat strip. */
+const TOTALS_GAP_Y = 56;
+const CAVEAT_GAP_Y = 34;
 
-/** The whole sheet: columns, totals, caveat. */
-const SHEET_H = CAVEAT_TOP + CAVEAT_H;
+/**
+ * The sheet's vertical layout, for a receipt with `rows` line items.
+ *
+ * The cause plate is as tall as the column of rows beside it, which is what
+ * makes the two read as one object rather than as a plate and a list. That was
+ * `ROW_H * 2 + ROW_GAP` written down, so a third row overran the columns block
+ * by a whole row and printed straight through the totals plate underneath it -
+ * silently, because nothing in this file knew how many rows it had.
+ */
+function geometry(rows: number) {
+  const colsH = ROW_H * rows + ROW_GAP * (rows - 1);
+  const totalsTop = colsH + TOTALS_GAP_Y;
+  const caveatTop = totalsTop + TOTALS_H + CAVEAT_GAP_Y;
+  return { colsH, totalsTop, caveatTop, sheetH: caveatTop + CAVEAT_H };
+}
+
+/**
+ * The most line items this sheet can hold.
+ *
+ * Five rows put the sheet's top edge at y=130, above `CHROME_BOTTOM`, so the
+ * receipt would be read across the chapter's own title band. Four clears it by
+ * two pixels. Enforced in `readLedger` rather than absorbed by shrinking the
+ * type, because a prediction naming five groups is a different scene from the
+ * one this piece was designed for and the handback should say so.
+ */
+const MAX_ROWS = 4;
 
 /** Padding inside a solid plate. The product's `p-(--sp-card)`, at the scale this is staged at. */
 const PAD = 40;
@@ -248,6 +305,14 @@ function readLedger(manifest: Manifest): LedgerFigures {
   const rules = figureNumber(manifest, 'rules');
   const removed = figureNumber(manifest, 'removed');
 
+  if (names.length > MAX_ROWS) {
+    throw new Error(
+      `${manifest.id}: the report predicts ${names.length} groups (${names.join(', ')}) and the ` +
+        `ledger sheet holds ${MAX_ROWS}. A fifth row pushes the receipt up into the chapter ` +
+        'title band. Re-cut the piece, or give the act a different set piece.',
+    );
+  }
+
   if (groups !== names.length) {
     throw new Error(
       `${manifest.id}: the report's "Groups" pill read ${groups} but figure "added" names ` +
@@ -270,12 +335,12 @@ function readLedger(manifest: Manifest): LedgerFigures {
  * be the alert token at a weight that reads at this size; the string under it
  * is character-for-character the one the rig read.
  */
-const Cause: React.FC<{ typo: string }> = ({ typo }) => (
+const Cause: React.FC<{ typo: string; height: number }> = ({ typo, height }) => (
   <div
     style={{
       boxSizing: 'border-box',
       width: CAUSE_W,
-      height: COLS_H,
+      height,
       padding: PAD,
       display: 'flex',
       flexDirection: 'column',
@@ -402,6 +467,11 @@ const Total: React.FC<{
  */
 export const Ledger: React.FC<PieceProps> = ({ manifest }) => {
   const { typo, added, groups, rules, removed } = readLedger(manifest);
+  // Both derived from the number of line items the capture actually produced.
+  // Nothing below this line knows a row count, which is the fix: the sheet used
+  // to be drawn for the two rows the org happened to predict when it was built.
+  const { colsH, totalsTop, caveatTop, sheetH } = geometry(added.length);
+  const { totalsAt, countAt, caveatAt } = beats(added.length);
 
   return (
     <AbsoluteFill style={{ fontFamily: INTER }}>
@@ -419,9 +489,9 @@ export const Ledger: React.FC<PieceProps> = ({ manifest }) => {
         style={{
           position: 'absolute',
           left: (FRAME.width - SHEET_W) / 2,
-          top: (CHROME_BOTTOM + FRAME.height) / 2 - SHEET_H / 2,
+          top: (CHROME_BOTTOM + FRAME.height) / 2 - sheetH / 2,
           width: SHEET_W,
-          height: SHEET_H,
+          height: sheetH,
         }}
       >
         <Dock
@@ -431,7 +501,7 @@ export const Ledger: React.FC<PieceProps> = ({ manifest }) => {
           rule={false}
           style={{ position: 'absolute', left: 0, top: 0, width: CAUSE_W }}
         >
-          <Cause typo={typo} />
+          <Cause typo={typo} height={colsH} />
         </Dock>
 
         <div
@@ -440,15 +510,14 @@ export const Ledger: React.FC<PieceProps> = ({ manifest }) => {
             left: CAUSE_W + GUTTER,
             top: 0,
             width: ROWS_W,
-            height: COLS_H,
+            height: colsH,
           }}
         >
           {added.map((name, i) => (
             <WouldAdd
               key={name}
-              // Two rows are what this org's report predicted; a third would
-              // simply keep the last row's cadence rather than have no beat.
-              drawAt={ROW_DRAW_AT[Math.min(i, ROW_DRAW_AT.length - 1)]}
+              // The cadence, not a table of two. Every row gets its own draw.
+              drawAt={ROW_DRAW_AT + ROW_DRAW_STEP * i}
               top={i * (ROW_H + ROW_GAP)}
               name={name}
             />
@@ -458,10 +527,10 @@ export const Ledger: React.FC<PieceProps> = ({ manifest }) => {
         {/* The one accent hairline on the sheet, under the plate that carries
             the counts: dock's own rule, which is where a receipt draws one. */}
         <Dock
-          from={TOTALS_AT}
+          from={totalsAt}
           edge="right"
           distance={160}
-          style={{ position: 'absolute', left: 0, top: TOTALS_TOP, width: SHEET_W }}
+          style={{ position: 'absolute', left: 0, top: totalsTop, width: SHEET_W }}
         >
           <div
             style={{
@@ -477,11 +546,11 @@ export const Ledger: React.FC<PieceProps> = ({ manifest }) => {
               borderRadius: 16,
             }}
           >
-            <Total from={COUNT_AT} value={groups} unit="Groups" color={STAGE.ink} roll />
-            <Total from={COUNT_AT + COUNT_STEP} value={rules} unit="Rules" color={STAGE.ink} roll />
+            <Total from={countAt} value={groups} unit="Groups" color={STAGE.ink} roll />
+            <Total from={countAt + COUNT_STEP} value={rules} unit="Rules" color={STAGE.ink} roll />
             {/* "The zero does not roll, it simply sets." */}
             <Total
-              from={COUNT_AT + COUNT_STEP * 2}
+              from={countAt + COUNT_STEP * 2}
               value={removed}
               unit="Removals"
               color={STAGE.affirm}
@@ -501,11 +570,11 @@ export const Ledger: React.FC<PieceProps> = ({ manifest }) => {
         </Dock>
 
         <Dock
-          from={CAVEAT_AT}
+          from={caveatAt}
           edge="right"
           distance={120}
           rule={false}
-          style={{ position: 'absolute', left: 0, top: CAVEAT_TOP, width: SHEET_W }}
+          style={{ position: 'absolute', left: 0, top: caveatTop, width: SHEET_W }}
         >
           <div
             style={{
@@ -519,7 +588,7 @@ export const Ledger: React.FC<PieceProps> = ({ manifest }) => {
               color: STAGE.inkDim,
             }}
           >
-            Group rules only. Pushed groups are not modelled.
+            Group rules only. A push from the application is not modelled.
           </div>
         </Dock>
       </Recede>

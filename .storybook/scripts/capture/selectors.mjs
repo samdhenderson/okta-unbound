@@ -169,7 +169,7 @@ export const workingSetSection = (page, label) => page.getByRole('region', { nam
  * group row. The row's real name sits in a plain `<p>` beside the button, so
  * this filters the `<li>` by that text first and only then looks for the
  * (single, unambiguous once filtered) `Open …` button inside it — the same
- * move {@link previewImpactFor} makes for rule cards.
+ * move {@link openRule} makes for rule cards.
  *
  * @param section - `'Pinned'` or `'Recent'`, passed through {@link workingSetSection}.
  */
@@ -299,9 +299,7 @@ export async function readOrgFindingTotal(page, label) {
     return labelSpan?.nextElementSibling?.textContent ?? null;
   });
   if (note === null) {
-    throw new Error(
-      `readOrgFindingTotal: "${label}" has no note yet — the card is still reading`,
-    );
+    throw new Error(`readOrgFindingTotal: "${label}" has no note yet — the card is still reading`);
   }
   const ok = /^of ([\d,]+) /.exec(note);
   if (!ok) {
@@ -864,7 +862,8 @@ export const profileSaveButton = (page) => page.getByRole('button', { name: /^Sa
 export const saveModal = (page) => page.getByRole('dialog');
 export const analyzeBlastRadius = (page) =>
   saveModal(page).getByRole('button', { name: /^Analyze blast radius$/ });
-export const confirmSave = (page) => saveModal(page).getByRole('button', { name: /^Save changes$/ });
+export const confirmSave = (page) =>
+  saveModal(page).getByRole('button', { name: /^Save changes$/ });
 
 /**
  * The blast-radius report's group count, off its own pill.
@@ -923,25 +922,195 @@ export const membershipRow = (page, name) =>
 export const loadRulesButton = (page) => page.getByRole('button', { name: /^Load Rules$/ });
 
 /**
- * A rule card's `Preview Impact`, resolved through the rule's own id.
+ * One rule card in the list, found by the rule's own name.
  *
- * **It cannot be selected by index.** All nine rule cards render one and all
- * nine report as visible, so `.first()` silently picks rule 1's — and the
- * earlier approach mixed two query engines that disagree on their population: a
- * DOM `querySelectorAll('button')` counts everything, while a role query
- * answers from the accessibility tree, which drops `aria-hidden`/`display:none`
- * subtrees, and `RuleCard` marks every collapsed card's body `inert`. An
- * off-by-one there does not fail — it captions the wrong rule's number over a
- * modal that opened perfectly.
+ * **A rule card cannot be found by its button's accessible name.** `RuleCard`
+ * opens through a `StretchedButton` labelled `Open rule` — the kind, not the
+ * entity — so every card in the list shares one accessible name, and the rule's
+ * own name lives in an `h3` the overlay only points at with `aria-describedby`
+ * (a description, which `getByRole({ name })` does not read). `RulesListPanel`
+ * wraps each card in a `[data-rule-id]` div, so the row is filtered by its
+ * heading first and the single unambiguous button taken from inside it — the
+ * same move {@link workingSetRow} makes on Home.
  *
- * Held out of the reel for now regardless: `ruleImpact` narrates `D-052`, where
- * the app models deactivation as retracting membership and Okta does not.
+ * Exact heading match, deliberately: the demo org carries both `Engineering by
+ * department` and `Engineering → GitHub (excludes contractors)`, and a
+ * substring filter would match a rule card, an expanded body and a modal at
+ * once.
  */
-export const previewImpactFor = (page, ruleId) =>
-  page
-    .locator('.disclose[data-open="true"]')
-    .filter({ hasText: ruleId })
-    .getByRole('button', { name: /^Preview Impact$/ });
+export const ruleRow = (page, name) =>
+  page.locator('[data-rule-id]').filter({ has: page.getByRole('heading', { name, exact: true }) });
+
+/** A rule card's row overlay, which pushes the rule detail rung. */
+export const openRule = (page, name) =>
+  ruleRow(page, name).getByRole('button', { name: 'Open rule', exact: true });
+
+/**
+ * The rule rung's `Preview impact`.
+ *
+ * **Lowercase `impact`, and it is no longer on the card.** The previous version
+ * of this selector looked for `Preview Impact` inside an open `.disclose` on a
+ * rule card, which was true of the surface ADR-0043 filmed and is true of
+ * nothing now: the verb moved onto `RuleActionBar` when the rule detail rung
+ * landed (ADR-0039), and the label is `Preview impact`. Both halves were stale,
+ * and a stale selector here fails as a timeout rather than as a wrong answer,
+ * which is the one good thing about it.
+ *
+ * It is `variant: 'primary'`, hence pinned, so it never falls into the More
+ * tier and never needs scrolling to: `ActionBar` is the second band of the
+ * sticky stack. It is **absent**, not disabled, when the rule assigns to no
+ * groups (ADR-0039 bans a verb with no wire), so a `waitFor` on it names the
+ * real fault - a subject rule that targets nothing - instead of timing out on a
+ * click.
+ */
+export const previewImpact = (page) =>
+  page.getByRole('button', { name: 'Preview impact', exact: true });
+
+/** The `ActionBar`'s overflow disclosure. The lifecycle verbs live behind it. */
+export const moreActions = (page) => page.getByRole('button', { name: 'More', exact: true });
+
+/**
+ * The lifecycle verb in the More tier.
+ *
+ * Only one of `Deactivate rule` / `Activate rule` is ever rendered - the other
+ * is not a thing you can do to a rule in this state, and ADR-0039 §3 forbids
+ * shipping it disabled. So aiming at `Deactivate rule` is also the assertion
+ * that the subject rule is ACTIVE.
+ *
+ * The tier is `inert` while closed, which means the accessibility tree does not
+ * hold it and a role query returns nothing: {@link moreActions} has to be
+ * pressed first, and a failure here reads as "the tier never opened" rather
+ * than "the button moved".
+ */
+export const deactivateRule = (page) =>
+  page.getByRole('button', { name: 'Deactivate rule', exact: true });
+
+/**
+ * The rule-impact dialog, in whichever of its two modes is open.
+ *
+ * `RuleImpactModal` is one dialog with a `mode`, not two components: `preview`
+ * titles itself `Rule impact preview` and offers only `Close`, `deactivate`
+ * titles itself `Deactivate rule?` and offers `Cancel` plus a danger
+ * `Deactivate rule`. Naming the mode is the point of this selector - a walk
+ * that waited on a bare `role=dialog` could not tell which verb it had opened,
+ * and the two say opposite-sounding things about the same population.
+ */
+export const impactModal = (page, mode) =>
+  page.getByRole('dialog', {
+    name: mode === 'deactivate' ? 'Deactivate rule?' : 'Rule impact preview',
+    exact: true,
+  });
+
+/**
+ * The dialog's footer verbs.
+ *
+ * `Deactivate rule` appears **twice** on screen once the tier is open and the
+ * deactivate dialog is up - once in the tier behind it, once in the footer -
+ * so the confirm is scoped to the dialog. The walk never presses it; it is
+ * named so that pressing it can only ever be deliberate. `Cancel` is what the
+ * reel actually uses, because the demo org is genuinely writable (ADR-0052) and
+ * a take that deactivated the rule would leave the org in a state the next
+ * chapter films.
+ */
+export const impactDismiss = (page, mode) =>
+  impactModal(page, mode).getByRole('button', {
+    name: mode === 'deactivate' ? 'Cancel' : 'Close',
+    exact: true,
+  });
+
+/**
+ * The dialog's opening paragraph, which is where each verb states its own
+ * consequence.
+ *
+ * Read rather than assumed, because this sentence is the whole reason the
+ * chapter came back: `D-052` shipped when the panel rendered this population as
+ * an access loss, and ADR-0043 held the chapter out until it stopped. A walk
+ * that filmed the modal without reading the sentence would film the fix and the
+ * defect identically.
+ *
+ * It is the first `<p>` in the dialog body and it contains an em dash, so it is
+ * asserted against and never printed on camera (ADR-0043 bans the glyph from
+ * the frame).
+ */
+export const impactLead = (page, mode) => impactModal(page, mode).locator('p').first();
+
+/**
+ * Read the dialog's two `StatCard`s: what the rule holds alone, out of what.
+ *
+ * **Scoped to the dialog, and it has to be.** `readRuleStats` walks every `<p>`
+ * on the page and the Rules stats grid is still mounted behind the modal
+ * (ADR-0018), so an unscoped read returns `Total Rules` and friends alongside
+ * these two and a caller picking by index gets the wrong surface entirely.
+ *
+ * No settle is required for the count-up here, unlike `readRuleStats`:
+ * `StatCard`'s `countUp` defaults to `false` and `RuleImpactModal` does not
+ * pass it, so these two numbers are painted at their final value. The dialog's
+ * own `loading` state is the thing to wait out, and the walk does that by
+ * waiting for the `Target groups` eyebrow rather than by sleeping.
+ *
+ * @returns {Promise<{ heldSolely: number, members: number }>}
+ */
+export async function readImpactSummary(page, mode) {
+  const stats = await impactModal(page, mode)
+    .locator('p')
+    .evaluateAll((els) => {
+      const out = {};
+      for (const el of els) {
+        const title = (el.textContent ?? '').trim();
+        const value = Number((el.nextElementSibling?.textContent ?? '').replace(/,/g, ''));
+        if (title && Number.isFinite(value) && el.nextElementSibling?.tagName === 'P') {
+          out[title] = value;
+        }
+      }
+      return out;
+    });
+  const heldSolely = stats['Held by this rule alone'];
+  const members = stats['Current members'];
+  if (!Number.isFinite(heldSolely) || !Number.isFinite(members)) {
+    throw new Error(
+      `readImpactSummary: the dialog's stat cards read ${JSON.stringify(stats)} - the analysis ` +
+        'has not finished, or the two titles moved',
+    );
+  }
+  return { heldSolely, members };
+}
+
+/**
+ * What the dialog says this rule holds inside one named target group.
+ *
+ * The dialog's stat cards are distinct-across-targets; this is the per-group
+ * line, and the two are different claims that read identically at playback
+ * speed. Both are worth having, because a rule with one target group makes them
+ * numerically equal and a rule with two does not.
+ *
+ * **Matched against the dialog's flattened text, not against its boxes.** The
+ * row's own container is a class-only `div` and the group name sits one level
+ * deeper, inside either a `<button>` (when group navigation is wired) or a
+ * plain `div` (when it is not) - so a `locator('div').filter(...)` resolves to
+ * the name box in one wiring and to the whole row in the other, and only the
+ * second of those contains the badge. Reading the text once and pattern
+ * matching it is indifferent to which wiring is on screen.
+ *
+ * The badge is one of two strings and they are not interchangeable: a group
+ * with sole holds gets `N held by this rule alone`, one without gets `No
+ * change`. Both are matched, so a `0` here is "the panel said No change" and
+ * never "the read missed".
+ *
+ * @returns {Promise<{ group: string, members: number, held: number }>}
+ */
+export async function readImpactTarget(page, mode, groupName) {
+  const text = (await impactModal(page, mode).innerText()).replace(/\s+/g, ' ').trim();
+  const row = new RegExp(
+    `${rx(groupName)} ([\\d,]+) members? (?:([\\d,]+) held by this rule alone|No change)`,
+  ).exec(text);
+  if (!row) {
+    throw new Error(
+      `readImpactTarget: no "${groupName}" row in the ${mode} dialog. Read: "${text.slice(0, 400)}"`,
+    );
+  }
+  const num = (raw) => Number(String(raw).replace(/,/g, ''));
+  return { group: groupName, members: num(row[1]), held: row[2] ? num(row[2]) : 0 };
+}
 
 /**
  * A rule card's expander.
