@@ -80,10 +80,11 @@ const meta = {
           'a reader draws one from — and will hold more of it over time (staleness, orphaned ' +
           'assignments, rule overlap). Naming it for the subject is what lets those land here ' +
           'without the label going stale.\n\n' +
-          '**Every attribute gets a card; rules only decide the order.** The rule index used to ' +
-          'be a *filter*, so a card existed only for attributes some feeding rule referenced — ' +
-          'which hid the drift worth catching most. Rule-referenced attributes still sort first, ' +
-          'because those are the ones granting access today.\n\n' +
+          '**Every attribute gets a card; three signals only decide the order.** The rule index ' +
+          'used to be a *filter*, so a card existed only for attributes some feeding rule ' +
+          'referenced — which hid the drift worth catching most. It is now the *lightest* of ' +
+          'three ranking inputs, behind near-duplicate spellings and a hidden tail; see ' +
+          '`AttributeSpreadSection` for the weights.\n\n' +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs)',
       },
     },
@@ -102,7 +103,8 @@ const meta = {
       description: '`false` when no Okta tab is connected; disables both gate buttons.',
     },
     feedingRules: {
-      description: 'The feeding rules, layered onto the cards as an annotation and a sort key.',
+      description:
+        'The feeding rules, layered onto the cards as an annotation and the lightest ranking input.',
     },
     mfaResults: { description: 'Per-member MFA scan results, or `null` before a scan has run.' },
     scanStatus: { description: 'Current MFA scan lifecycle status.' },
@@ -149,7 +151,7 @@ export const RosterError: Story = {
   args: { memberStatus: 'error', error: 'Members could not be read.' },
 };
 
-/** Roster loaded: a card per discovered attribute, rule-referenced ones first. */
+/** Roster loaded: a card per discovered attribute, ranked by what wants reading first. */
 export const AttributeCards: Story = {
   args: { members, memberStatus: 'done' },
 };
@@ -216,34 +218,40 @@ const wideMembers: OktaUser[] = Array.from({ length: 40 }, (_, i) => ({
 }));
 
 /**
- * The aggregated tail is reachable.
+ * The aggregated tail is reachable, in three steps.
  *
  * A card keeps only its leading values and folds the rest into one
  * `Other (N values)` row, which used to be inert text — the card stated a count
  * and then refused to say what was in it, which is exactly where drift hides.
- * The row now opens the same `BreakdownDetailsModal` the Members tab uses, over
- * the full distribution `computeDimensionBreakdown` re-derives from the roster
- * already in hand. **No second fetch**, and the long list is computed only when
- * somebody opens it.
+ * Expanding the card lists what it kept; **Show all** opens the same
+ * `BreakdownDetailsModal` the Members tab uses, over the full distribution
+ * `computeDimensionBreakdown` re-derives from the roster already in hand.
+ * **No second fetch**, and the long list is computed only when somebody opens it.
  *
- * Read-only: this tab has no member list, so no row is wired to a filter and the
- * modal does not offer one.
+ * Read-only here: no `onFilterMembers` is wired, so the modal's rows stay inert
+ * and promise nothing rather than offering a filter with nowhere to apply it.
  */
-export const OtherRowRevealsHiddenValues: Story = {
+export const HiddenTailRevealedInThreeStages: Story = {
   args: { members: wideMembers, memberCount: wideMembers.length, memberStatus: 'done' },
   play: async ({ canvas, canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
 
-    // The card names the tail's size and nothing in it.
+    // Stage one: the collapsed card measures the tail and says so in words.
     await expect(canvas.getByText('costCenter')).toBeVisible();
-    await expect(canvas.queryByText('CC-108')).toBeNull();
+    await expect(canvas.getByText('30% hidden in the tail')).toBeVisible();
 
-    await userEvent.click(canvas.getByRole('button', { name: /Other \(3 values\)/ }));
+    // Stage two: this card's own disclosure, named for the attribute it opens.
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Show the value breakdown for costCenter' }),
+    );
+
+    // Stage three.
+    await userEvent.click(canvas.getByRole('button', { name: /Show all 9 values/ }));
 
     const dialog = await body.findByRole('dialog');
     await expect(within(dialog).getByText('CC-108')).toBeVisible();
     // Every value, not just the hidden three.
     await expect(within(dialog).getByText('CC-100')).toBeVisible();
-    await expect(within(dialog).queryByText(/filter the member list/)).toBeNull();
+    await expect(within(dialog).queryByText(/Members tab/)).toBeNull();
   },
 };
