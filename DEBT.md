@@ -1218,6 +1218,63 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Status:** open
 - **Related:** `I-032` (found it and worked around it)
 
+### D-116 · The blast radius predicts additions into app-mastered groups
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/shared/membership/blastRadius.ts` (`additionEffect`)
+- **Verified:** 2026-09-02 — found by the `I-029` writer, and now exercised by
+  the demo org: `I-026` gave `Datadog - Engineering` a rule, and the reel's
+  Ledger plate duly named that `APP_GROUP` as a predicted addition.
+- **Problem:** `additionEffect` has no `APP_GROUP` gate, so it predicts a user
+  will be **added** to a group that is mastered by an application. A group rule
+  cannot add anyone to an app-mastered group — the upstream directory owns that
+  roster — so the prediction is structurally impossible, not merely uncertain.
+  The removal path enforces the distinction correctly; only the addition path
+  does not. The gap is already recorded in the function's own docblock, with the
+  reason: a group's type is unreachable for a group the user does not yet hold,
+  because the type comes from the membership record being predicted.
+- **Done when:** an addition into an `APP_GROUP` target is either suppressed or
+  labelled as not-modelled, rather than presented beside ordinary predictions
+  with equal confidence. Whichever is chosen, the reason is recorded in the
+  docblock, since the next reader will otherwise re-derive the same dead end.
+  Resolving the type lookup is the substance of the work — a fix that merely
+  hides the row without knowing the type would suppress real predictions too.
+  The demo org exercises this, so `demoRuleCoverage`-adjacent expectations and
+  the reel's Ledger row count both move when it lands.
+- **Risk:** Medium — this changes what a prediction surface claims, and the
+  surface steers membership edits. It also re-films the Users and Rules
+  chapters.
+- **Status:** open
+- **Related:** `I-029` (found it), `I-026` (made the demo exercise it)
+
+### D-117 · `GroupsTab.tsx` is 731 lines, well over the ~300-line bar
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** L
+- **Files:** `src/sidepanel/components/GroupsTab.tsx`
+- **Verified:** 2026-09-02 — 731 lines after `I-019`, which added 18 and
+  reported the overrun rather than absorbing it.
+- **Problem:** The tab holds list state, the cached/live mode switch, filter
+  and search state, the working set, the deep-link effect, the detail-view
+  push and the rung wrapper. `I-019` needed nine lines of that effect to make a
+  deep link land on a named pane, and there was nothing to trim in exchange —
+  every remaining line is load-bearing for a different concern. That is the
+  signal the file is doing too many jobs, not that the last change was
+  careless. It is now the largest component in the repo bar `App.tsx`.
+- **Done when:** the deep-link/navigation effect and the cached-vs-live mode
+  switch move into hooks beside the existing ones, leaving the component to
+  compose. Land it tests-first, one concern per change, per the working
+  agreement — `GroupsTab.test.tsx` (78) and `GroupsTab.navigation.test.tsx`
+  (12) are the safety net and must stay green throughout without retargeting.
+- **Risk:** Medium — no behaviour should change, but this is the tab with the
+  most state and the deep-link path is easy to break silently. Pure refactor:
+  if an assertion needs rewriting, the extraction is wrong.
+- **Status:** open
+- **Related:** `I-019` (grew it and reported it), `D-091`, `ADR-0024`
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk

@@ -97,7 +97,7 @@ block says they mean — same vocabulary, one definition, defined there.
   kept, its doc comment states plainly that a caller rendering same-named
   entities must pass `copyIdLabel`, and a story shows the collision case.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** blocked:D-107
 - **Widened 2026-08-25 by `ui-reviewer` on `I-002`'s diff:** the copy control
   is only half of it. `EntityLink`'s **chip** derives its `aria-label` as
   `Open <type> <name>` (`EntityLink.tsx:146`) and exposes **no override prop
@@ -413,7 +413,7 @@ block says they mean — same vocabulary, one definition, defined there.
   auto-runs.
 - **Risk:** Medium — the `initialPane` widening touches a component four
   surfaces mount.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** the Home reports commit, ADR-0018
 
 ### I-020 · Home's reports as Export Engine descriptors
@@ -754,7 +754,7 @@ block says they mean — same vocabulary, one definition, defined there.
   the hero rule's solely-held set is **empty**, which is exactly why the
   original defect went unnoticed for so long; the scene needs a fixture where
   the count is non-zero or it will demonstrate nothing.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `D-052` (the defect that held it out), ADR-0043, ADR-0045
 
 ### I-031 · Group Detail's rules section answers "what does it say?" by leaving the tab
