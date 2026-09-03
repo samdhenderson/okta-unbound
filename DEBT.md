@@ -1326,6 +1326,34 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Status:** open
 - **Related:** `I-033` (found it), `ADR-0030`
 
+### D-120 · `useExportTab.ts` carries every concern the Export tab has
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** L
+- **Files:** `src/sidepanel/hooks/useExportTab.ts`
+- **Verified:** 2026-09-02 — 486 lines before `I-020`, which adds the
+  snapshot-source branch on top. Found by that item's writer while scoping it.
+- **Problem:** The hook owns descriptor selection, column selection and
+  presets, the filter state, the debounced match-count probe, the export run
+  and its progress, and the download. `I-020` adds a seventh concern — a row
+  source that resolves synchronously from the org snapshot rather than
+  fetching — and every one of those concerns has to know whether it is in the
+  endpoint world or the snapshot world. That is the point at which a hook stops
+  being a hook and becomes the tab.
+- **Done when:** the probe and the run/download are separate hooks composed by
+  a thin `useExportTab`, with the source distinction resolved once at the top
+  rather than branched at each concern. Land it tests-first, one concern per
+  change, per the working agreement. Behaviour must not move: the existing
+  suites are the safety net and must pass without retargeting. If an assertion
+  needs rewriting, the extraction is wrong.
+- **Risk:** Medium — the Export tab is the surface where a mistake writes a
+  wrong file rather than showing a wrong number, and the escaping and audit
+  paths run through here. Pure refactor only; no change to what a cell
+  contains.
+- **Status:** open
+- **Related:** `I-020` (found it and added to it), `ADR-0065`, `D-118`, `D-117`
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk

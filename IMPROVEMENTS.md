@@ -446,7 +446,7 @@ block says they mean — same vocabulary, one definition, defined there.
   survive the trip — a report whose collections cannot support a count must not
   become an export that quietly ships a partial list.
 - **Risk:** Medium — it widens a contract every existing descriptor implements.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `I-019`, ADR-0030, ADR-0040
 
 ### I-021 · Icon registry entries for the three glyphs `GroupCollections` still hand-rolls
@@ -990,6 +990,60 @@ block says they mean — same vocabulary, one definition, defined there.
   moves by exactly the expected amount and no rule is disabled wholesale.
 - **Status:** open
 - **Related:** `I-027` (found it)
+
+### I-041 · Home cannot hand a report to the Export tab
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/home/ReportsCard.tsx`,
+  `src/sidepanel/components/HomeTab.tsx`, `src/sidepanel/App.tsx`
+- **Verified:** 2026-09-02 — `I-020` landed the descriptors and the Export-hub
+  route, and stopped deliberately short of this one.
+- **Problem:** `I-020` made every Home report exportable, but only by finding it
+  again in the Export tab's entity hub. The reader looking at a finding — the
+  person who actually wants the CSV — still has to leave, recall the report's
+  name, and re-select it. `ADR-0065` wants hub discoverability independently, so
+  that route is correct and stays; what is missing is the pre-scoped jump from
+  the surface that raised the question. `I-020` did not wire it because
+  `ReportsCard` is mounted only by `HomeTab`: a required prop breaks the card's
+  type-check, and an optional one ships a verb with no wire, which `ADR-0039`
+  bans.
+- **Done when:** `HomeTabProps` carries `onExportReport: (reportKey: string) =>
+void`, passed through to `ReportsCard`, and `App` routes it into the existing
+  `handleNavigateToExport({ descriptorId })` — the same shape `group-rules`
+  already uses. Each report key maps to its descriptor id; the mapping lives
+  with the reports, not in `App`. A story covers the control, and the caveat
+  stays visible on the card so the jump does not read as an endorsement.
+- **Risk:** Low — one new prop and an existing navigation path. The verb must
+  be omitted, never rendered disabled, for a report whose resolution is
+  `unavailable`.
+- **Status:** open
+- **Related:** `I-020` (built the descriptors and left this), `ADR-0065`,
+  `ADR-0039`
+
+### I-042 · The snapshot-row projection is written twice
+
+- **Category:** structure
+- **Priority:** P4
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useHomeReports.ts`,
+  `src/sidepanel/export/orgReportSource.ts` (`readJoinInputs`)
+- **Verified:** 2026-09-02 — found by the `I-020` writer, who could not fix it:
+  `useHomeReports.ts` was outside that item's allowlist.
+- **Problem:** `I-020` deliberately shares the joins and the honesty rules
+  between Home and the export layer — that was the point of the item. The one
+  thing it could not share is the mechanical projection from raw snapshot rows
+  to `OrphanCandidateGroup`, which is now spelled out in both places, fallbacks
+  included (`?? 0`, `|| id`, commented in both as matching `toGroupSummary`).
+  Two copies of a mapping whose fallbacks encode real decisions is how the two
+  surfaces start disagreeing about the same group.
+- **Done when:** the projection moves to a pure module both callers import, with
+  the fallback reasoning recorded once. No behaviour change: both suites pass
+  untouched, and if an assertion moves the extraction is wrong.
+- **Risk:** Low — pure function, two callers, both well covered.
+- **Status:** open
+- **Related:** `I-020` (created the second copy and reported it)
 
 ## Archive
 
