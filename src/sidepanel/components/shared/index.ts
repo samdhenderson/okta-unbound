@@ -71,6 +71,6 @@ export type {
 export type { StableWidthProps } from './StableWidth';
 export type { StatusType, UserStatusVariant } from './status';
 export { userStatusVariant } from './status';
-export type { TabItem, TabsVariant } from './Tabs';
+export type { TabItem, TabsVariant, TabCountDisplay } from './Tabs';
 export type { TooltipTriggerProps } from './Tooltip';
 export type { BreadcrumbItem, BreadcrumbsSize } from './Breadcrumbs';
