@@ -1,6 +1,7 @@
 # ADR-0061: A list rung's `primary` is its page verb, and the open panel says so in words
 
-- Status: Accepted
+- Status: Accepted (§1 amended by [ADR-0068](./0068-a-rungs-primary-is-a-verb-that-acts.md);
+  §§2–3 stand)
 - Date: 2026-08-31
 - Amends: [ADR-0051](./0051-a-verb-strip-for-a-list-rung.md) §1, which spends `primary`
   on the open inline panel
@@ -68,6 +69,18 @@ The open inline panel states itself in its own label, which swaps to `Hide …`,
 Both halves are load-bearing, and neither weakens ADR-0051.
 
 ### 1. What counts as a page-level verb here
+
+> **Amended by [ADR-0068](./0068-a-rungs-primary-is-a-verb-that-acts.md).** The ADR-0030 §2
+> test below is necessary but not sufficient: it admitted a **fetch** and an **export**,
+> both of which have the whole page as their object and neither of which is what the admin
+> came to the rung to do. `primary` now additionally requires that pressing it **acts** —
+> opens a modal or performs the operation — so a refresh is never `primary` and an export
+> descriptor is never in the row at all (`priority: 'tier'`, everywhere). The reference
+> example named here is gone: [ADR-0069](./0069-refresh-is-one-app-level-control.md) makes
+> the Rules tab fetch on open and moves _Load rules_ / _Refresh_ out of
+> `RulesListActionBar` entirely. `GroupActionBar`'s **Add** replaces it. The
+> "at most one `primary` per strip, by construction" argument survives, as does the reading
+> that a rung may legitimately have none.
 
 The ADR-0030 §2 test, unchanged: **the verb's object is the whole page.** Load/Refresh
 acts on the rung's entire subject — every rule in the org — and its availability is not a
