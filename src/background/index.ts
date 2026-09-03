@@ -384,11 +384,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
       }
 
-      // A snapshot sync is the largest fan-out the extension issues, so it is
-      // the traffic that most wants the org's own threshold rather than the
-      // configured default. Same fire-and-forget posture as above.
-      ensureRateLimitThreshold(globalScheduler, request.tabId);
-
       syncSnapshot(
         globalScheduler,
         request.origin,

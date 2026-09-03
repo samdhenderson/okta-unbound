@@ -1470,6 +1470,43 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Status:** open
 - **Related:** `ADR-0008`, `ADR-0070`, `docs/dead-code.md`
 
+### D-125 · A cold org's first burst spends on the default threshold
+
+- **Status:** open
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/background/rateLimitThreshold.ts`,
+  `src/background/snapshotBridge.ts`, `src/shared/scheduler/apiScheduler.ts`
+- **Verified:** 2026-09-03 — found while verifying the threshold path end to end
+  for the activity-rack redesign (ADR-0072); the wiring gap found alongside it
+  (the alarm route never arming the probe at all) is fixed, this half is not.
+- **Problem:** `ensureRateLimitThreshold` is deliberately never awaited — a
+  request must not wait on, or be failed by, an optional refinement of the
+  backoff policy. The consequence is that every request issued before the probe
+  answers is gated on `DEFAULT_CONFIG.minRemainingThreshold` (10), not on the
+  org's number. For a Workforce org that is nearly harmless: the learned value
+  is 15, so the first few requests back off five points late. For a **CIAM** org
+  it is not. Its default warning threshold is 60, which implies backing off at
+  45% remaining, and the cold window runs at 10% instead — a 35-point gap,
+  spanning exactly the moment a snapshot fan-out is at its widest and the
+  detector has observed nothing (ADR-0070's "wider cold start" consequence
+  compounds it). The org whose admins configured a low threshold because they
+  are near their limits is the org this hurts.
+- **Done when:** a cold org's first fan-out cannot run wide on the default. The
+  cheapest shape is probably for `syncSnapshot` to await the probe — a snapshot
+  is a background walk with no user waiting on it, unlike an interactive
+  request, so the two call sites can honestly differ — but "block the walk" and
+  "start narrow and widen once the threshold lands" are both viable and the
+  choice is not obvious. Whichever is taken, `rateLimitThreshold.test.ts` gains
+  a case asserting the cold path does not dispatch on the default, and the
+  fire-and-forget posture stays for `scheduleApiRequest`.
+- **Risk:** Medium. It touches the rate-limit surface, which `CLAUDE.md` treats
+  as a security invariant, and awaiting anything on the snapshot path risks
+  stalling a walk behind a probe that a non-Super-Admin org answers with 403.
+  The memo already makes that 403 cost one request per browser session, so the
+  stall is bounded — but it needs an ADR-shaped argument, not a one-line change.
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
