@@ -277,7 +277,7 @@ block says they mean — same vocabulary, one definition, defined there.
   `CopyableId` where a link would be wrong. The unresolvable case keeps
   rendering as it does today.
 - **Risk:** Low — render-time change, no new fetch.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `I-002`, `I-001`
 
 ### I-016 · `RuleExpressionText` is consumed cross-feature from `groups/detail/`
@@ -285,7 +285,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Category:** ux
 - **Priority:** P3
 - **Size:** S
-- **Files:** `src/sidepanel/components/groups/detail/RuleExpressionText.tsx`,
+- **Files:** `src/sidepanel/components/shared/RuleExpressionText.tsx`,
   `src/sidepanel/components/users/comparison/CauseWorklistRow.tsx`,
   `src/sidepanel/components/shared/index.ts`, `docs/components.md`
 - **Verified:** 2026-08-25 — created and immediately cross-imported by `I-002`.
@@ -300,7 +300,7 @@ block says they mean — same vocabulary, one definition, defined there.
   records why feature-to-feature imports are acceptable here so the next case is
   not re-litigated.
 - **Risk:** Low — a move plus import updates, no behavior change.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `I-002`
 
 ### I-017 · One unresolved-entity reference, not three
@@ -635,7 +635,7 @@ block says they mean — same vocabulary, one definition, defined there.
   rather than the predicates. Note this re-films every chapter and moves Home's
   `unruled` figure.
 - **Related:** ADR-0043 (memberships are derived, not asserted), ADR-0052
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -801,7 +801,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low for (1) and (3). (2) touches `useViewStack` wiring on the Groups
   tab and would need `RuleDetailView` to render without an `ActionBar`, which no
   caller needs today.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** ADR-0030 §2, ADR-0039, ADR-0016, `docs/features-plan.md` §H
 
 ### I-032 · A created feeding rule does not appear until the group is reopened
@@ -827,7 +827,7 @@ block says they mean — same vocabulary, one definition, defined there.
   pane shows the new rule without a reopen. A test pins that the member-source
   analysis survives the refresh.
 - **Risk:** Low-medium — touches the hook every Group Detail pane reads.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `I-013`
 
 ### I-033 · Two mounts of the org snapshot index, for one org
@@ -864,6 +864,83 @@ block says they mean — same vocabulary, one definition, defined there.
   provider's identity stability is load-bearing in three more places.
 - **Status:** open
 - **Related:** ADR-0040, ADR-0062
+
+### I-036 · `RuleDetailView` keeps a private copy of the condition renderer
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/rules/RuleDetailView.tsx`
+  (`renderConditionWithGroupBadges`),
+  `src/sidepanel/components/shared/RuleExpressionText.tsx`
+- **Verified:** 2026-09-02 — found by the `I-031` writer while wiring the shared
+  renderer into `GroupRulesSection`.
+- **Problem:** `I-016` promoted `RuleExpressionText` to `shared/` precisely
+  because a rule expression should be rendered one way everywhere. The rule
+  detail rung — the surface whose whole subject is the expression — still runs
+  its own local `renderConditionWithGroupBadges`, an id-regex tokeniser doing
+  the same job. Two renderers for one string is the drift `RuleExpressionText`'s
+  own docblock warns about, and the rung is the one place a divergence would be
+  most visible.
+- **Done when:** `RuleDetailView` renders its condition through the shared
+  `RuleExpressionText` and the local tokeniser is deleted, or — if the rung
+  genuinely needs something the shared component refuses — the shared component
+  gains that as a documented prop and the rung uses it. A local copy is not an
+  outcome. Existing rung tests keep passing unchanged; if the badge markup
+  differs, the assertions are retargeted per `ADR-0022`, not relaxed.
+- **Risk:** Low — same input, same intended output, covered by existing tests.
+- **Status:** open
+- **Related:** `I-016` (promoted the shared renderer), `I-031` (found this)
+
+### I-037 · A resolver rebuilt each render defeats the memo it feeds
+
+- **Category:** structure
+- **Priority:** P4
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/comparison/CauseWorklistRow.tsx`
+  (`clauseGroupNames`)
+- **Verified:** 2026-09-02 — found by the `I-016` writer while reviewing
+  `RuleExpressionText`'s consumers against its new prop contract.
+- **Problem:** `CauseWorklistRow` builds a fresh resolver closure on every
+  render and passes it as `resolveGroupName`. `RuleExpressionText` memoises its
+  tokenisation on that function's identity, so the memo re-runs every render for
+  this consumer and does nothing. The output is identical and the tokeniser is
+  cheap, so this is a latent cost rather than a live one — but the memo is
+  currently decoration, and the next consumer to assume it works will be wrong.
+- **Done when:** the resolver is stable across renders (`useCallback`, or a
+  `useMemo` over the name map it closes over), so the tokenisation memo actually
+  holds. No behaviour changes; no new test is warranted for a pure-performance
+  fix that `ADR-0023` would call untestable through the DOM.
+- **Risk:** Low.
+- **Status:** open
+- **Related:** `I-016` (promoted the component and found this)
+
+### I-038 · The demo's intern cohort is refilled by an inactive rule
+
+- **Category:** structure
+- **Priority:** P4
+- **Size:** S
+- **Files:** `src/sidepanel/demo/memberships.ts` (`RULE_FED`, `HAND_MANAGED`),
+  `src/sidepanel/demo/snapshot.ts` (rule 9)
+- **Verified:** 2026-09-02 — found by the `I-026` writer while reconciling
+  `RULE_FED` against `demoRules`.
+- **Problem:** Demo rule 9 (`Interns → cohort group`) is `INACTIVE`, yet
+  `RULE_FED` re-derives the interns membership on every write. An inactive rule
+  does not fill a group in Okta, and the group's own `membershipDaysAgo: 430`
+  says the roster froze when the season ended. The fixture models a group as
+  rule-fed by a rule that cannot be feeding it, which is the same class of
+  self-contradiction `I-026` closed elsewhere — it was left out of that item
+  deliberately, as a separate concern from the missing-declarations drift.
+- **Done when:** `Interns 2026` moves to `HAND_MANAGED` with
+  `eligible = employeeType === 'INTERN'` and `size = pool.length`, so the same
+  people are in it and the roster is frozen rather than continuously re-derived.
+  It is appended **last** so the shared RNG does not reshuffle the other draws —
+  a mid-list insert would silently change every subsequent group's membership.
+  `demoRuleCoverage.test.ts` covers it as an exemption with a written reason.
+- **Risk:** Low, but it moves demo membership numbers, so it re-films any
+  chapter that shows the interns cohort.
+- **Status:** open
+- **Related:** `I-026` (found it), `ADR-0043`
 
 ## Archive
 

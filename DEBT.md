@@ -1148,6 +1148,76 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Status:** open
 - **Related:** `I-024` (fixed the sibling string and filed this one)
 
+### D-114 · An attribute the profile lacks reads as "nobody matches"
+
+- **Category:** correctness
+- **Priority:** P1
+- **Size:** M
+- **Files:** `src/shared/ruleEvaluator.ts` (`resolveMember`),
+  `src/shared/ruleEvaluator.test.ts`
+- **Verified:** 2026-09-02 — found by the `I-026` writer while checking demo
+  rules against the real evaluator, then re-confirmed at `resolveMember`'s
+  source. Affects live orgs, not only the demo fixture.
+- **Problem:** `resolveMember` collapses two different facts into one answer:
+
+  ```ts
+  const raw = (options.user.profile as Record<string, unknown>)[property.name];
+  if (raw === undefined || raw === null) return null;
+  ```
+
+  An attribute **absent from the profile** and one **explicitly set to null**
+  both resolve to `null`. Only the second licenses an answer; the first is the
+  evaluator failing to understand the expression, which the module header says
+  it must never report as `no-match`.
+
+  The consequence is not subtle. `user.status` is a top-level Okta user field,
+  not a profile field, so `user.status == "ACTIVE"` — an ordinary, common rule
+  expression — reduces to `null == "ACTIVE"` → `false` for **every** user. The
+  evaluator states with confidence that nobody matches a rule that in fact
+  matches the whole org. The same holds for every `user.*` reference outside the
+  profile object: `id`, `created`, `lastLogin`, `type`.
+
+- **Done when:** an attribute missing from the profile returns `UNRESOLVED`
+  (reaching the existing unevaluable path with a reason), while an attribute
+  present and explicitly `null` keeps returning `null`. Tests pin the two apart,
+  including `user.status == "ACTIVE"` specifically, since that is the shape that
+  exposed it. The demo fixture's `EVALUATOR_CANNOT_REPRODUCE` single-entry
+  allow-list in `src/sidepanel/demo/demoRuleCoverage.test.ts` is deleted as part
+  of this fix and the ordinary equality check takes over — the test's failure
+  message already says so.
+- **Risk:** Medium — this moves answers, by design. Surfaces reading the
+  evaluator (blast radius, member-source classification, the rule-impact
+  preview) will show `unevaluable` where they previously showed a confident
+  `no-match`. That is the honest reading and the reason the change is worth
+  making, but it is a visible behaviour change on live data, so it wants the
+  `okta-claim-check` skill run over a real org's rules before it lands.
+- **Status:** open
+- **Related:** `I-026` (found it), `ADR-0017` (parse, never guess)
+
+### D-115 · One `error` field serves two independent loads
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useGroupSource.ts`,
+  `src/sidepanel/components/groups/detail/GroupDetailView.tsx`
+- **Verified:** 2026-09-02 — found by the `I-032` writer; the hook's rules load
+  and member analysis both write the single `error` field.
+- **Problem:** `useGroupSource` runs two independent loads — the cheap rules
+  read and the gated member-source walk — and both report into one `error`
+  string. Whichever fails last wins the message, so a member-walk failure can
+  overwrite a rules failure that is still true, and the sections downstream can
+  only disambiguate by their own status field. `I-032` had to work around this
+  directly: `refreshRules` deliberately does **not** clear `error` on entry,
+  because doing so would erase a member failure the reader is still looking at.
+- **Done when:** the hook exposes `rulesError` and `memberError` separately,
+  each cleared by its own load, and `GroupDetailView` routes each to the section
+  that owns it. The `refreshRules` workaround comment goes away because the
+  hazard it names no longer exists.
+- **Risk:** Low — internal hook shape with one consumer.
+- **Status:** open
+- **Related:** `I-032` (found it and worked around it)
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
