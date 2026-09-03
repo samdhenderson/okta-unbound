@@ -35,6 +35,7 @@ export type IconType =
   | 'search'
   | 'link'
   | 'external-link'
+  | 'handoff'
   | 'pin'
   | 'list'
   | 'hand'
@@ -289,6 +290,19 @@ const Icon: React.FC<IconProps> = ({ type, className = '', size = 'md', label })
           strokeLinejoin="round"
           strokeWidth={2}
           d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+        />
+      </svg>
+    ),
+    // An arrow crossing into a panel: "the live Okta tab is on this — bring it
+    // over here". Distinct from `external-link`, which sends the reader *out* to
+    // Okta; this one brings a subject *in*.
+    handoff: (
+      <svg className={baseClasses} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M11 16l4-4m0 0l-4-4m4 4H3m4-7h9a4 4 0 014 4v6a4 4 0 01-4 4H7"
         />
       </svg>
     ),

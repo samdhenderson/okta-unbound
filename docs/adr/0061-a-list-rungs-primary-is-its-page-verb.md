@@ -1,6 +1,10 @@
 # ADR-0061: A list rung's `primary` is its page verb, and the open panel says so in words
 
-- Status: Accepted
+- Status: Accepted (§1's rule amended by
+  [ADR-0068](./0068-a-rungs-primary-is-a-verb-that-acts.md); §1's worked example, §3's
+  last paragraph and the Consequences' first two bullets amended by
+  [ADR-0069](./0069-refresh-is-one-app-level-control.md), which deletes the control they
+  describe; **§2 stands in full**)
 - Date: 2026-08-31
 - Amends: [ADR-0051](./0051-a-verb-strip-for-a-list-rung.md) §1, which spends `primary`
   on the open inline panel
@@ -69,6 +73,25 @@ Both halves are load-bearing, and neither weakens ADR-0051.
 
 ### 1. What counts as a page-level verb here
 
+> **Amended by [ADR-0068](./0068-a-rungs-primary-is-a-verb-that-acts.md).** The ADR-0030 §2
+> test below is necessary but not sufficient: it admitted a **fetch** and an **export**,
+> both of which have the whole page as their object and neither of which is what the admin
+> came to the rung to do. `primary` now additionally requires that pressing it **acts** —
+> opens a modal or performs the operation. A refresh is excluded **absolutely**; an export
+> is **ranked, not banned**, and ADR-0068 §2's ordering is what decides — an acting verb
+> wins and sends every export to `priority: 'tier'`, and only a rung with none may let its
+> one whole-rung export hold `primary`, on a written enumeration rather than a judgement.
+> (An earlier revision of this callout said an export "is never in the row at all,
+> `priority: 'tier'`, everywhere". That was ADR-0068's flat first draft and is not what it
+> accepted; `GroupsListActionBar` keeps `Export list` in the row under rule 2.) The
+> reference example named here is gone:
+> [ADR-0069](./0069-refresh-is-one-app-level-control.md) makes the Rules tab fetch on open
+> and moves _Load rules_ / _Refresh_ out of `RulesListActionBar` entirely.
+> `GroupActionBar`'s **Add** replaces it — a better reference, because _Load rules_ only
+> ever demonstrated the ADR-0030 §2 half of the rule (a fetch has no consequence to test).
+> The "at most one `primary` per strip, by construction" argument survives, as does the
+> reading that a rung may legitimately have none.
+
 The ADR-0030 §2 test, unchanged: **the verb's object is the whole page.** Load/Refresh
 acts on the rung's entire subject — every rule in the org — and its availability is not a
 function of any selection, filter or panel. _Compare (3)_ and _Merge (3)_ fail that test on
@@ -104,6 +127,19 @@ would have seated `Hide duplicates` using the width of `Duplicates (3)`.
 
 ### 3. `pinned` while open is kept, and it is the half that matters for safety
 
+> **Amended by [ADR-0069](./0069-refresh-is-one-app-level-control.md).** Only the last
+> paragraph, and only its example. "The Rules strip's leading position is the load verb in
+> every state, whose worst outcome is a re-fetch" was true of a strip that no longer exists:
+> ADR-0069 §4 and §6 delete the `load` descriptor, so the leading position on that rung is
+> now **Export rules**, whose worst outcome is a navigation to the Export tab's column
+> picker — nothing written, nothing spent. **Everything else in this section survives
+> intact**, and is the half that carries the safety: `pinned`-while-open is set explicitly
+> rather than as a side effect of `variant`, so the control that closes an open panel can
+> never overflow behind **More**; ADR-0051 §2's rule that the leading position must be a
+> control whose worst outcome is cheap is untouched, and still binds the Rules rung
+> precisely because its set of verbs varies with state. ADR-0068 §4 restates the same
+> decoupling from the other direction — emphasis is not ordering.
+
 ADR-0051's real safety property was never the colour. It was this:
 
 > `ActionBar` treats a `primary` action as `priority: 'pinned'`, so the control that
@@ -133,6 +169,21 @@ state, whose worst outcome is a re-fetch.
   Filed as an `IMPROVEMENTS.md` item.
 
 ## Consequences
+
+> **The first two bullets are amended by
+> [ADR-0069](./0069-refresh-is-one-app-level-control.md).** `RulesListActionBar` is no
+> longer the reference shape for anything — the descriptor it was a reference for is
+> deleted (§4, §6 there), and `GroupActionBar`'s **Add** is the replacement, installed by
+> [ADR-0068](./0068-a-rungs-primary-is-a-verb-that-acts.md) §3. The Rules rung's `primary`
+> is now `Export rules`, under ADR-0068 §2's rule 2, on the enumeration written above that
+> strip's descriptor array. And the second bullet's causal claim is half wrong in
+> hindsight: the Rules rung's `PageHeader` did lose its `actions` slot, and the
+> `N Conflicts` badge does still carry that count — but Load/Refresh did not end up in
+> the strip, it ended up in the app-level chrome control beside the Pin, where every
+> other rung's refresh went too. **The remaining bullets stand**, including the
+> `RulesMergeBanner` → `RulesDuplicatesPanel` conversion, the `FilterToggle` accessible-name
+> fix, and the observation that two strips legitimately differ in what wears the fill —
+> though the reason for that difference is now ADR-0068's, not this ADR's.
 
 - **`RulesListActionBar` ships to this rule** and is the reference shape for it:
   `Refresh` / `Load rules` as `primary`, three panel toggles resting in the tier with

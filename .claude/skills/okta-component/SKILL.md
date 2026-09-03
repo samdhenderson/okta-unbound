@@ -8,7 +8,7 @@ description: >-
   MemberSearchBar), the size scales that are NOT uniform across primitives
   (Icon is xs|sm|md|lg|xl at 12/16/20/24/32px, LoadingSpinner is
   sm|md|lg|xl|2xl at 16/20/24/32/48px, and they're deliberately name-aligned
-  with each other but not with Button's or Input's own sm|md|lg), Input's
+  with each other but not with Button's xs|sm|md|lg or Input's own sm|md|lg), Input's
   icon/trailing adornment slots and their pointer-events/aria-hidden
   requirements, modal a11y (role=dialog, aria-modal, focus trap, focus
   restore, Escape), and the co-located .stories.tsx + axe-clean requirement.
@@ -80,7 +80,9 @@ purpose:
   `<LoadingSpinner size="sm" />` next to `<Icon type="search" size="sm" />`
   match at 16px, `size="md"` matches at 20px, and so on.
 - `Button` (`src/sidepanel/components/shared/Button.tsx`) has its own
-  unrelated `sm | md | lg` scale (≈36 / 40 / 56px) and `Input`
+  unrelated `xs | sm | md | lg` scale (≈24 / 36 / 40 / 56px — `xs` is the
+  recessed step, reserved for `ActionBar`'s selection register and never for a
+  page's own verb) and `Input`
   (`src/sidepanel/components/shared/Input.tsx`) has yet another one (≈30 /
   38 / 46px). **Do not assume `size="sm"` means the same pixels on two
   different primitives** — only `Icon` and `LoadingSpinner` are aligned to

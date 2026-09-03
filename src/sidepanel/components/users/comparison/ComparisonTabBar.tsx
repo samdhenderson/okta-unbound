@@ -2,24 +2,32 @@
  * @module sidepanel/components/users/comparison/ComparisonTabBar
  * @description Tab bar (Overview / Groups / Apps / Attributes) with per-tab diff-count badges.
  *
+ * ## A description of four tabs, not a second tab bar
+ *
+ * This was a hand-rolled `role="tablist"` whose container, active and inactive
+ * class strings were near-verbatim copies of shared {@link Tabs}' `segmented`
+ * variant. It was forked for two things that variant did not offer — per-tab
+ * icons, and a second row below `sm` — and the copy left behind the one part of
+ * a tab bar that is not styling: `Tabs` implements roving `tabindex` and
+ * Arrow/Home/End, and the fork implemented **no keyboard navigation at all**, so
+ * a keyboard user could reach this strip and then not move inside it.
+ *
+ * Both reasons for the fork are now capabilities of the primitive (`TabItem.icon`
+ * renders in every variant; `wrap` gives a `segmented` strip two columns below
+ * `sm`), so what is left here is the description of these four tabs: their
+ * labels, their glyphs, and which of them carry a diff badge.
+ *
  * ## Two rows below 640px, one above
  *
- * The bar was a single flex row of three tabs. A fourth — and the longest label
- * of the four — does not fit beside them in a 360px side panel: icon + label +
- * `px-3` comes to roughly 110px per tab, so four tabs need ~440px against the
- * ~330px the compact panel actually has. The three ways out were truncating a
- * label (which hides the word the tab is named for), dropping the glyphs (which
- * is the exact loss that kept this component off `Tabs` `segmented` — see
- * `docs/components.md`), or giving the bar a second row when it is narrow. Only
- * the last costs nothing.
- *
- * So the bar is a `grid`: two columns below the panel's 640px breakpoint — the
- * same threshold `useIsNarrow` condenses the ActivityBar at — and four above it.
- * The tabs keep their icons and their whole labels at every width.
+ * Four tabs of icon + label come to roughly 440px against the ~330px a 360px
+ * side panel has. The three ways out were truncating a label (which hides the
+ * word the tab is named for), dropping the glyphs, or giving the bar a second
+ * row when it is narrow. Only the last costs nothing, and it is what `wrap`
+ * asks for.
  */
 import React from 'react';
-import Icon from '../../shared/Icon';
-import { StableWidth } from '../../shared';
+import { Tabs } from '../../shared';
+import type { TabItem } from '../../shared';
 import type { IconType } from '../../shared/Icon';
 import type { TabKey } from './comparisonAnalytics';
 
@@ -45,14 +53,23 @@ interface ComparisonTabBarProps {
 }
 
 /** One tab's static description. The icon union is hard-coded, so a typo cannot compile. */
-type ComparisonTab = {
+type ComparisonTab = TabItem & {
   key: TabKey;
-  label: string;
   icon: Extract<IconType, 'chart' | 'users' | 'app' | 'list'>;
-  badge?: number;
 };
 
-/** role=tablist tab bar with per-tab diff badges. Documented tab-bar raw exception. */
+/**
+ * Narrows a key coming back out of `Tabs` — which speaks `string`, since it does
+ * not know this surface's four sections — without a cast.
+ */
+const isTabKey = (tabs: ComparisonTab[], key: string): key is TabKey =>
+  tabs.some((tab) => tab.key === key);
+
+/**
+ * The comparison surface's tab bar: shared `Tabs` in its `segmented` variant,
+ * wrapped to two columns on a narrow panel, with a diff-count badge on each tab
+ * that can report one.
+ */
 const ComparisonTabBar: React.FC<ComparisonTabBarProps> = ({
   activeTab,
   onChange,
@@ -60,75 +77,34 @@ const ComparisonTabBar: React.FC<ComparisonTabBarProps> = ({
   appDiff,
   attributeDiff,
 }) => {
+  // `countDisplay: 'nonzero'` is what makes these *difference* counts rather than
+  // sizes: nothing differing is nothing to report, so the tab shows no pill — and
+  // the slot is still reserved, because all three land together when the
+  // comparison resolves.
   const tabs: ComparisonTab[] = [
     { key: 'overview', label: 'Overview', icon: 'chart' },
-    { key: 'groups', label: 'Groups', icon: 'users', badge: groupDiff },
-    { key: 'apps', label: 'Apps', icon: 'app', badge: appDiff },
-    { key: 'attributes', label: 'Attributes', icon: 'list', badge: attributeDiff },
+    { key: 'groups', label: 'Groups', icon: 'users', count: groupDiff, countDisplay: 'nonzero' },
+    { key: 'apps', label: 'Apps', icon: 'app', count: appDiff, countDisplay: 'nonzero' },
+    {
+      key: 'attributes',
+      label: 'Attributes',
+      icon: 'list',
+      count: attributeDiff,
+      countDisplay: 'nonzero',
+    },
   ];
 
   return (
-    <div
-      role="tablist"
-      className="grid grid-cols-2 items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 p-1 sm:grid-cols-4"
-    >
-      {tabs.map((t) => {
-        const active = activeTab === t.key;
-        return (
-          <button
-            key={t.key}
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(t.key)}
-            // `.press-subtle` only overrides `--press-scale`; the `:active`
-            // rule that reads it lives on `.press`, so both classes are
-            // required together. `-subtle`, because the button stretches to
-            // fill its grid column (`justify-items: stretch`, this grid's
-            // unoverridden default), so at the panel's wider densities it is
-            // a row-width target rather than a compact button one.
-            className={`press press-subtle relative flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${
-              active
-                ? 'bg-white text-neutral-900 shadow-sm'
-                : 'text-neutral-600 hover:text-neutral-900'
-            }`}
-            style={{ fontFamily: 'var(--font-heading)' }}
-          >
-            <Icon type={t.icon} size="sm" />
-            <span>{t.label}</span>
-            {/*
-              The badge lands when the comparison resolves, and the cell is
-              centred — so adding it used to push the icon and the label left
-              rather than appending to their right, on three tabs in the same
-              frame (D-053e). The slot is held open from first render, so the
-              badge's arrival changes what is in it and moves nothing.
-            */}
-            {t.badge !== undefined && (
-              <StableWidth
-                // Two digits, not the current count: a badge that lands as `12`
-                // would otherwise widen the slot it was measured at as `0`. A tab
-                // that never carries a badge (Overview) renders no slot at all,
-                // so nothing pays for space it cannot use.
-                reserve={
-                  <span className="inline-flex min-w-[18px] px-1.5 text-xs leading-none">00</span>
-                }
-                align="center"
-                className="ml-0.5 shrink-0"
-              >
-                {t.badge > 0 && (
-                  <span
-                    className={`inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums leading-none ${
-                      active ? 'bg-primary text-white' : 'bg-neutral-200 text-neutral-700'
-                    }`}
-                  >
-                    {t.badge}
-                  </span>
-                )}
-              </StableWidth>
-            )}
-          </button>
-        );
-      })}
-    </div>
+    <Tabs
+      tabs={tabs}
+      activeKey={activeTab}
+      onChange={(key) => {
+        if (isTabKey(tabs, key)) onChange(key);
+      }}
+      variant="segmented"
+      wrap
+      ariaLabel="Comparison sections"
+    />
   );
 };
 

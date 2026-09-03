@@ -1102,6 +1102,37 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
 - **Related:** `I-022` (the seventh role and its reasoning), `I-015`, `I-031`,
   `I-023`
 
+### I-045 · A disabled control's reason is unreachable by keyboard
+
+- **Category:** ux
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/sidepanel/components/shared/Button.tsx`,
+  `src/sidepanel/components/groups/GroupsListActionBar.tsx`
+- **Verified:** 2026-09-03 — found while giving `Select all` a reason for being
+  disabled at full selection.
+- **Problem:** `Select all (M)` and `Export list` now explain _why_ they are
+  disabled — "All 42 groups matching the filter are already selected", "No
+  groups match the current filter" — carried as an accessible description on a
+  natively `disabled` button. A native `disabled` button is skipped by Tab, so
+  a keyboard user tabbing the strip never lands on it and never hears the
+  reason. It is reachable by pointer hover and in a screen reader's browse
+  mode, and nowhere else. The explanation exists precisely because the control
+  stays visible rather than vanishing at the boundary (`ADR-0068`), so the one
+  group of users who cannot reach it are the ones the visible-but-disabled
+  decision was partly made for.
+- **Done when:** shared `Button` offers an `aria-disabled` form — focusable,
+  announced as unavailable, with a no-op handler — and the two controls above
+  use it. A story asserts the reason is reachable by Tab, not only by
+  `toHaveAccessibleDescription`.
+- **Risk:** Medium. `aria-disabled` is a contract change on the primitive every
+  verb strip renders through: unlike `disabled`, it does not stop a click, so
+  every consumer that adopts it must be checked for a handler that would now
+  fire. Do not convert existing `disabled` call sites wholesale — add the form,
+  adopt it where a reason exists.
+- **Status:** open
+- **Related:** `ADR-0068`, `ADR-0051`, `docs/ux-guidelines.md`
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk

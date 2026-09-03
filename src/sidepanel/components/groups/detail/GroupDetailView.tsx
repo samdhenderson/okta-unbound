@@ -73,6 +73,7 @@ import GroupAccessSection from './GroupAccessSection';
 import GroupRulesSection from './GroupRulesSection';
 import GroupPushSection from './GroupPushSection';
 import GroupInsightsPane from './GroupInsightsPane';
+import type { MemberFilter } from '../../members/memberAnalytics';
 import GroupActionBar from './GroupActionBar';
 import AddGroupMemberModal from './AddGroupMemberModal';
 import CompareGroupModal from './CompareGroupModal';
@@ -91,8 +92,10 @@ import { useRemoveDeprovisioned } from './useRemoveDeprovisioned';
 import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
 import { useCreateFeedingRule } from '../../../hooks/useCreateFeedingRule';
 import { useWorkingSetEntry } from '../../../hooks/useWorkingSetEntry';
+import { useRefreshSubject } from '../../../hooks/useRefreshSubject';
 import { invalidate } from '../../../cache/entityCache';
 import { cacheKeys } from '../../../cache/keys';
+import { invalidateGroupDetail } from '../../../cache/rungInvalidation';
 import { OKTA_PAGE_SIZE } from '../../../../shared/utils/oktaPagination';
 import type { GroupSummary } from '../../../../shared/types';
 
@@ -188,6 +191,33 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   // reader who is already looking at a tab.
   const [activeTab, setActiveTab] = useState<GroupDetailTab>(initialPane ?? 'overview');
 
+  /*
+    The Insights → Members jump. Insights asks a question about one attribute
+    value ("who are the 12 people whose department is blank?"); Members is where
+    that question is answered, so picking a row switches the pane and arrives
+    with the filter already applied.
+
+    The request is held here rather than pushed into the explorer because this is
+    the only place that owns both panes. It is identified by **object
+    reference**, not by value: `useMemberFilters` applies a new reference once
+    and then forgets it, so re-picking the same dimension and value is a fresh
+    request rather than a no-op, and a re-render is never mistaken for one.
+
+    Deliberately not `initialFilters`: tabs stay mounted (ADR-0018), so the
+    explorer is alive and already holding filters by the time Insights asks, and
+    an initial value would be read at mount and silently dropped. Firing it would
+    take a remount on a `key`, which discards the search text, sort, paging
+    window and scroll position to deliver a single filter.
+  */
+  const [pendingMemberFilter, setPendingMemberFilter] = useState<MemberFilter | null>(null);
+
+  const filterMembersBy = useCallback((filter: MemberFilter) => {
+    setPendingMemberFilter(filter);
+    setActiveTab('members');
+  }, []);
+
+  const openInsights = useCallback(() => setActiveTab('insights'), []);
+
   // Two lines, and the reason they are *here* rather than in the navigation
   // machinery: this rung is the only surface that knows all four facts at once —
   // which kind, which id, what it is called, and which pane is open. Gated on
@@ -248,6 +278,35 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     invalidate(cacheKeys.mfaScan(group.id));
     source.analyzeMembers();
   }, [group.id, source]);
+
+  /*
+    This rung's answer to the app-level refresh control (ADR-0069 §2): drop the
+    group's cache entries, then re-run every load the rung performs on open. It
+    is `onCleanupDone`'s shape over the rung's full key set — the drop is
+    `invalidateGroupDetail`, which is where the exact set is written down and
+    tested.
+
+    The member walk is the one load that is *conditionally* re-run. It is the
+    only expensive read here, and on a group above `AUTO_LOAD_MEMBER_CAP` the
+    reader has to ask for it explicitly; re-running it unasked would spend, on a
+    press meaning "re-read what I am looking at", exactly the budget the gate
+    exists to withhold. `memberStatus === 'idle'` is precisely "never paid for",
+    so a refresh re-walks the roster if and only if there is a roster on screen.
+  */
+  const membersLoaded = source.memberStatus !== 'idle';
+  const refreshRung = useCallback(() => {
+    invalidateGroupDetail(group.id);
+    source.refreshRules();
+    references.reload();
+    accessGrants.reload();
+    if (membersLoaded) source.analyzeMembers();
+  }, [group.id, source, references, accessGrants, membersLoaded]);
+
+  // Named by the group, not deictically: the chrome band describes the live Okta
+  // tab, which may be on a different entity entirely, and "Refresh this group" is
+  // ambiguous in exactly that state. The name reaches the tooltip and the
+  // accessible name only — never visible text in the band.
+  useRefreshSubject(group.name, refreshRung, isActive);
   const removeDeprovisioned = useRemoveDeprovisioned(group.id, targetTabId, onCleanupDone);
 
   // The Members tab's per-row ADR-0031 proof: one call about one membership, from
@@ -416,6 +475,8 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                   onConfirmRemove={membersSection.confirmRemove}
                   removeStatus={membersSection.removeStatus}
                   removeError={membersSection.removeError}
+                  onOpenInsights={openInsights}
+                  pendingFilter={pendingMemberFilter}
                 />
               </div>
             )}
@@ -453,6 +514,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             {activeTab === 'insights' && (
               <div role="tabpanel" aria-label="Insights">
                 <GroupInsightsPane
+                  onFilterMembers={filterMembersBy}
                   groupId={group.id}
                   memberCount={group.memberCount}
                   members={membersSection.members}

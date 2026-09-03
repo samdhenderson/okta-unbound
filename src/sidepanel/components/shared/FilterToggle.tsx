@@ -36,7 +36,7 @@ import StableWidth from './StableWidth';
 
 /** Props for {@link FilterToggle}. */
 export interface FilterToggleProps {
-  /** Whether the filter panel is currently expanded. Drives the active styling and `aria-pressed`. */
+  /** Whether the filter panel is currently expanded. Drives the active styling and the state attribute. */
   open: boolean;
   /** Number of filters currently applied. The badge is hidden at 0. */
   activeCount: number;
@@ -56,6 +56,18 @@ export interface FilterToggleProps {
    * name is built from {@link FilterToggleProps.label} and the count.
    */
   title?: string;
+  /**
+   * `id` of the region this control discloses.
+   *
+   * Supplying it makes the button a **disclosure** — `aria-expanded` plus
+   * `aria-controls`, the same contract `IconButton` and `StretchedButton`
+   * document — instead of a toggle button reporting `aria-pressed`. The two say
+   * different things and a reader should be told one of them: *pressed* is a
+   * setting that is on, *expanded* is a region below that is open. A rung whose
+   * panel has no stable id keeps the toggle semantics it has always had, so this
+   * is additive rather than a migration.
+   */
+  controls?: string;
 }
 
 const PADDING: Record<'md' | 'lg', string> = {
@@ -86,11 +98,14 @@ const FilterToggle: React.FC<FilterToggleProps> = ({
   size = 'md',
   label = 'Filters',
   title = 'Toggle filters',
+  controls,
 }) => (
   <button
     type="button"
     onClick={onToggle}
-    aria-pressed={open}
+    aria-pressed={controls ? undefined : open}
+    aria-expanded={controls ? open : undefined}
+    aria-controls={controls}
     aria-label={activeCount > 0 ? `${label}, ${activeCount} applied` : label}
     className={`press flex shrink-0 items-center gap-(--sp-inline) rounded-md border text-sm font-medium ${
       PADDING[size]

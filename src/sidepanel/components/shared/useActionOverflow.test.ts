@@ -404,6 +404,34 @@ describe('useActionOverflow', () => {
       expect(parent.getPropertyValue('--bar-bleed')).toBe('');
     });
 
+    it('publishes the untransformed offset when an ancestor is mid-transform (D-044)', () => {
+      // The Groups rung mounts inside a wrapper running `animate-push-in`
+      // (`transform: translateX(16%)` on its first frame), and this hook's
+      // first pass can land mid-animation. `getBoundingClientRect` reports the
+      // *transformed* box, so a rect-based bleed would briefly include a slice
+      // of that translate on top of the real gutter. `offsetLeft` is a
+      // layout-time value the transform never touches, so the hook reads the
+      // offset chain instead — stubbed here since jsdom does not implement it.
+      const fixture = makeFixture({ width: 500 });
+
+      Object.defineProperty(fixture.band, 'offsetLeft', { value: 24, configurable: true });
+      Object.defineProperty(fixture.band, 'offsetParent', {
+        value: fixture.parent,
+        configurable: true,
+      });
+      Object.defineProperty(fixture.parent, 'offsetLeft', { value: 0, configurable: true });
+      Object.defineProperty(fixture.parent, 'offsetParent', { value: null, configurable: true });
+
+      // The transformed box: 16% of the rung's own 500px width sits on top of
+      // the real 24px gutter, exactly like `translateX(16%)` mid-entrance would
+      // report through `getBoundingClientRect`.
+      setRect(fixture.band, { left: 24 + 0.16 * 500, top: 100, width: 500, height: 48 });
+
+      mount(fixture);
+
+      expect(fixture.band.style.getPropertyValue('--bar-bleed')).toBe('24px');
+    });
+
     it('keeps --dock-offset a layout gap once the band has stuck', () => {
       // The regression. `bandRect.top - sentinelRect.top` is the rung step while
       // the strip is in flow and is *how far you have scrolled* once it sticks:

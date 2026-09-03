@@ -9,7 +9,7 @@
  * (`getAppAssignmentCounts`); the inventory itself comes from the org snapshot.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertMessage, Button, PageHeader } from './shared';
+import { AlertMessage, PageHeader } from './shared';
 import AppsToolbar from './apps/AppsToolbar';
 import AppsListPanel from './apps/AppsListPanel';
 import {
@@ -22,6 +22,7 @@ import {
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useAppsData } from '../hooks/useAppsData';
+import { useRefreshSubject } from '../hooks/useRefreshSubject';
 import { useOrgSnapshot } from '../cache/useOrgSnapshot';
 import { splitShardedId } from '../../shared/snapshot/types';
 import type { OktaAppGroupAssignment } from '../../shared/schemas/okta';
@@ -206,9 +207,18 @@ const AppsTab: React.FC<AppsTabProps> = ({
     setGroupsFilter('');
   }, []);
 
-  const handleRefresh = useCallback(() => {
+  /** A forced re-walk of the inventory. Also the list panel's own reload prompt. */
+  const reloadApps = useCallback(() => {
     void loadApps(true);
   }, [loadApps]);
+
+  // The rung's answer to the app-level refresh control (ADR-0069 §2/§4). This
+  // used to be a `PageHeader.actions` Button — the slot ADR-0030 §2 exists to
+  // empty, holding the rung's single most-pressed control. The list panel keeps
+  // its own reload prompt, which is where an initial load belongs. Gated on
+  // `isActive` like every other fetch here: a hidden tab must not own the
+  // refresh (ADR-0018).
+  useRefreshSubject('the apps list', reloadApps, isActive);
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
@@ -216,17 +226,6 @@ const AppsTab: React.FC<AppsTabProps> = ({
         title="Applications"
         subtitle="Browse the org's application inventory (read-only)"
         badge={{ text: `${apps.length.toLocaleString()} Apps`, variant: 'primary' }}
-        actions={
-          <Button
-            variant="secondary"
-            icon="refresh"
-            onClick={handleRefresh}
-            loading={isLoading}
-            disabled={isLoading || targetTabId == null}
-          >
-            Refresh
-          </Button>
-        }
       />
 
       <div className="max-w-7xl mx-auto px-(--sp-gutter) py-(--sp-gutter) space-y-(--sp-rung)">
@@ -261,7 +260,7 @@ const AppsTab: React.FC<AppsTabProps> = ({
             activeFilterCount={activeFilterCount}
             hasSearchQuery={searchQuery.trim().length > 0}
             onClearFilters={handleClearFilters}
-            onReload={handleRefresh}
+            onReload={reloadApps}
             oktaOrigin={oktaOrigin}
             fetchAssignmentCounts={api.getAppAssignmentCounts}
           />

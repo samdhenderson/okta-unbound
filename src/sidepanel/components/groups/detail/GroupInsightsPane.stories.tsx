@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import GroupInsightsPane from './GroupInsightsPane';
 import type { FeedingRule } from '../../../hooks/useGroupSource';
 import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
@@ -80,10 +80,11 @@ const meta = {
           'a reader draws one from — and will hold more of it over time (staleness, orphaned ' +
           'assignments, rule overlap). Naming it for the subject is what lets those land here ' +
           'without the label going stale.\n\n' +
-          '**Every attribute gets a card; rules only decide the order.** The rule index used to ' +
-          'be a *filter*, so a card existed only for attributes some feeding rule referenced — ' +
-          'which hid the drift worth catching most. Rule-referenced attributes still sort first, ' +
-          'because those are the ones granting access today.\n\n' +
+          '**Every attribute gets a card; three signals only decide the order.** The rule index ' +
+          'used to be a *filter*, so a card existed only for attributes some feeding rule ' +
+          'referenced — which hid the drift worth catching most. It is now the *lightest* of ' +
+          'three ranking inputs, behind near-duplicate spellings and a hidden tail; see ' +
+          '`AttributeSpreadSection` for the weights.\n\n' +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs)',
       },
     },
@@ -102,7 +103,8 @@ const meta = {
       description: '`false` when no Okta tab is connected; disables both gate buttons.',
     },
     feedingRules: {
-      description: 'The feeding rules, layered onto the cards as an annotation and a sort key.',
+      description:
+        'The feeding rules, layered onto the cards as an annotation and the lightest ranking input.',
     },
     mfaResults: { description: 'Per-member MFA scan results, or `null` before a scan has run.' },
     scanStatus: { description: 'Current MFA scan lifecycle status.' },
@@ -149,7 +151,7 @@ export const RosterError: Story = {
   args: { memberStatus: 'error', error: 'Members could not be read.' },
 };
 
-/** Roster loaded: a card per discovered attribute, rule-referenced ones first. */
+/** Roster loaded: a card per discovered attribute, ranked by what wants reading first. */
 export const AttributeCards: Story = {
   args: { members, memberStatus: 'done' },
 };
@@ -197,3 +199,102 @@ export const MfaError: Story = {
 
 /** No Okta tab connected — both gate buttons disable. */
 export const Disabled: Story = { args: { canAnalyze: false } };
+
+/**
+ * The composition reports, moved here off the Members tab.
+ *
+ * They describe the roster rather than control it, and on the Members tab they
+ * were one of seven surfaces stacked above the first member row. Here every
+ * value is a jump: the pane holds no member list, so a click applies the filter
+ * on Members and moves — which the copy says before anybody clicks.
+ */
+export const CompositionJumpsToMembers: Story = {
+  args: { members, memberStatus: 'done', onFilterMembers: fn() },
+  play: async ({ args, canvas, canvasElement }) => {
+    const disclosure = canvas.getByRole('button', { name: /Composition/ });
+    await userEvent.click(disclosure);
+    await expect(canvas.getByText('Pick a value to open the Members tab filtered by it.'));
+
+    // Two things in this region are buttons named for the value: the spread
+    // bar's `Engineering` segment (`Department: Engineering, 5 members`) and
+    // the value row itself. A bare /Engineering/ matches both, so the click
+    // would depend on document order. Scope to the region through the
+    // disclosure's own `aria-controls` — the region's contract, not a test id
+    // — and anchor the name, which the segment's `Department:` prefix fails.
+    const regionId = disclosure.getAttribute('aria-controls')!;
+    const composition = within(canvasElement.querySelector(`#${regionId}`) as HTMLElement);
+
+    await userEvent.click(composition.getByRole('button', { name: /^Engineering/ }));
+    await expect(args.onFilterMembers).toHaveBeenCalledWith(
+      expect.objectContaining({ dimension: 'department', value: 'Engineering' }),
+    );
+  },
+};
+
+/**
+ * Without a caller able to honour a jump the section is **absent**, not inert.
+ * It is made of nothing but value clicks, so an unwired copy of it would be a
+ * grid of controls that do nothing (ADR-0039).
+ */
+export const CompositionOmittedWithNowhereToGo: Story = {
+  args: { members, memberStatus: 'done' },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('button', { name: /Composition/ })).toBeNull();
+  },
+};
+
+/**
+ * Forty members over nine cost centres — more distinct values than a card's
+ * summary keeps, so three of them get folded into `Other (3 values)`.
+ */
+const wideMembers: OktaUser[] = Array.from({ length: 40 }, (_, i) => ({
+  id: `wide${i + 1}`,
+  status: 'ACTIVE',
+  profile: {
+    login: `wide${i + 1}@example.com`,
+    email: `wide${i + 1}@example.com`,
+    firstName: `First${i + 1}`,
+    lastName: `Last${i + 1}`,
+    department: i % 2 === 0 ? 'Engineering' : 'Product',
+    costCenter: `CC-${100 + (i % 9)}`,
+  },
+}));
+
+/**
+ * The aggregated tail is reachable, in three steps.
+ *
+ * A card keeps only its leading values and folds the rest into one
+ * `Other (N values)` row, which used to be inert text — the card stated a count
+ * and then refused to say what was in it, which is exactly where drift hides.
+ * Expanding the card lists what it kept; **Show all** opens the same
+ * `BreakdownDetailsModal` the Members tab uses, over the full distribution
+ * `computeDimensionBreakdown` re-derives from the roster already in hand.
+ * **No second fetch**, and the long list is computed only when somebody opens it.
+ *
+ * Read-only here: no `onFilterMembers` is wired, so the modal's rows stay inert
+ * and promise nothing rather than offering a filter with nowhere to apply it.
+ */
+export const HiddenTailRevealedInThreeStages: Story = {
+  args: { members: wideMembers, memberCount: wideMembers.length, memberStatus: 'done' },
+  play: async ({ canvas, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+
+    // Stage one: the collapsed card measures the tail and says so in words.
+    await expect(canvas.getByText('costCenter')).toBeVisible();
+    await expect(canvas.getByText('30% hidden in the tail')).toBeVisible();
+
+    // Stage two: this card's own disclosure, named for the attribute it opens.
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Show the value breakdown for costCenter' }),
+    );
+
+    // Stage three.
+    await userEvent.click(canvas.getByRole('button', { name: /Show all 9 values/ }));
+
+    const dialog = await body.findByRole('dialog');
+    await expect(within(dialog).getByText('CC-108')).toBeVisible();
+    // Every value, not just the hidden three.
+    await expect(within(dialog).getByText('CC-100')).toBeVisible();
+    await expect(within(dialog).queryByText(/Members tab/)).toBeNull();
+  },
+};

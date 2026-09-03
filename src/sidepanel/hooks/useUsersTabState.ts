@@ -54,7 +54,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type React from 'react';
-import type { GroupMembership, OktaUser, UserInfo } from '../../shared/types';
+import type { GroupMembership, OktaUser } from '../../shared/types';
 import type { AlertAction, AlertMessageData } from '../components/shared/AlertMessage';
 import { invalidate } from '../cache/entityCache';
 import { useOktaApi } from './useOktaApi';
@@ -160,15 +160,6 @@ export interface UseUsersTabStateReturn {
   searchResults: OktaUser[];
   /** True while a debounced search is in flight. */
   isSearching: boolean;
-  /**
-   * The user detected on the current admin page when the banner should be offered
-   * (different from the selected user, not dismissed, no active search), else `null`.
-   */
-  detectedUser: UserInfo | null;
-  /** Loads the detected user + their memberships (the banner's Load button). */
-  loadDetectedUser: () => Promise<void>;
-  /** Hides the detected-user banner for that user id without loading. */
-  dismissDetectedUser: () => void;
   /** Selects a user from the search results and loads their memberships. */
   selectUser: (user: OktaUser) => Promise<void>;
   /** Clears the search, selection, memberships and both banners. */
@@ -266,7 +257,7 @@ export function useUsersTabState({
   isActive = true,
   compareViewRef,
 }: UseUsersTabStateOptions): UseUsersTabStateReturn {
-  const { userInfo, oktaOrigin } = useUserContext(isActive);
+  const { oktaOrigin } = useUserContext(isActive);
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -282,9 +273,6 @@ export function useUsersTabState({
     setResultMessage(message);
     setResultAction(action ?? null);
   }, []);
-  // Detected-user banner is hidden per id once dismissed (the tab stays pinned to
-  // the user you explicitly selected; admin navigation never swaps it).
-  const [dismissedDetectedId, setDismissedDetectedId] = useState<string | null>(null);
   // Id of the group most recently added via the Add-to-Group modal, so its row in
   // GroupMembershipsList can play a one-shot success flash (`animate-affirm-flash`)
   // instead of the confirmation only showing in the banner above the fold.
@@ -453,9 +441,8 @@ export function useUsersTabState({
     [showUserDetail],
   );
 
-  const { loadDetectedUser, loadUserById } = useDetectedUser({
+  const { loadUserById } = useDetectedUser({
     targetTabId,
-    detectedUserId: userInfo?.userId,
     loadMemberships,
     onSelectUser: onDetectedUserSelected,
     onError: setError,
@@ -482,19 +469,15 @@ export function useUsersTabState({
     onUserSelected?.();
   }, [selectedUserId, loadUserById, onUserSelected, resetNav]);
 
-  // Show the detected-user banner only when the page's user differs from the one
-  // explicitly selected and hasn't been dismissed — never while searching.
-  const detectedUserId = userInfo?.userId;
-  const showDetectedBanner =
-    Boolean(userInfo) &&
-    detectedUserId !== selectedUser?.id &&
-    detectedUserId !== dismissedDetectedId &&
-    !searchQuery;
-
-  const dismissDetectedUser = useCallback(() => {
-    if (!userInfo) return;
-    setDismissedDetectedId(userInfo.userId);
-  }, [userInfo]);
+  /*
+    The detected-user banner used to live here: a row inside the tab body offering
+    to load whichever user the admin console had open. It is gone, generalised
+    into the masthead's handoff offer (`useEntityHandoff`), which asks the same
+    question for every detectable kind and costs no row. Accepting it sets
+    `selectedUserId`, which the deep-link effect above already fulfils through
+    `loadUserById` — the exact call the banner's Load button made. Its
+    per-id dismissal moved with it, unchanged in scope.
+  */
 
   // Clear search and reset to initial state. Also pops the view stack: clearing the
   // selected user unmounts the comparison's host, and a pushed view with no host
@@ -617,9 +600,6 @@ export function useUsersTabState({
     setSearchQuery,
     searchResults,
     isSearching,
-    detectedUser: showDetectedBanner && userInfo ? userInfo : null,
-    loadDetectedUser,
-    dismissDetectedUser,
     selectUser: handleSelectUser,
     clearSearch,
     nav,

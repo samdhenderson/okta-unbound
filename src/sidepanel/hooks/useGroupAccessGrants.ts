@@ -32,7 +32,7 @@
  * access.
  */
 
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { z } from 'zod';
 import { useOwedLoad } from './useOwedLoad';
 import { useOktaApi } from './useOktaApi';
@@ -126,6 +126,19 @@ export interface UseGroupAccessGrantsReturn {
   roles: RoleGrant[];
   /** Whether the admin-roles read could be completed. See {@link RolesReadStatus}. */
   rolesStatus: RolesReadStatus;
+  /**
+   * Re-run both reads for the group currently held, ignoring the once-per-input
+   * latch that governs the automatic load.
+   *
+   * The **only** re-run this hook exposes, deliberately (ADR-0069 §7): a hook
+   * with two ways to re-fetch the same axis is how the two axes drift. The
+   * app-level refresh control is its caller; nothing re-runs on its own.
+   *
+   * Both axes return to their loading status immediately, so a caller rendering
+   * a spinner from `appsStatus`/`rolesStatus` shows one for the whole re-read
+   * rather than leaving the previous answer looking current.
+   */
+  reload: () => void;
 }
 
 /**
@@ -206,10 +219,16 @@ export function useGroupAccessGrants(
     setRolesStatus('loading');
   }
 
-  // A load is owed whenever the group or the API target changes, and is paid the
-  // next time the view is visible.
-  useOwedLoad(targetTabId == null ? groupId : `${targetTabId}:${groupId}`, enabled, () => {
+  /**
+   * Issue both reads for `groupId`. Shared by the owed automatic load and by
+   * {@link UseGroupAccessGrantsReturn.reload}, so the manual path can never
+   * drift from the automatic one.
+   */
+  const load = useCallback(() => {
     const runId = ++runIdRef.current;
+    setAppsStatus('loading');
+    setAppsError(null);
+    setRolesStatus('loading');
 
     fetchAllPages(
       (url) => makeApiRequest(url, { reason: 'Load group app assignments' }),
@@ -257,7 +276,11 @@ export function useGroupAccessGrants(
         setRoles([]);
         setRolesStatus('unavailable');
       });
-  });
+  }, [groupId, makeApiRequest]);
 
-  return { apps, appsStatus, appsError, roles, rolesStatus };
+  // A load is owed whenever the group or the API target changes, and is paid the
+  // next time the view is visible.
+  useOwedLoad(targetTabId == null ? groupId : `${targetTabId}:${groupId}`, enabled, load);
+
+  return { apps, appsStatus, appsError, roles, rolesStatus, reload: load };
 }

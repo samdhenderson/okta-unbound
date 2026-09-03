@@ -155,8 +155,23 @@ vi.mock('../../../hooks/useCreateFeedingRule', () => ({
 vi.mock('./GroupOverviewPane', () => ({
   default: () => <div data-testid="stub-overview" />,
 }));
+/*
+  These two stubs take part in the Insights → Members jump rather than ignoring
+  it, because the jump is the one thing this rung does that neither pane can do
+  alone: Insights raises a request, this view routes it, Members receives it.
+
+  Note what is asserted downstream: not "GroupDetailView passed a prop to a mock"
+  — ADR-0023 bans that, and it would pass even if the panes never switched — but
+  that pressing a control in one pane lands the reader in the other with the
+  filter in hand. The stubs behave like the real components at that seam so the
+  routing is what is under test.
+*/
 vi.mock('./GroupMembersSection', () => ({
-  default: () => <div data-testid="stub-members" />,
+  default: ({ pendingFilter }: { pendingFilter?: { label: string } | null }) => (
+    <div data-testid="stub-members">
+      {pendingFilter ? `filtered by ${pendingFilter.label}` : ''}
+    </div>
+  ),
 }));
 vi.mock('./GroupAccessSection', () => ({
   default: () => <div data-testid="stub-access" />,
@@ -168,7 +183,22 @@ vi.mock('./GroupPushSection', () => ({
   default: () => <div data-testid="stub-push" />,
 }));
 vi.mock('./GroupInsightsPane', () => ({
-  default: () => <div data-testid="stub-insights" />,
+  default: ({
+    onFilterMembers,
+  }: {
+    onFilterMembers?: (f: { dimension: string; value: string; label: string }) => void;
+  }) => (
+    <div data-testid="stub-insights">
+      <button
+        type="button"
+        onClick={() =>
+          onFilterMembers?.({ dimension: 'department', value: '', label: 'department is blank' })
+        }
+      >
+        Filter Members
+      </button>
+    </div>
+  ),
 }));
 vi.mock('./AddGroupMemberModal', () => ({
   default: () => <div data-testid="stub-add-modal" />,
@@ -219,6 +249,22 @@ describe('GroupDetailView', () => {
     roster and still be looking at an un-analyzed meter. Its readout is the strip
     inside the roster now, and its commentary is `MemberSourceNotes`.
   */
+  it('carries an Insights row click to the Members pane with its filter applied', async () => {
+    const user = userEvent.setup();
+    render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Insights' }));
+    await user.click(screen.getByRole('button', { name: 'Filter Members' }));
+
+    // Both halves matter. Landing on Members without the filter would strand the
+    // reader on an unfiltered roster having asked a specific question; applying
+    // the filter without switching panes would apply it somewhere they cannot
+    // see. Neither half is a valid outcome on its own.
+    expect(screen.getByRole('tab', { name: 'Members' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('stub-members')).toHaveTextContent('filtered by department is blank');
+    expect(screen.queryByTestId('stub-insights')).not.toBeInTheDocument();
+  });
+
   it('switches to the Members tab, rendering its one section and unmounting Overview', async () => {
     const user = userEvent.setup();
     render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
@@ -303,6 +349,28 @@ describe('GroupDetailView', () => {
 
     await user.click(screen.getByRole('button', { name: /export members/i }));
     expect(onExportGroup).toHaveBeenCalledWith(group.id, group.name);
+  });
+
+  /*
+    ADR-0068 §2: an export descriptor never sits in the row, on any rung. It does
+    not produce a file in place — it forwards to the Export tab with its column
+    picker and presets — so it is navigation wearing a verb's clothes. Asserted
+    through the region the **More** control names, the same way *Create feeding
+    rule* is above: jsdom honours neither `inert` nor CSS, so "is it visible"
+    would pass either way.
+  */
+  it('keeps Export members in the disclosure tier, not the action row', () => {
+    render(<GroupDetailView group={makeGroup()} targetTabId={1} onExportGroup={vi.fn()} />);
+
+    const more = screen.getByRole('button', { name: /More/ });
+    const tierId = more.getAttribute('aria-controls');
+    const tier = tierId ? document.getElementById(tierId) : null;
+    if (!tier) throw new Error('the More control names no region');
+
+    expect(within(tier).getByRole('button', { name: /export members/i })).toBeInTheDocument();
+    // And `Add`, the verb that acts, is in the row rather than the tier.
+    expect(within(tier).queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
   });
 
   it("wires the action bar's Add button to the Add-member modal", async () => {

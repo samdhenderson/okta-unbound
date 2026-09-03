@@ -1,6 +1,6 @@
 /**
  * @module sidepanel/components/users/UserSearchPanel
- * @description The Users tab's "find a user" surface: search box, detected-user banner, results, empty state.
+ * @description The Users tab's "find a user" surface: search box, results, empty state.
  *
  * Purely presentational — every piece of state (the debounced query, the banner's
  * visibility, the results) is owned by
@@ -14,10 +14,9 @@
  */
 import React from 'react';
 import { EmptyState } from '../shared';
-import DetectedUserBanner from './DetectedUserBanner';
 import UserSearchBar from './UserSearchBar';
 import UserSearchResults from './UserSearchResults';
-import type { OktaUser, UserInfo } from '../../../shared/types';
+import type { OktaUser } from '../../../shared/types';
 
 /** Props for {@link UserSearchPanel}. */
 export interface UserSearchPanelProps {
@@ -33,17 +32,6 @@ export interface UserSearchPanelProps {
   searchResults: OktaUser[];
   /** Invoked with the chosen user when a result row is clicked. */
   onSelectUser: (user: OktaUser) => void;
-  /**
-   * The user detected on the current admin page, or `null` to hide the banner.
-   * Loading is manual only, so the tab is never hijacked by admin navigation.
-   */
-  detectedUser: UserInfo | null;
-  /** Disables the banner's Load button while a load/analysis is in flight. */
-  isDetectedUserLoading: boolean;
-  /** Load the detected user + their memberships into the tab. */
-  onLoadDetectedUser: () => void;
-  /** Dismiss the detected-user banner without loading. */
-  onDismissDetectedUser: () => void;
   /** Whether a user is selected — hides the results and the empty state. */
   hasSelectedUser: boolean;
   /** Whether the tab is showing an error — suppresses the empty state. */
@@ -56,8 +44,13 @@ export interface UserSearchPanelProps {
 }
 
 /**
- * The Users tab's search surface: the search box, the manual-load detected-user
- * banner, the search results and the pre-search empty state.
+ * The Users tab's search surface: the search box, the search results and the
+ * pre-search empty state.
+ *
+ * It used to carry a third element — the detected-user banner, a row offering to
+ * load whichever user the admin console had open. That offer is now the
+ * masthead's handoff affordance, which asks the same question for every
+ * detectable kind and spends no row of the tab body to ask it.
  */
 const UserSearchPanel: React.FC<UserSearchPanelProps> = ({
   searchQuery,
@@ -66,10 +59,6 @@ const UserSearchPanel: React.FC<UserSearchPanelProps> = ({
   isSearching,
   searchResults,
   onSelectUser,
-  detectedUser,
-  isDetectedUserLoading,
-  onLoadDetectedUser,
-  onDismissDetectedUser,
   hasSelectedUser,
   hasError,
   alerts,
@@ -85,16 +74,6 @@ const UserSearchPanel: React.FC<UserSearchPanelProps> = ({
           isSearching={isSearching}
           showClearButton={Boolean(searchQuery || hasSelectedUser)}
         />
-
-        {/* Detected-user banner: manual load only, so the tab is never hijacked. */}
-        {detectedUser && (
-          <DetectedUserBanner
-            userInfo={detectedUser}
-            isLoading={isDetectedUserLoading}
-            onLoad={onLoadDetectedUser}
-            onDismiss={onDismissDetectedUser}
-          />
-        )}
       </div>
 
       {alerts}

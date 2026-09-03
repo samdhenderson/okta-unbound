@@ -10,7 +10,7 @@
  * Fixtures use only fake placeholders (`00gFAKE…`, `0oaFAKE…`) per CLAUDE.md.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { useGroupAccessGrants } from './useGroupAccessGrants';
 
 const runtimeSendMessage = chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
@@ -88,5 +88,80 @@ describe('useGroupAccessGrants', () => {
 
     await waitFor(() => expect(result.current.appsStatus).toBe('error'));
     expect(result.current.appsError).toBe('Internal error');
+  });
+
+  // ADR-0069 §7: the app-level refresh control needs a way to re-run a detail
+  // rung's loads, and this hook had none. The re-run must issue a real second
+  // pair of requests — the owed-load latch that makes a tab revisit free is
+  // exactly what a deliberate refresh has to bypass.
+  describe('reload', () => {
+    it('re-issues both reads and republishes the new answer', async () => {
+      let appRows = [makeApp('0oaFAKEAPP1', 'Salesforce')];
+      installHarness({
+        apps: () => ({ success: true, data: appRows }),
+        roles: () => ({ success: true, data: [] }),
+      });
+
+      const { result } = renderHook(() => useGroupAccessGrants(GROUP_ID, TAB_ID));
+      await waitFor(() => expect(result.current.appsStatus).toBe('done'));
+      const callsAfterFirstLoad = runtimeSendMessage.mock.calls.length;
+
+      appRows = [makeApp('0oaFAKEAPP1', 'Salesforce'), makeApp('0oaFAKEAPP2', 'Workday')];
+      act(() => result.current.reload());
+
+      await waitFor(() => expect(result.current.apps).toHaveLength(2));
+      expect(result.current.appsStatus).toBe('done');
+      expect(result.current.rolesStatus).toBe('available');
+      expect(runtimeSendMessage.mock.calls.length).toBeGreaterThan(callsAfterFirstLoad);
+    });
+
+    it('returns both axes to their loading status while the re-read is in flight', async () => {
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let gateArmed = false;
+
+      runtimeSendMessage.mockReset();
+      runtimeSendMessage.mockImplementation(
+        async (message: { action?: string; endpoint?: string }) => {
+          if (message?.action !== 'scheduleApiRequest') return { success: true };
+          if (gateArmed) await gate;
+          return { headers: {}, success: true, data: [] };
+        },
+      );
+
+      const { result } = renderHook(() => useGroupAccessGrants(GROUP_ID, TAB_ID));
+      await waitFor(() => expect(result.current.appsStatus).toBe('done'));
+
+      gateArmed = true;
+      act(() => result.current.reload());
+
+      expect(result.current.appsStatus).toBe('loading');
+      expect(result.current.rolesStatus).toBe('loading');
+
+      release();
+      await waitFor(() => expect(result.current.appsStatus).toBe('done'));
+    });
+
+    it('clears a previous apps error rather than leaving it beside a fresh result', async () => {
+      let appsFails = true;
+      installHarness({
+        apps: () =>
+          appsFails
+            ? { success: false, status: 500, error: 'Internal error' }
+            : { success: true, data: [makeApp('0oaFAKEAPP1', 'Salesforce')] },
+        roles: () => ({ success: true, data: [] }),
+      });
+
+      const { result } = renderHook(() => useGroupAccessGrants(GROUP_ID, TAB_ID));
+      await waitFor(() => expect(result.current.appsStatus).toBe('error'));
+
+      appsFails = false;
+      act(() => result.current.reload());
+
+      await waitFor(() => expect(result.current.appsStatus).toBe('done'));
+      expect(result.current.appsError).toBeNull();
+    });
   });
 });

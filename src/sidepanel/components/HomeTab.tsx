@@ -28,10 +28,10 @@
  * ## The reports mount nothing of their own
  *
  * `useHomeReports` takes the same snapshot handles the jump bar and the org card
- * already hold, so both reports under the card are joins over rows on disk. It
+ * already hold, so the report under the card is a join over rows on disk. It
  * deliberately owns no sync ladder: `useOrgFigures` owns the single top-up Home
  * is allowed to spend per mount, and a second consumer deciding independently
- * that the snapshot looked stale would double it. The card's third row is the
+ * that the snapshot looked stale would double it. The card's second row is the
  * exception that proves it: MFA coverage cannot be joined from disk, so it ships
  * as a chooser over the same rows and hands the request off to the group's own
  * page rather than spending one here.
@@ -146,7 +146,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
     enabled: isActive,
     connected: targetTabId !== null,
   });
-  // No `enabled` and no sync of its own: both reports are joins over the rows
+  // No `enabled` and no sync of its own: the report is a join over the rows
   // `useOrgFigures` already mounted, and it owns the single top-up Home is
   // allowed to spend. A second consumer deciding independently that the
   // snapshot looked stale would double it.

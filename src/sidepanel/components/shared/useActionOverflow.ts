@@ -219,6 +219,44 @@ function gapAboveBand(band: HTMLElement, host: HTMLElement): number {
 }
 
 /**
+ * The band's distance from the panel's left edge, read without going through
+ * a transformed box (D-044).
+ *
+ * `getBoundingClientRect()` reports the box **after** every ancestor
+ * transform is applied. The Groups rung mounts inside a wrapper that runs an
+ * entrance animation (`animate-push-in`, `transform: translateX(16%)` on its
+ * first frame), and this hook's first pass can land mid-animation — so the
+ * rect-based distance briefly includes a slice of that translate on top of
+ * the real gutter. `offsetLeft` is a layout-time value: CSS transforms move
+ * the painted box without moving the element in layout, so walking the
+ * `offsetParent` chain and summing `offsetLeft` gives the untransformed
+ * position, exactly like the side panel's own layout (no transform) would
+ * report.
+ *
+ * Returns `undefined` when the chain cannot be walked at all — the element
+ * has no `offsetParent` (detached, or `display: none`) — so the caller can
+ * fall back to the rect. In every real, laid-out case this always resolves;
+ * the fallback exists for that edge and for jsdom, which does not implement
+ * `offsetParent`/`offsetLeft` and always reports `null`/`0`.
+ *
+ * @param el - The element to locate.
+ * @returns The untransformed distance from the viewport's left edge, or
+ * `undefined` if the offset chain is unavailable.
+ */
+function untransformedLeft(el: HTMLElement): number | undefined {
+  let left = 0;
+  let node: HTMLElement | null = el;
+  let hasChain = false;
+  while (node) {
+    left += node.offsetLeft;
+    const parent: Element | null = node.offsetParent;
+    node = parent instanceof HTMLElement ? parent : null;
+    if (node) hasChain = true;
+  }
+  return hasChain ? left : undefined;
+}
+
+/**
  * Measure the split, publish the merge variables, and keep focus alive across both.
  *
  * `actions` is the **bar-eligible run in bar order** — pinned actions first,
@@ -387,13 +425,17 @@ export function useActionOverflow(
     if (!band) return;
     if (band.clientWidth <= 0) return;
 
-    const bandRect = band.getBoundingClientRect();
-
     // The side panel *is* the viewport, so the band's distance from the left of
     // the viewport is exactly the gutter the merge has to bleed across. Measured
     // rather than assumed, which also covers the case where `max-w-7xl` stops the
     // column growing and a fixed bleed no longer reaches the panel edge.
-    band.style.setProperty('--bar-bleed', `${Math.round(bandRect.left)}px`);
+    //
+    // Read via `offsetLeft` (D-044), not `getBoundingClientRect`, because the
+    // latter reports the *transformed* box — see `untransformedLeft` above.
+    // The rect is kept only as the fallback for the offset chain being
+    // unavailable (see that function's doc).
+    const bleed = untransformedLeft(band) ?? band.getBoundingClientRect().left;
+    band.style.setProperty('--bar-bleed', `${Math.round(bleed)}px`);
 
     const sentinel = refs.sentinel.current;
     const host = band.parentElement;

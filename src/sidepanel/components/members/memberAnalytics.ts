@@ -284,6 +284,21 @@ export interface AttributeSummary {
   total: number; // total members
   fillRate: number; // 0-100, populated / total
   rows: BreakdownRow[]; // top values (+ "Other" / "(none)") for the summary bar
+  /**
+   * Values that differ from another value **only** in case or whitespace, found
+   * over the attribute's *full* value map — see {@link nearDuplicateValues}.
+   *
+   * It is carried on the summary rather than derived from {@link
+   * AttributeSummary.rows} because `rows` is already truncated by the time a card
+   * sees it, and the tail is exactly where a mis-spelled duplicate hides:
+   * `engineering` with three members sits behind `Engineering` with nine hundred.
+   * Computing it during the discovery pass, where the whole map is in hand, costs
+   * one extra walk of the distinct values and no extra walk of the roster.
+   *
+   * Optional because a hand-built summary (a story, a fixture) has no full map;
+   * {@link attributeDriftValues} falls back to the named rows for those.
+   */
+  driftValues?: readonly string[];
 }
 
 export interface DiscoverOptions {
@@ -354,6 +369,9 @@ export function discoverAttributeBreakdowns(
       total,
       fillRate: total > 0 ? (populated / total) * 100 : 0,
       rows: mapToRows(withMissing, total, maxRows),
+      // Over the *full* value map, not the truncated rows above: a duplicate
+      // spelling is most often in the tail the summary is about to fold away.
+      driftValues: nearDuplicateValues(map.keys()),
     });
   }
 
@@ -637,4 +655,243 @@ export function outlierValues(summary: AttributeSummary): string[] {
   return real
     .filter((row) => row !== dominant && shareOf(row.count) <= OUTLIER_MAX_SHARE)
     .map((row) => row.value);
+}
+
+/* -------------------------------------------------------------------------- *
+ * Attribute ranking — which attribute is worth reading first
+ * -------------------------------------------------------------------------- */
+
+/**
+ * Weight of the drift signal: two or more values that differ only in case or
+ * whitespace.
+ *
+ * The heaviest of the three because it is the only one that names something
+ * *wrong*. A hidden tail and a rule dependency are both facts about an
+ * attribute; near-duplicates are one value spelled two ways, which silently
+ * splits a rule's population.
+ */
+export const DRIFT_WEIGHT = 4;
+
+/**
+ * Weight of the hidden-tail signal: enough of the group sits in values the
+ * summary declined to name that the named rows no longer describe the group.
+ */
+export const TAIL_WEIGHT = 2;
+
+/**
+ * Weight of the rule-coupling signal.
+ *
+ * Deliberately the lightest. Coupling says an attribute is load-bearing
+ * *today*, which is why it breaks ties — but an attribute with drift outranks
+ * one that merely feeds a rule, because the drift is what will break the rule.
+ * This replaces the old rule-referenced-first partition, under which an
+ * immaculate rule-fed attribute sorted above a mis-spelled one nobody had
+ * written a rule against yet.
+ */
+export const RULE_WEIGHT = 1;
+
+/**
+ * Share of the whole roster (percent) at or above which the folded-away tail is
+ * a signal rather than a footnote.
+ *
+ * Twenty percent is where "the named values describe this group" stops being
+ * true: below it the named rows still account for four members in five.
+ */
+export const TAIL_SHARE_THRESHOLD = 20;
+
+/**
+ * Fold a raw attribute value to the form near-duplicate detection compares on:
+ * trimmed, lower-cased, internal whitespace runs collapsed to a single space.
+ *
+ * Deliberately nothing else. Punctuation, abbreviation and spelling are **not**
+ * normalized away — `Eng` and `Engineering` may well be the same team, but only
+ * a human can say so, whereas `Engineering ` and `engineering` cannot be
+ * anything but one value entered twice.
+ *
+ * @param raw - A value label exactly as Okta returned it.
+ * @returns The comparison key. Never shown to a reader — the original spelling is.
+ */
+export function normalizeAttributeValue(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * The values in a set that differ from another value **only** in case or
+ * whitespace — `Engineering`, `engineering` and `ENGINEERING` in one group.
+ *
+ * A different, cheaper and more honest claim than {@link outlierValues}. That
+ * function needs a dominant value at {@link OUTLIER_DOMINANT_SHARE} and can only
+ * see the rows a summary named, so it cannot spot `engineering` sitting inside
+ * the folded-away tail behind `Engineering` — exactly the case the Insights pane
+ * exists to catch. This one makes no claim about which spelling is *right*, and
+ * holds at any distribution shape.
+ *
+ * Blank values are skipped: a missing value is a fill-rate problem, not a
+ * spelling one, and every blank would otherwise collide with every other blank.
+ *
+ * @param labels - Every distinct value label for one attribute.
+ * @returns The colliding labels, grouped by collision, in first-seen order.
+ * Empty when every value stands on its own — the common case.
+ */
+export function nearDuplicateValues(labels: Iterable<string>): string[] {
+  const groups = new Map<string, string[]>();
+  for (const label of labels) {
+    const key = normalizeAttributeValue(label);
+    if (key === '') continue;
+    const group = groups.get(key);
+    if (!group) {
+      groups.set(key, [label]);
+      // The exact same spelling handed in twice is one value, not two — a caller
+      // iterating rows rather than a map must not get a false positive.
+    } else if (!group.includes(label)) {
+      group.push(label);
+    }
+  }
+
+  const collisions: string[] = [];
+  for (const group of groups.values()) {
+    if (group.length > 1) collisions.push(...group);
+  }
+  return collisions;
+}
+
+/** Which of the three ranking signals an {@link AttributeSignal} reports. */
+export type AttributeSignalKind = 'drift' | 'tail' | 'rule';
+
+/**
+ * One reason an attribute ranks where it does, in a form a badge can render.
+ *
+ * The badge text is a **phrase, never a bare number**: a collapsed card still has
+ * to show why it sorted where it did, and `3` on its own explains nothing.
+ * Colour is never the only carrier — every signal reads as words first.
+ */
+export interface AttributeSignal {
+  /** Which signal this is. Mapped to a badge variant at the call site. */
+  kind: AttributeSignalKind;
+  /** This signal's contribution to the attribute's score. */
+  weight: number;
+  /** Badge text — a self-contained phrase. */
+  label: string;
+  /** The longer sentence, for the badge's tooltip. */
+  description: string;
+}
+
+/**
+ * How many members sit in the values a summary folded into its aggregated
+ * `Other` row.
+ *
+ * Read off the summary rather than recomputed, so it agrees with the bar the
+ * card actually draws. Note that {@link discoverAttributeBreakdowns} ranks the
+ * blank bucket alongside real values, so a mostly-blank attribute can fold
+ * blanks into this count — which is the right answer for "how much of this group
+ * the named rows do not describe".
+ *
+ * @param summary - One attribute's precomputed distribution.
+ * @returns The tail's member count; `0` when nothing was folded away.
+ */
+export function attributeTailCount(summary: AttributeSummary): number {
+  return summary.rows.find((row) => row.value === OTHER_VALUE)?.count ?? 0;
+}
+
+/**
+ * An attribute's near-duplicate values, preferring the authoritative set
+ * {@link discoverAttributeBreakdowns} computed over the **full** value map.
+ *
+ * Falls back to the named rows for a hand-built summary (a story, a fixture).
+ * That is a weaker answer — it cannot see the tail — but never a wrong one:
+ * everything it flags is still a genuine collision.
+ *
+ * @param summary - One attribute's precomputed distribution.
+ * @returns The colliding value labels.
+ */
+export function attributeDriftValues(summary: AttributeSummary): string[] {
+  if (summary.driftValues) return [...summary.driftValues];
+  return nearDuplicateValues(
+    summary.rows
+      .filter((row) => row.value !== NONE_VALUE && row.value !== OTHER_VALUE)
+      .map((row) => row.label),
+  );
+}
+
+/**
+ * Every ranking signal that holds for one attribute, in badge order:
+ * drift → hidden tail → rule coupling.
+ *
+ * @param summary - One attribute's precomputed distribution.
+ * @param ruleCount - How many feeding rules reference the attribute.
+ * @returns The signals that hold. Empty means the attribute is quiet — a real
+ * answer, not a missing one.
+ */
+export function attributeSignals(summary: AttributeSummary, ruleCount: number): AttributeSignal[] {
+  const signals: AttributeSignal[] = [];
+
+  const drift = attributeDriftValues(summary);
+  if (drift.length > 1) {
+    signals.push({
+      kind: 'drift',
+      weight: DRIFT_WEIGHT,
+      label: `${drift.length} near-duplicate values`,
+      description: `${drift.join(', ')} — these differ only in case or spacing, so they are almost certainly one value entered more than one way.`,
+    });
+  }
+
+  const tailCount = attributeTailCount(summary);
+  const tailShare = summary.total > 0 ? (tailCount / summary.total) * 100 : 0;
+  if (tailShare >= TAIL_SHARE_THRESHOLD) {
+    signals.push({
+      kind: 'tail',
+      weight: TAIL_WEIGHT,
+      label: `${Math.round(tailShare)}% hidden in the tail`,
+      description: `${tailCount.toLocaleString()} of ${summary.total.toLocaleString()} members hold a value this card does not name. Open it to see them.`,
+    });
+  }
+
+  if (ruleCount > 0) {
+    signals.push({
+      kind: 'rule',
+      weight: RULE_WEIGHT,
+      label: ruleCount === 1 ? 'A rule depends on it' : `${ruleCount} rules depend on it`,
+      description: 'A feeding rule reads this attribute, so how it is spelled grants access today.',
+    });
+  }
+
+  return signals;
+}
+
+/** An attribute plus why it ranks where it does. */
+export interface RankedAttribute {
+  /** The attribute's precomputed distribution. */
+  summary: AttributeSummary;
+  /** The signals that hold, in badge order. */
+  signals: AttributeSignal[];
+  /** Sum of the signals' weights. */
+  score: number;
+  /** `true` when at least one signal holds — the flagged/quiet split. */
+  flagged: boolean;
+}
+
+/**
+ * Rank discovered attributes by how much they want reading: score descending,
+ * **stable** within a score.
+ *
+ * Stability is the point of the second half. `discoverAttributeBreakdowns`
+ * already orders by "common organizational attributes first, then fill rate";
+ * scoring re-orders across that ordering without discarding it, so two equally
+ * unremarkable attributes keep the sensible order they arrived in.
+ *
+ * @param summaries - Discovered attributes, in discovery order.
+ * @param ruleCountFor - How many feeding rules reference a given attribute key.
+ * @returns One entry per summary, ranked.
+ */
+export function rankAttributes(
+  summaries: readonly AttributeSummary[],
+  ruleCountFor: (key: string) => number,
+): RankedAttribute[] {
+  const ranked = summaries.map((summary) => {
+    const signals = attributeSignals(summary, ruleCountFor(summary.key));
+    const score = signals.reduce((sum, signal) => sum + signal.weight, 0);
+    return { summary, signals, score, flagged: score > 0 };
+  });
+  // `Array.prototype.sort` is stable, so discovery order survives inside a score.
+  return ranked.sort((a, b) => b.score - a.score);
 }

@@ -25,6 +25,7 @@ import {
 import userEvent from '@testing-library/user-event';
 import type { ReactElement, ReactNode } from 'react';
 import GroupsTab from './GroupsTab';
+import { useCurrentRefreshSubject } from '../hooks/useRefreshSubject';
 import { ProgressProvider } from '../contexts/ProgressContext';
 import { syncSnapshot } from '../../background/snapshotBridge';
 
@@ -349,10 +350,35 @@ function seedSnapshot(
  * and is why the "stale wins" race this suite used to pin no longer has a
  * mechanism.
  */
+/**
+ * Stands in for the chrome band's one refresh control (ADR-0069).
+ *
+ * The rung no longer renders a Refresh button of its own — it registers a
+ * subject, and `ContextBar` renders the only control. `ContextBar` is a sibling
+ * of the tab rather than a child, so a test that renders `GroupsTab` alone has
+ * no button to press. This reads the live registration through the same public
+ * hook the real control uses, so pressing it exercises the production seam
+ * rather than reaching into the rung.
+ */
+function RefreshHarness() {
+  const subject = useCurrentRefreshSubject();
+  if (!subject) return null;
+  return (
+    <button type="button" onClick={subject.run}>
+      {`Refresh ${subject.name}`}
+    </button>
+  );
+}
+
 async function renderCached(groups: Record<string, any>[], props: Record<string, any> = {}) {
   seedSnapshot('groups', groups.map(summaryToRaw));
   seedPushEnrichment(groups);
-  const result = render(<GroupsTab targetTabId={1} oktaOrigin={ORIGIN} {...props} />);
+  const result = render(
+    <>
+      <GroupsTab targetTabId={1} oktaOrigin={ORIGIN} {...props} />
+      <RefreshHarness />
+    </>,
+  );
   await act(async () => {});
   return result;
 }
@@ -812,7 +838,12 @@ describe('loadAllGroups', () => {
       ],
     }));
 
-    render(<GroupsTab targetTabId={1} oktaOrigin={ORIGIN} />);
+    render(
+      <>
+        <GroupsTab targetTabId={1} oktaOrigin={ORIGIN} />
+        <RefreshHarness />
+      </>,
+    );
     await uev.click(screen.getByRole('button', { name: 'Load All Groups' }));
 
     await waitFor(() => expect(renderedGroupNames()).toEqual(['Engineering', 'Slack Users']));
@@ -822,7 +853,11 @@ describe('loadAllGroups', () => {
       screen.getByPlaceholderText('Search by name, description, ID — or /regex/'),
     ).toBeInTheDocument();
     expect(screen.getByText('2 Cached')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Refresh/ })).toBeInTheDocument();
+    // RETARGETED (ADR-0069): the rung's own Refresh button is gone — one refresh
+    // lives in the chrome band and the rung tells it what "again" means. Same
+    // property, asserted at the seam that now carries it: a cached list is
+    // refreshable, and the control names this list rather than saying "this".
+    expect(screen.getByRole('button', { name: 'Refresh the groups list' })).toBeInTheDocument();
 
     // Every raw group was mapped to a summary: each row renders its type badge.
     expect(screen.getByText('OKTA')).toBeInTheDocument();
@@ -1397,19 +1432,23 @@ describe('selection', () => {
     for (const name of ['AppOne', 'OktaOne', 'OktaTwo']) {
       await uev.click(screen.getByRole('checkbox', { name: `Select ${name}` }));
     }
-    // RETARGETED: `GroupsListActionBar` replaced the `N of M selected` readout —
-    // the selected count is the header badge, and the filtered denominator rides
-    // `Select all (M)`, which stays visible (disabled) once everything is taken
-    // precisely so the count survives. Same two numbers, same assertion.
+    // RETARGETED TWICE. `GroupsListActionBar` first replaced the `N of M
+    // selected` readout, moving the denominator onto `Select all (M)` (which
+    // stays visible, disabled, once everything is taken, precisely so the count
+    // survives) and the selected count onto the `PageHeader` badge. The badge
+    // was wrong: a header describes what you are *browsing*, and `3 Selected`
+    // overwrote `3 Cached`. The count is now prose on the list's own line. Same
+    // two numbers throughout, and the line states both at once.
     expect(screen.getByRole('button', { name: 'Select all (3)' })).toBeInTheDocument();
-    expect(screen.getByText('3 Selected')).toBeInTheDocument();
+    expect(screen.getByText(/Showing 3 of 3 · 3 selected/)).toBeInTheDocument();
 
     await uev.click(screen.getByRole('button', { name: /^Filters/ }));
     await uev.click(section('Group Type').getByRole('button', { name: 'App' }));
 
     expect(renderedGroupNames()).toEqual(['AppOne']);
     expect(screen.getByRole('button', { name: 'Select all (1)' })).toBeInTheDocument();
-    expect(screen.getByText('3 Selected')).toBeInTheDocument();
+    // The hidden picks stay selected: one row on screen, three still ticked.
+    expect(screen.getByText(/Showing 1 of 1 · 3 selected/)).toBeInTheDocument();
 
     // Export uses `groups`, not `filteredGroups` — all three, including the hidden ones.
     await uev.click(screen.getByRole('button', { name: /Export \(3\)/ }));
@@ -1438,7 +1477,9 @@ describe('selection', () => {
     ]);
 
     await uev.click(screen.getByRole('checkbox', { name: 'Select AppOne' }));
-    expect(screen.getByText('1 Selected')).toBeInTheDocument();
+    // RETARGETED: the selection count left the `PageHeader` badge for the list's
+    // own line (ADR-0032 — a header describes what you are browsing). Same number.
+    expect(screen.getByText(/· 1 selected/)).toBeInTheDocument();
 
     // Refresh replaces `groups` wholesale; the selection is never pruned.
     await uev.click(screen.getByRole('button', { name: /Refresh/ }));
@@ -1449,7 +1490,7 @@ describe('selection', () => {
     await waitFor(() =>
       expect(idbTables.get('syncMeta')!.get(`${ORIGIN}::groups`).lastFullWalkAt).toBeGreaterThan(1),
     );
-    expect(screen.getByText('1 Selected')).toBeInTheDocument();
+    expect(screen.getByText(/· 1 selected/)).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Select AppOne' })).toBeChecked();
   });
 
@@ -1460,15 +1501,18 @@ describe('selection', () => {
     await uev.click(section('Group Type').getByRole('button', { name: 'Okta' }));
 
     await uev.click(screen.getByRole('button', { name: 'Select all (2)' }));
-    expect(screen.getByText('2 Selected')).toBeInTheDocument();
+    expect(screen.getByText(/Showing 2 of 2 · 2 selected/)).toBeInTheDocument();
 
     await uev.click(section('Group Type').getByRole('button', { name: 'All' }));
     expect(screen.getByRole('button', { name: 'Select all (3)' })).toBeInTheDocument();
-    expect(screen.getByText('2 Selected')).toBeInTheDocument();
+    expect(screen.getByText(/Showing 3 of 3 · 2 selected/)).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Select AppOne' })).not.toBeChecked();
 
     await uev.click(screen.getByRole('button', { name: 'Deselect all' }));
-    expect(screen.queryByText(/\d+ Selected/)).not.toBeInTheDocument();
+    // The `· N selected` clause drops off; the line itself stays, so nothing
+    // below the band moves as the selection empties.
+    expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Showing 3 of 3/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Select all (3)' })).toBeEnabled();
   });
 
@@ -1984,15 +2028,26 @@ describe('empty states', () => {
 // 15. PageHeader badge + actions
 // ===========================================================================
 describe('page header', () => {
-  it('prefers the selection badge over the cached-count badge', async () => {
+  /*
+    RETARGETED (ADR-0032). This test used to assert the opposite: that ticking a
+    row REPLACED `1 Cached` with `1 Selected`. That precedence was the defect.
+    `PageHeader` describes what you are *browsing*, and the cached count is a
+    durable property of the rung, so overwriting it with a transient property of
+    the pointer deleted the rung's only statement of what it holds — the moment
+    you started working with it. The selection is prose on the list's own line
+    now, and both numbers are readable at once. Same two numbers, both still
+    covered; what changed is which band each belongs to.
+  */
+  it('keeps the cached-count badge when rows are selected, and states the selection on the list', async () => {
     const uev = userEvent.setup();
     await renderCached([cachedGroup({ id: 'a', name: 'Alpha' })]);
     expect(screen.getByText('1 Cached')).toBeInTheDocument();
 
     await uev.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
 
-    expect(screen.getByText('1 Selected')).toBeInTheDocument();
-    expect(screen.queryByText('1 Cached')).not.toBeInTheDocument();
+    expect(screen.getByText('1 Cached')).toBeInTheDocument();
+    expect(screen.queryByText('1 Selected')).not.toBeInTheDocument();
+    expect(screen.getByText(/Showing 1 of 1 · 1 selected/)).toBeInTheDocument();
   });
 
   it('shows the Live badge in live mode', () => {

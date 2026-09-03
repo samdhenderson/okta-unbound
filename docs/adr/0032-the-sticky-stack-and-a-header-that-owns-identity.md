@@ -1,6 +1,7 @@
 # ADR-0032: The sticky stack, and a header that owns entity identity
 
-- Status: Accepted (§3a amended by ADR-0038; §3's stack amended by ADR-0050)
+- Status: Accepted (§1 amended by ADR-0069; §3a amended by ADR-0038; §3's stack amended by
+  ADR-0050)
 - Date: 2026-08-15
 - Amends: ADR-0030 (its identity-header section, and its deferral of a pinned title)
 - Relates to: ADR-0018 (every tab stays mounted), ADR-0027 (motion tokens),
@@ -39,6 +40,21 @@ _both_ `sticky top-0` in the one shared scroller, and the rail's `z-40` beat the
 bands that compete for the top of the scroller publish their heights to each other.**
 
 ### 1. Two bars, two subjects
+
+> **Amended by [ADR-0069](./0069-refresh-is-one-app-level-control.md) §3.** This section
+> governs what each band **describes** — the three rows of the table below are all about
+> the readout. It does not govern what may be _docked_ in a band. ADR-0069 puts one
+> refresh control in the chrome band whose subject is what you are **browsing**, and that
+> control **names the browsed entity** — _Refresh Payments Team_, not _Refresh this
+> group_ — because when the live tab and the browsed entity differ, which is exactly the
+> state the handoff exists to serve, the deictic form does not say which group it means.
+> What survives, and is the reason that naming is not this ADR's original defect: the
+> control names its subject **only in its tooltip and accessible name**, with no visible
+> label, badge or count. The failure this ADR was written from was a group named three
+> times in _visible_ chrome; the standing render still names it once. Everything below
+> about the two readouts — `ContextBar` never following in-panel navigation, `PageHeader`
+> never falling back to the context entity, and the same name in both being a coincidence
+> rather than duplication — is untouched.
 
 `ContextBar` and `PageHeader` are not redundant and must not converge.
 

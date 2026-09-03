@@ -58,7 +58,7 @@ export type { SkeletonVariant, SkeletonSize } from './Skeleton';
 export type { ListRowDensity, ListRowState, ListRowAs, ListRowProps } from './ListRow';
 export type { AlertMessageData, AlertAction } from './AlertMessage';
 export type { DetailSectionProps } from './DetailSection';
-export type { ActionBarProps, ActionDescriptor, ActionPriority } from './ActionBar';
+export type { ActionBarProps, ActionDescriptor, ActionPriority, ActionRegister } from './ActionBar';
 export type { BadgeVariant, BadgeProps } from './Badge';
 export type { EntityLinkProps } from './EntityLink';
 export type { FilterToggleProps } from './FilterToggle';
@@ -71,6 +71,6 @@ export type {
 export type { StableWidthProps } from './StableWidth';
 export type { StatusType, UserStatusVariant } from './status';
 export { userStatusVariant } from './status';
-export type { TabItem, TabsVariant } from './Tabs';
+export type { TabItem, TabsVariant, TabCountDisplay } from './Tabs';
 export type { TooltipTriggerProps } from './Tooltip';
 export type { BreadcrumbItem, BreadcrumbsSize } from './Breadcrumbs';

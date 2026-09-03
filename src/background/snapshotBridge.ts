@@ -23,6 +23,7 @@
 import type { ApiScheduler } from '../shared/scheduler/apiScheduler';
 import { syncOrg, type PageRequest, type WalkOutcome } from '../shared/snapshot/snapshotSync';
 import type { SnapshotCollection } from '../shared/snapshot/types';
+import { ensureRateLimitThreshold } from './rateLimitThreshold';
 import { createLogger } from '../shared/utils/logger';
 import { oktaOriginOf } from '../shared/utils/oktaUrl';
 
@@ -196,6 +197,22 @@ export async function syncSnapshot(
   // of the same org would double its request cost for no extra data.
   const raced = inFlight.get(origin);
   if (raced && (raced.force || !force)) return raced.run;
+
+  // Learn this org's own cooldown threshold before the largest fan-out the
+  // extension issues.
+  //
+  // This lives here rather than at the message router because `syncSnapshot` is
+  // the choke point all three trigger routes share, and two of them do not go
+  // through a message at all: `snapshotScheduler` imports this function directly
+  // and calls it from the tab-settle debounce and from the periodic
+  // `chrome.alarms` handler. The alarm route is the one that matters most — it
+  // runs with no side panel open, which is exactly when nothing else would have
+  // armed the probe, and a background walk on the hardcoded default is the
+  // traffic most likely to trip the org's own warning.
+  //
+  // Fire-and-forget, like every other call site: a sync must not wait on — or be
+  // failed by — an optional refinement of the backoff policy (ADR-0059 §3).
+  ensureRateLimitThreshold(scheduler, tabId);
 
   const run = syncOrg({
     origin,

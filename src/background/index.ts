@@ -58,7 +58,12 @@ log.info('Service worker started');
 
 // Initialize the global API scheduler
 const globalScheduler = new ApiScheduler({
-  maxConcurrent: 5,
+  // Ten seats in total, four to any one Okta rate-limit bucket (ADR-0070 §2).
+  // Four is below the five that shipped before, so no single bucket — the only
+  // thing Okta meters — is hit harder than it was; ten is chosen so a snapshot
+  // fan-out and a user's click are not competing for the same five seats.
+  maxConcurrent: 10,
+  maxConcurrentPerBucket: 4,
   minRemainingThreshold: 10, // Cooldown at 10% remaining
   cooldownDuration: 30000, // 30 seconds fallback
   retryDelay: 2000,
@@ -378,11 +383,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: false, error: 'Invalid syncSnapshot message' });
         return true;
       }
-
-      // A snapshot sync is the largest fan-out the extension issues, so it is
-      // the traffic that most wants the org's own threshold rather than the
-      // configured default. Same fire-and-forget posture as above.
-      ensureRateLimitThreshold(globalScheduler, request.tabId);
 
       syncSnapshot(
         globalScheduler,

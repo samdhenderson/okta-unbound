@@ -8,6 +8,16 @@
  * (clear button, spinner) — whose reserved padding scales with `size`, so a
  * search composite never has to re-declare the field's class string. Use over a
  * raw `<input>`; for multi-line use `Textarea`, for choices use `Select`.
+ *
+ * `type="search"` suppresses the native WebKit cancel-button
+ * (`::-webkit-search-cancel-button`) only when `trailingInteractive` is set —
+ * i.e. only when the caller says `trailing` holds something clickable (a
+ * clear button), not when it holds a merely decorative node (a spinner). A
+ * bare `type="search"` field with no custom clear keeps its native × as its
+ * only clear affordance; suppressing it there would delete a working control
+ * to fix a cosmetic issue that field doesn't have. `MemberSearchBar` routes
+ * its clear button through `trailing`/`trailingInteractive` for exactly this
+ * reason, rather than layering its own control on top of the field.
  */
 import React from 'react';
 
@@ -52,7 +62,10 @@ interface InputProps {
   /**
    * Set when `trailing` holds something the user clicks (a clear button). By
    * default the slot is `pointer-events-none` so a decorative adornment (a
-   * spinner) can't swallow clicks aimed at the field.
+   * spinner) can't swallow clicks aimed at the field. Also the signal that
+   * suppresses the native `type="search"` cancel-button, so a field with a
+   * merely decorative `trailing` (a spinner) keeps its native × instead of
+   * losing its only clear affordance.
    */
   trailingInteractive?: boolean;
   className?: string;
@@ -163,6 +176,7 @@ const Input: React.FC<InputProps> = ({
     ${icon ? leadingPaddingClasses[size] : ''}
     ${trailing ? trailingPaddingClasses[size] : ''}
     ${fullWidth ? 'w-full' : ''}
+    ${type === 'search' && trailingInteractive ? '[&::-webkit-search-cancel-button]:appearance-none' : ''}
   `
     .trim()
     .replace(/\s+/g, ' ');

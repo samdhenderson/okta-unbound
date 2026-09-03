@@ -10,6 +10,7 @@
  * @see `ADR-0060` — the declared-work ledger these segments render.
  */
 import React from 'react';
+import { PLANNED_HATCH } from './hatches';
 
 /** The four states a request in an operation can be in, in pipeline order. */
 export interface PipelineCounts {
@@ -39,16 +40,6 @@ export interface PipelineMeterProps {
    */
   label: string;
 }
-
-/**
- * Diagonal hatching for an approximate planned segment.
- *
- * State is encoded in *form* as well as colour here on purpose: the planned and
- * queued segments are close in weight, and a viewer who cannot separate them by
- * hue can still separate solid from hatched.
- */
-const HATCH =
-  'repeating-linear-gradient(135deg, var(--color-neutral-400) 0 3px, transparent 3px 6px)';
 
 /** One segment. Rendered only when it has width, so zero-width slivers never appear. */
 function Segment({ fraction, style }: { fraction: number; style: React.CSSProperties }) {
@@ -87,7 +78,9 @@ const PipelineMeter: React.FC<PipelineMeterProps> = ({ counts, approximate = fal
       <Segment
         fraction={share(counts.planned)}
         style={
-          approximate ? { backgroundImage: HATCH } : { backgroundColor: 'var(--color-neutral-400)' }
+          approximate
+            ? { backgroundImage: PLANNED_HATCH }
+            : { backgroundColor: 'var(--color-neutral-400)' }
         }
       />
     </div>

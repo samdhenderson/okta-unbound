@@ -94,6 +94,9 @@ const AuditLogViewer = lazy(() => import('./components/AuditLogViewer'));
 import { useGroupContext } from './hooks/useGroupContext';
 import { useOktaPageContext } from './hooks/useOktaPageContext';
 import { useSessionExpiry } from './hooks/useSessionExpiry';
+import { useAppRefresh } from './hooks/useRefreshSubject';
+import { useEntityHandoff } from './hooks/useEntityHandoff';
+import type { JumpKind } from './hooks/useJumpResolver';
 import { SchedulerProvider } from './contexts/SchedulerContext';
 import { NavigationProvider } from './contexts/NavigationContext';
 import { OrgEntityIndexProvider } from './contexts/OrgEntityIndexContext';
@@ -320,6 +323,19 @@ const App: React.FC = () => {
     void refetchPageContext();
   }, [refetchPageContext]);
 
+  // The panel's one refresh (ADR-0069). Its subject is whatever the panel is
+  // showing: the rung on screen registers what "again" means for itself, and
+  // this composes that with the context re-probe above. The two halves are
+  // independent — the pin governs whether the panel follows the live tab, so the
+  // probe is skipped while pinned; it says nothing about whether the roster on
+  // screen is current, so the data half always runs. That is why the control is
+  // no longer disabled under a pin, which is what it was when it re-probed and
+  // nothing else.
+  const { subjectName: refreshSubjectName, refresh: handleRefresh } = useAppRefresh(
+    refetchPageContext,
+    isPinned,
+  );
+
   // Reconnect: reload the Okta tab so a fresh content script is injected, then
   // re-detect. Used when the connection is genuinely down (e.g. the script was
   // orphaned by an extension reload). Needs no extra permission — reloading a
@@ -423,6 +439,36 @@ const App: React.FC = () => {
       handleNavigateToPolicy,
     ],
   );
+
+  /*
+    The handoff offer: the live Okta tab is on something the panel can open, so
+    the masthead's identity region offers to open it. This generalises the Users
+    tab's detected-user banner to all four detectable kinds and costs no row —
+    the banner spent one inside the tab body, and only users ever had one.
+
+    Reachability is asked, never assumed. `navigationHandlers` above covers five
+    kinds and `isLivePinnable` covers two; a shared affordance that widened past
+    either would be a control that only refuses (ADR-0039). `admin` and
+    `unknown` have no entity at all and are filtered inside the hook.
+
+    Withheld while pinned: a pin is a deliberate instruction to stop following
+    the live tab, and the bar already carries its own *Unpin & switch* hint for
+    that state.
+  */
+  const canNavigateToKind = useCallback(
+    (kind: JumpKind) => typeof navigationHandlers[kind] === 'function',
+    [navigationHandlers],
+  );
+  const navigateToKind = useCallback(
+    (kind: JumpKind, id: string) => navigationHandlers[kind]?.(id),
+    [navigationHandlers],
+  );
+  const handoff = useEntityHandoff({
+    page,
+    suppressed: isPinned,
+    canNavigateTo: canNavigateToKind,
+    navigateTo: navigateToKind,
+  });
 
   // Open the Export tab pre-scoped to a descriptor + context entity (deep-linked
   // from an entity's page-level export action).
@@ -528,8 +574,12 @@ const App: React.FC = () => {
               liveContextChanged={liveContextChanged}
               liveEntityName={liveIdentity?.name}
               onTogglePin={handleTogglePin}
-              onRefresh={handleRefreshAll}
+              onRefresh={handleRefresh}
+              refreshSubjectName={refreshSubjectName}
               onReconnect={handleReconnect}
+              handoff={handoff.offer}
+              onAcceptHandoff={handoff.accept}
+              onDismissHandoff={handoff.dismiss}
             />
 
             {/* One statement, once, for a fact that belongs to the connection

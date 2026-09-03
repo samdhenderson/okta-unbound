@@ -16,6 +16,7 @@ import {
   oldestWalkAt,
   subCountStatus,
   type FigureSource,
+  type SubCountInput,
 } from './orgFigures';
 
 const WALK_AT = 1_800_000_000_000;
@@ -222,10 +223,11 @@ describe('buildSubCount', () => {
   const base = {
     key: 'groups-empty',
     label: 'Groups with no members',
+    icon: 'users',
     counted: named({ count: 214 }),
     count: 31,
     request,
-  };
+  } satisfies SubCountInput;
 
   it('carries its number, its destination and what it is out of', () => {
     expect(buildSubCount(base)).toMatchObject({
@@ -317,6 +319,25 @@ describe('buildSubCount', () => {
     expect(suppressed.note).toBe('Needs group rules, which have not been read.');
   });
 
+  it('never publishes 0 as a stand-in for unknown, whatever the subtraction produced', () => {
+    // The zero trap, at the one place it is most tempting: a gate that never
+    // finished makes the *join* produce a small number — here, none at all —
+    // and rendering that as `0` would tell an admin "nothing to fix" on the
+    // strength of a collection nobody read. `null` is the only honest answer,
+    // and the card renders it as an em dash on a row that is not a control.
+    for (const count of [0, 31]) {
+      const suppressed = buildSubCount({
+        ...base,
+        gates: [named({ complete: false, lastFullWalkAt: null, count: 0 }, 'group rules')],
+        count,
+      });
+      expect(suppressed.status).toBe('unavailable');
+      expect(suppressed.value).toBeNull();
+      expect(suppressed.value).not.toBe(0);
+      expect(suppressed.note).toBe('Needs group rules, which have not been read.');
+    }
+  });
+
   it('names its own collection when that is what is missing', () => {
     const suppressed = buildSubCount({
       ...base,
@@ -350,6 +371,7 @@ describe('buildBox', () => {
       buildSubCount({
         key: 'groups-empty',
         label: 'Groups with no members',
+        icon: 'users',
         counted: named(),
         count: 31,
         request: { tab: 'groups', view: 'empty' },

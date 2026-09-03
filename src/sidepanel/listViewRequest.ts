@@ -24,8 +24,14 @@
  *
  * - `empty` — `sizeFilter: 'empty'`, groups with no members.
  * - `no-rules` — `ruleFilter: 'unruled'`, groups no rule assigns anyone to.
+ * - `empty-no-rules` — both at once: nothing in the group, and nothing on its
+ *   way in. This is the one the Home card's second finding opens, and it exists
+ *   as its own view rather than reusing either single axis because a finding
+ *   whose number disagrees with the list it opens is worse than no link at all.
+ *   The two single-axis views stay: they are what the Groups tab's own filter
+ *   pills produce.
  */
-export type GroupsListView = 'empty' | 'no-rules';
+export type GroupsListView = 'empty' | 'no-rules' | 'empty-no-rules';
 
 /**
  * A pre-filtered view of the Applications list.

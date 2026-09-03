@@ -1392,6 +1392,121 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Status:** open
 - **Related:** `ADR-0045`, `ADR-0043`, `I-029` (filmed clean alongside these)
 
+### D-122 · The cooldown arms on a global count the gate no longer uses
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/shared/scheduler/apiScheduler.ts`
+- **Verified:** 2026-09-03 — found while implementing `ADR-0070` §4.
+- **Problem:** `ADR-0070` §4 stopped charging every in-flight request to every
+  bucket's budget, but scoped the correction to `gateFor()` only. The cooldown
+  arming path still adds the global `activeRequests.size` to a single bucket's
+  observed usage when deciding whether that bucket is close enough to its limit
+  to warrant a cooldown. So the gate and the cooldown now disagree about how
+  much of the org's in-flight work belongs to the same bucket: the gate counts
+  only that bucket's requests, the cooldown counts all of them. The disagreement
+  errs toward cooling down early, which is the safe direction and is what ships
+  today, so this is not urgent — but two code paths reading the same number two
+  different ways is how a later change breaks one of them without touching it.
+- **Done when:** the cooldown-arming path charges the same per-bucket count the
+  gate charges, or a comment at both sites states why the asymmetry is
+  deliberate and what would break if it were removed. A test pins whichever
+  answer is chosen.
+- **Risk:** Low. Touches the rate-limit surface, so it needs the
+  `security-logging-reviewer` pass `CLAUDE.md` requires — and the safe-direction
+  argument must be re-checked, not assumed, if the charge is narrowed.
+- **Status:** open
+- **Related:** `ADR-0070`, `ADR-0059`
+
+### D-123 · `ActionBar.tsx` is 664 lines and renders its measurement probe twice
+
+- **Category:** maintainability
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/shared/ActionBar.tsx`
+- **Verified:** 2026-09-03 — 664 lines after the selection register landed, up
+  from 474.
+- **Problem:** The primitive was already past the ~300-line guidance before the
+  register was added and is now well past it. 352 of those lines are comments,
+  which is the file carrying its own reasoning because there is nowhere else to
+  put it — the fit arithmetic lives in `actionBarFit.ts`, but the two-row
+  measurement dance, the probe, and the register's ref-anchoring trick all live
+  inline. The probe was extracted to a `MeasureProbe` component when the second
+  row made it render twice; that is the seam a split would follow.
+- **Done when:** the measurement concern is a module of its own with its own
+  story, and `ActionBar.tsx` is back under the guidance, with no assertion in
+  `actionBarFit.test.ts` or `useActionOverflow.test.ts` edited to get there.
+- **Risk:** Medium. This primitive is the one every rung's verb strip renders
+  through, and its overflow behaviour has no CSS-bearing automated coverage —
+  the headless story runner loads no Tailwind, so a refactor's real effect is
+  only visible by eye. Land it behind a manual pass in `npm run storybook`.
+- **Status:** open
+- **Related:** `ADR-0051`, `ADR-0068`, `D-117`, `D-118`
+
+### D-124 · Three `ActivityView` fields survive with no reader
+
+- **Category:** dead-code
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useActivityBar.ts`,
+  `src/sidepanel/components/ActivityBarView.tsx`
+- **Verified:** 2026-09-03 — `message`, `elapsedLabel` and `apiCalls` lost their
+  last consumer when the "Active" metric slot was dropped.
+- **Problem:** The activity bar's four metric slots collapsed to one summary
+  line and the Active tile went with them. Three fields on `ActivityView` are
+  still computed and still passed down, and nothing renders any of them. They
+  are not caught by `knip`, which sees an object property in use because the
+  object is used. Dead state on a view model is worse than a dead export: the
+  next person to add a slot will find three plausible-looking fields already
+  wired and reach for one, without knowing it stopped meaning anything.
+- **Done when:** the three fields are gone from `ActivityView` and from
+  everything that builds one, or each carries a comment naming the consumer it
+  is being kept for. `useActivityBar.test.tsx` and the `ActivityBarView`
+  fixtures come along; no assertion is edited to accommodate the removal, since
+  nothing asserts on them today.
+- **Risk:** Low, but it touches many fixtures — the reason it was left out of
+  the redesign's diff rather than folded in. One concern, one commit.
+- **Status:** open
+- **Related:** `ADR-0008`, `ADR-0070`, `docs/dead-code.md`
+
+### D-125 · A cold org's first burst spends on the default threshold
+
+- **Status:** open
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/background/rateLimitThreshold.ts`,
+  `src/background/snapshotBridge.ts`, `src/shared/scheduler/apiScheduler.ts`
+- **Verified:** 2026-09-03 — found while verifying the threshold path end to end
+  for the activity-rack redesign (ADR-0072); the wiring gap found alongside it
+  (the alarm route never arming the probe at all) is fixed, this half is not.
+- **Problem:** `ensureRateLimitThreshold` is deliberately never awaited — a
+  request must not wait on, or be failed by, an optional refinement of the
+  backoff policy. The consequence is that every request issued before the probe
+  answers is gated on `DEFAULT_CONFIG.minRemainingThreshold` (10), not on the
+  org's number. For a Workforce org that is nearly harmless: the learned value
+  is 15, so the first few requests back off five points late. For a **CIAM** org
+  it is not. Its default warning threshold is 60, which implies backing off at
+  45% remaining, and the cold window runs at 10% instead — a 35-point gap,
+  spanning exactly the moment a snapshot fan-out is at its widest and the
+  detector has observed nothing (ADR-0070's "wider cold start" consequence
+  compounds it). The org whose admins configured a low threshold because they
+  are near their limits is the org this hurts.
+- **Done when:** a cold org's first fan-out cannot run wide on the default. The
+  cheapest shape is probably for `syncSnapshot` to await the probe — a snapshot
+  is a background walk with no user waiting on it, unlike an interactive
+  request, so the two call sites can honestly differ — but "block the walk" and
+  "start narrow and widen once the threshold lands" are both viable and the
+  choice is not obvious. Whichever is taken, `rateLimitThreshold.test.ts` gains
+  a case asserting the cold path does not dispatch on the default, and the
+  fire-and-forget posture stays for `scheduleApiRequest`.
+- **Risk:** Medium. It touches the rate-limit surface, which `CLAUDE.md` treats
+  as a security invariant, and awaiting anything on the snapshot path risks
+  stalling a walk behind a probe that a non-Super-Admin org answers with 403.
+  The memo already makes that 403 cost one request per browser session, so the
+  stall is bounded — but it needs an ADR-shaped argument, not a one-line change.
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk

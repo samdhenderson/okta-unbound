@@ -1,6 +1,7 @@
 # ADR-0051: A verb strip for a list rung
 
-- Status: Accepted (§1 amended by [ADR-0061](./0061-a-list-rungs-primary-is-its-page-verb.md))
+- Status: Accepted (§1 amended by [ADR-0061](./0061-a-list-rungs-primary-is-its-page-verb.md),
+  then superseded by [ADR-0068](./0068-a-rungs-primary-is-a-verb-that-acts.md); §2 stands)
 - Date: 2026-08-28
 - Discharges: ADR-0039's deferral ("that refinement is for whichever ADR ships
   `GroupSelectionBar`, not this one") and ADR-0038's named extension point
@@ -44,6 +45,20 @@ The strip becomes `GroupsListActionBar`, an ADR-0039 wrapper around the shared
 > explicitly rather than as a side effect of `variant` — that was always the real safety
 > property. `GroupsListActionBar` is unchanged: it has no page-level verb, so this section
 > still describes it exactly.
+
+> **Superseded by [ADR-0068](./0068-a-rungs-primary-is-a-verb-that-acts.md).** The last
+> sentence above no longer holds. `primary` is a verb that **acts** — it opens a modal or
+> performs the operation — and is never a refresh. `GroupsListActionBar` did have a
+> `primary` all along (`Export list`, which ADR-0061 did not know about), so this section
+> stopped describing it the moment it shipped; the strip **keeps** `Export list`, because
+> ADR-0068 §2 lets an export hold `primary` on a rung with no acting verb, and every one of
+> that rung's other verbs is scoped to the ticked rows or is a read-only panel toggle. On
+> any rung that _does_ act, an export moves to `priority: 'tier'`. What survives
+> from this section is the `pinned`-while-open property below — the control that closes an
+> open panel can never overflow behind **More** — which ADR-0061 already re-seated as an
+> explicit `priority` rather than a side effect of `variant`. **§2 below is untouched by
+> both amendments**: position one is a selection control, and that is a safety property
+> written from an incident, not a layout preference.
 
 A detail rung has one page-level verb, and `variant: 'primary'` names it. A list rung does
 not: _Compare_, _Merge_, _Bulk actions_ and _Export_ are peers whose availability is gated

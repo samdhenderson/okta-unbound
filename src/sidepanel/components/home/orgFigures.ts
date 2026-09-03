@@ -209,6 +209,15 @@ export interface OrgSubCount {
    * when the number is an em dash.
    */
   label: string;
+  /**
+   * The glyph that leads the row, from the shared registry.
+   *
+   * It leads rather than trails because the row inverted — the number moved to
+   * the trailing edge — and the 20px glyph plus its 12px gap is the same lead
+   * `WorkingSetRow` uses, so the entity rows above the card and the findings on
+   * it read as one column rather than two lists that happen to be adjacent.
+   */
+  icon: IconType;
   /** See {@link subCountStatus}. */
   status: OrgFigureStatus;
   /** The count, or `null` when nothing behind it can support one. */
@@ -248,10 +257,10 @@ export interface OrgBox extends OrgFigure {
  *   reports need this and the findings do not: "app access no rule maintains"
  *   draws its population from the app-group assignments, where every finding on
  *   the org card counts one collection and subtracts from others.
- * - `gates` may not be anything but `ok`. "Groups no rule fills" is computed by
- *   subtracting the groups some rule targets, so a rule list missing half its
- *   pages does not under-report; it reports every group those missing rules fed
- *   as unfilled. That is not a floor with a caveat, it is a wrong number, and
+ * - `gates` may not be anything but `ok`. "Groups with no members that no rule
+ *   fills" is computed by subtracting the groups some rule targets, so a rule
+ *   list missing half its pages does not under-report; it reports every group
+ *   those missing rules fill as unfilled. That is not a floor with a caveat, it is a wrong number, and
  *   there is no honest way to label it. So a gate that is anything but `ok`
  *   suppresses the count entirely.
  *
@@ -369,6 +378,8 @@ export interface SubCountInput extends CountInput {
   key: string;
   /** The finding, as a sentence. */
   label: string;
+  /** The glyph that leads the row. See {@link OrgSubCount.icon}. */
+  icon: IconType;
   /** The filtered list this finding opens. */
   request: ListViewRequest;
 }
@@ -379,8 +390,14 @@ export interface SubCountInput extends CountInput {
  * @param input - See {@link SubCountInput}.
  * @returns The finding descriptor.
  */
-export function buildSubCount({ key, label, request, ...counts }: SubCountInput): OrgSubCount {
-  return { key, label, ...resolveCount(counts), request };
+export function buildSubCount({
+  key,
+  label,
+  icon,
+  request,
+  ...counts
+}: SubCountInput): OrgSubCount {
+  return { key, label, icon, ...resolveCount(counts), request };
 }
 
 /**

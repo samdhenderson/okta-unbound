@@ -29,8 +29,9 @@ const variantClasses: Record<FooVariant, string> = {/* … */};
 const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' };
 ```
 
-- Size scale is `sm | md | lg` by default. Two primitives extend it where call sites
-  needed steps the three-name scale could not express: `Icon` is
+- Size scale is `sm | md | lg` by default. Three primitives extend it where call sites
+  needed steps the three-name scale could not express: `Button` adds `xs` (24px, the
+  recessed step — `ActionBar`'s selection register, never a page verb), `Icon` is
   `xs | sm | md | lg | xl` (12/16/20/24/32px) and `LoadingSpinner` is
   `sm | md | lg | xl | 2xl` (16/20/24/32/48px) — deliberately **name-for-name aligned**
   over the sizes they share, so a spinner standing in for a glyph is requested by the
@@ -164,9 +165,40 @@ checkbox). Because every card in a list shares one `label`, pass `describedBy`
 pointing at that card's title. First consumer: `GroupListItem`'s row-body
 drill-in.
 
+When the card it covers **discloses** a region rather than navigating, pass
+`expanded` and `controls` — the same disclosure contract `IconButton` documents,
+so a card and a chevron announce a collapse identically. Two traps the
+`AttributeHealthCard` consumer had to solve, and the next one will too. Scope
+the overlay to the card's **header** region (`ListRow`'s `headerClassName`),
+or the button covers the body it just opened and a click inside it collapses
+the card. And give the button a `label` that names its subject — a grid of
+cards otherwise offers a screen-reader user a list of identically-named
+controls, and `describedBy` does not fix that, because a description is not a
+name.
+
 `Tabs` is the accessible tab-bar primitive (`role="tablist"/"tab"`, roving
 `tabindex`, arrow-key nav) with three variants: `underline` (section nav),
-`segmented` (compact toggle) and `rail` (icon-first primary nav).
+`segmented` (compact toggle) and `rail` (icon-first primary nav). **Never
+hand-roll a `role="tablist"`**: the ARIA attributes are the part that gets
+copied and the keyboard handling is the part that gets left behind, which is
+exactly what `ComparisonTabBar` shipped — a strip a keyboard user could reach
+and then not move inside.
+
+Three additive capabilities keep a caller from forking it for styling, and each
+is a property of a tab rather than of one surface:
+
+| Capability             | What it is                                                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TabItem.icon`         | a glyph before the label, in **every** variant; only `rail` collapses the tab to it. Decorative outside `rail` — the visible label is the name    |
+| `TabItem.countDisplay` | `always` (default) badges a `0`, right for a count that states a **size**; `nonzero` suppresses it, for one that states a **finding**             |
+| `wrap`                 | a `segmented` strip takes a second row below `sm` (two equal columns, one equal-width row above). `underline`/`rail` scroll instead and ignore it |
+
+`countDisplay: 'nonzero'` also holds the badge's slot open at two digits from
+first render (`StableWidth`), because such a count arrives with a fetch: three
+badges landing at once would otherwise shove three labels sideways in one frame
+(ADR-0044, `D-053e`). `wrap` names no column count — `grid-flow-col` +
+`auto-cols-fr` above the breakpoint — so a strip that grows a tab needs no new
+class, and a `sm:grid-cols-${n}` would not survive Tailwind's static scan anyway.
 
 The **`rail`** variant is what `TabNavigation` uses for the panel's top-level
 sections — `RAIL_TAB_DEFS`, which is **seven** of the nine in `TAB_DEFS`.
@@ -327,14 +359,40 @@ to `tier`, behind a confirm `Modal` that states the consequence in plain languag
 next to the control ("Blocks sign-in until reversed," not just "Suspend").
 A **list** rung reads the same rules with two additions (ADR-0051, ADR-0061). The tier
 may sort by **frequency** as well as consequence, though frequency may move a verb down,
-never up, and never brings a confirm `Modal` with it. And `primary` is spent on whichever
-of these the rung has:
+never up, and never brings a confirm `Modal` with it.
 
-- **A page-level verb, if there is one** — one whose object is the whole page rather
-  than a selection. `RulesListActionBar`'s _Load rules_ / _Refresh_ is the reference:
-  rules do not load on mount, so nothing on that rung means anything until it is pressed.
-- **Nothing, if there isn't** — `GroupsListActionBar` has only selection-scoped peers, so
-  it has no `primary`.
+**`primary` is a verb that acts** (ADR-0068). Two questions, both of which must answer
+yes: is its object the **whole page** — not a selection, a filter or a section — and does
+pressing it **act**, by opening a modal or performing the operation? A fetch fails the
+second, and so does a toggle that opens a read-only panel: revealing something to read is
+not acting. `GroupActionBar`'s **Add** is the reference — its object is the whole group,
+it opens a modal that writes, and adding a member is reversible, so it stays in the row.
+
+Where that leaves an export is a **ranking**, not a ban:
+
+1. **An acting verb wins.** On a rung that has one, every export takes `priority: 'tier'`
+   — `GroupActionBar`'s _Export members_ is behind **More**, under **Add**.
+2. **On a rung with no acting verb, the whole-rung export may hold `primary`** and stay in
+   the row. `GroupsListActionBar` is that rung: it ships `export-list` as `primary` and
+   keeps it. Any _other_ export there is selection-scoped and still goes to the tier.
+   `RulesListActionBar` is the second: three read-only panel toggles and one whole-rung
+   `Export rules`, so the export holds the fill. That rung is also where the rule's
+   reference example used to be — its _Load rules_ / _Refresh_ was ADR-0061's — and it is
+   gone, which is why the ranking is worded from `GroupActionBar`'s **Add** instead.
+3. **Otherwise the rung has no `primary` at all**, which is a real answer rather than a
+   gap to fill — a strip of evenly-weighted peers.
+
+**A refresh is never `primary`, in any of the three cases**, and after ADR-0069 it is not a
+strip verb at all: one chrome control beside the Pin refreshes whatever the panel is
+showing.
+
+Rule 2 is the one that needs policing, because "this rung has no acting verb" is the easy
+thing to claim. It is an **enumeration, written as a comment above the descriptor array**:
+every verb the rung offers in any state, including verbs it renders outside the strip, each
+with the question it fails. On the Groups list rung the selection controls, `Compare`,
+`Export (N)` and `Merge` fail question 1; `Cross-search`, `Collections`, `Cleanup` and
+`Bulk actions` are read-only panels and fail question 2. A rung that later grows an acting
+verb loses the fallback in the same change.
 
 **The open inline panel is named in its label, not in a colour**: `Duplicates (3)` →
 `Hide duplicates`, plus an explicit `priority: 'pinned'` so the control that closes an
@@ -459,19 +517,11 @@ comment at the call site:
   `aria-activedescendant` to a shared primitive for one consumer is the wrong
   trade. A `Input`-level combobox mode is accepted future work, gated on a second
   consumer.)
-- **Genuinely custom controls:** `ComparisonTabBar` — a one-off `role="tab"` bar,
-  now **four** tabs (Overview / Groups / Apps / Attributes). Re-evaluated for
-  migration to `Tabs` `segmented` and **kept**: `segmented` ignores `TabItem.icon`
-  (only `rail` renders one), so the swap would silently drop the four glyphs.
-  Retiring it means either accepting that loss or teaching `segmented` to render
-  icons, and the latter needs a second consumer before it earns a place in a shared
-  primitive. Its off-scale `text-[10px]` badge has been brought onto the scale in the
-  meantime. The fourth tab is also why it is a `grid grid-cols-2 sm:grid-cols-4`
-  rather than a flex row: four icon+label tabs need ~440px against the ~330px a
-  360px panel has, so below 640px the bar takes a second row instead of truncating a
-  label or dropping the glyphs.
-  Also: the dynamic-color banner, radio-cards, the `AttributeFacet`
-  data-viz spread bars, and the Export tab's `EntityPicker` selectable entity
+- **Genuinely custom controls:** the dynamic-color banner, radio-cards, the `AttributeFacet`
+  and `AttributeSpreadBar` data-viz spread bars, the Activity Bar's `BucketRow`
+  lane (a track whose fills, hatches and folded badges encode scheduler state —
+  the same dataviz category as the spread bars, not a list row, so `ListRow`
+  would fight it rather than serve it), and the Export tab's `EntityPicker` selectable entity
   cards (`role="button"` icon+title+description rows; `Button` is a centered
   CTA, so it does not fit — but `ListRow as="button"` now does, and
   `EntityPicker` is on the ADR-0029 migration list rather than a permanent
@@ -479,7 +529,8 @@ comment at the call site:
 - **Awaiting a new shared primitive (accepted future work):**
   - Chromeless **text-links** ("Clear all", "View details") have no shared
     `TextLink` primitive — adding one would discharge these across `GroupFilterPanel`,
-    `AttributeFacet`, and `ComparisonOverviewTab`.
+    `AttributeFacet`, `AttributeHealthCard` (its `Other (N values)` drill-in), and
+    `ComparisonOverviewTab`.
   - `FilterPill` legend-row toggles and the semantic-colored variants need a
     `className` escape hatch to match without inline classes.
   - The active-filter chip's `rounded-full` close button (`IconButton` is

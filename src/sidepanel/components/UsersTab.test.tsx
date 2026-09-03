@@ -206,14 +206,6 @@ const userSearchInput = () => screen.getByPlaceholderText('Search by email, name
 const groupSearchInput = () => screen.getByPlaceholderText('Type to search by group name...');
 
 /**
- * The detected-user banner's own label. It read `Detected in admin` before the
- * banner was reduced to one row; the eyebrow is the same statement — *this user
- * is the one open in the admin console* — and is what distinguishes the banner
- * from the loaded rung, which is all these assertions ever needed of it.
- */
-const DETECTED_BANNER = 'Open in admin';
-
-/**
  * One membership row, scoped by the group id the row carries.
  *
  * Scoping is mandatory rather than tidy: the Groups pane header renders a filter
@@ -409,28 +401,41 @@ describe('user search: 600ms debounce contract', () => {
 });
 
 // ===========================================================================
-// 2. Detected-user banner: MANUAL load only. The tab is never hijacked by admin
-//    navigation — it stays pinned to the explicitly selected user.
+// 2. Admin navigation never hijacks the tab.
+//
+//    RETARGETED (ADR-0022). This block used to drive the tab's own
+//    detected-user banner: a row inside the tab body offering to load whichever
+//    user the admin console had open. The banner is deleted, generalised into
+//    the masthead's handoff offer (`useEntityHandoff`), which asks the same
+//    question for every detectable kind and costs no row.
+//
+//    The property these cases exist for is unchanged and is what they still
+//    assert: **detection alone fetches nothing**, and a load happens only when
+//    it is asked for. Accepting the offer sets `selectedUserId`, which lands on
+//    the identical `loadUserById` path the banner's Load button called, so each
+//    case below asks through the control that now asks.
+//
+//    Two assertions moved rather than went: that the offer is shown at all, and
+//    that dismissing it hides it for that entity and returns it for a different
+//    one. Neither is this tab's business any more — they are covered by
+//    `useEntityHandoff.test.ts` and the `ContextBar` handoff stories.
 // ===========================================================================
-describe('detected user: manual-load banner', () => {
+describe('admin navigation never hijacks the tab', () => {
   const detected = {
     userInfo: { userId: 'u1', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
     isLoading: false,
     oktaOrigin: null,
   };
 
-  it('does NOT auto-fetch; shows a banner and loads only when Load is clicked', async () => {
+  it('does NOT auto-fetch on detection, and loads only when asked', async () => {
     userContext.current = { ...detected };
     route(/^\/api\/v1\/users\/u1$/, () => ({ success: true, data: oktaUser() }));
-    render(<UsersTab targetTabId={1} />);
+    const { rerender } = render(<UsersTab targetTabId={1} />);
 
-    // No fetch on detection — the banner is shown instead.
+    // Detection alone fetches nothing.
     expect(userDetailCalls()).toHaveLength(0);
-    expect(screen.getByText(DETECTED_BANNER)).toBeInTheDocument();
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Load' }));
-    });
+    rerender(<UsersTab targetTabId={1} selectedUserId="u1" />);
 
     expect(await screen.findByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument();
     // §8: the details read and the membership groups read now route through the scheduler.
@@ -448,35 +453,18 @@ describe('detected user: manual-load banner', () => {
     }
 
     expect(userDetailCalls()).toHaveLength(0);
-    expect(screen.getByText(DETECTED_BANNER)).toBeInTheDocument();
   });
 
-  it('surfaces an error when a manual Load fails', async () => {
+  it('surfaces an error when the requested load fails', async () => {
     userContext.current = {
       userInfo: { userId: 'u1', userName: 'Ada Lovelace' },
       isLoading: false,
       oktaOrigin: null,
     };
     route(/^\/api\/v1\/users\/u1$/, () => ({ success: false, error: 'boom' }));
-    render(<UsersTab targetTabId={1} />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Load' }));
-    });
+    render(<UsersTab targetTabId={1} selectedUserId="u1" />);
 
     expect(await screen.findByText('boom')).toBeInTheDocument();
-  });
-
-  it('Dismiss hides the banner without any fetch', async () => {
-    userContext.current = { ...detected };
-    render(<UsersTab targetTabId={1} />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-    });
-
-    expect(screen.queryByText(DETECTED_BANNER)).not.toBeInTheDocument();
-    expect(userDetailCalls()).toHaveLength(0);
   });
 });
 
@@ -629,10 +617,10 @@ describe('compare entry point', () => {
     };
     route(USER_GROUPS, () => ({ success: true, data: [] }));
     route(/^\/api\/v1\/users\/u1$/, () => ({ success: true, data: oktaUser() }));
-    render(<UsersTab targetTabId={1} />);
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Load' }));
-    });
+    // RETARGET (ADR-0022): the detected-user banner's Load is now the masthead
+    // handoff's accept, which sets `selectedUserId` — the same `loadUserById`
+    // path. This is a locator, not an assertion.
+    render(<UsersTab targetTabId={1} selectedUserId="u1" />);
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
   }
 
@@ -675,11 +663,12 @@ describe('lifecycle actions', () => {
     route(USER_GROUPS, () => ({ success: true, data: [] }));
     // §8: the banner Load fetches details through the scheduler (getUserDetails).
     route(/^\/api\/v1\/users\/u1$/, () => ({ success: true, data: oktaUser() }));
-    render(<UsersTab targetTabId={1} />);
-    // Load the detected user via the banner (no auto-load).
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Load' }));
-    });
+    // RETARGET (ADR-0022): the tab's detected-user banner is gone, generalised
+    // into the masthead's handoff offer. Accepting that offer sets
+    // `selectedUserId`, which lands on the identical `loadUserById` path the
+    // banner's Load button called — so this is the same load, asked for the
+    // same way, through the control that now asks.
+    render(<UsersTab targetTabId={1} selectedUserId="u1" />);
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
     // The account-state verbs are one press away, in the strip's second tier.
     // Opening it issues nothing, which the endpoint assertions below still prove.
@@ -771,11 +760,12 @@ describe('add-to-group: 300ms group search (memoized searchGroups)', () => {
     route(USER_GROUPS, () => ({ success: true, data: [] }));
     // §8: the banner Load fetches details through the scheduler (getUserDetails).
     route(/^\/api\/v1\/users\/u1$/, () => ({ success: true, data: oktaUser() }));
-    render(<UsersTab targetTabId={1} />);
-    // Load the detected user via the banner (no auto-load).
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Load' }));
-    });
+    // RETARGET (ADR-0022): the tab's detected-user banner is gone, generalised
+    // into the masthead's handoff offer. Accepting that offer sets
+    // `selectedUserId`, which lands on the identical `loadUserById` path the
+    // banner's Load button called — so this is the same load, asked for the
+    // same way, through the control that now asks.
+    render(<UsersTab targetTabId={1} selectedUserId="u1" />);
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
     runtimeSendMessage.mockClear();
     // "Add to Group" shortened to "Add group" under ADR-0038 so both row verbs

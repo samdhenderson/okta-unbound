@@ -62,6 +62,7 @@ import { useViewStack } from '../hooks/useViewStack';
 import { useWorkingSet } from '../hooks/useWorkingSet';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useRefreshSubject } from '../hooks/useRefreshSubject';
 import type { GroupSummary } from '../../shared/types';
 import GroupExportModal from './groups/GroupExportModal';
 import GroupComparisonModal from './groups/GroupComparisonModal';
@@ -241,6 +242,18 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   const { filteredGroups, activeFilterCount } = filters;
   const { selectedGroupIds, selectedGroups } = selection;
 
+  const reloadGroups = useCallback(() => {
+    void loadAllGroups(true);
+  }, [loadAllGroups]);
+
+  // The list rung's answer to the app-level refresh control (ADR-0069 §2/§4).
+  // This used to be a `PageHeader.actions` Button beside `Load All Groups` —
+  // the slot ADR-0030 §2 exists to empty. The initial load stays in the header,
+  // because loading a list you have never loaded is not refreshing it; only the
+  // forced re-walk moves. Gated on `isActive` like every other fetch here: a
+  // hidden tab must not own the refresh (ADR-0018).
+  useRefreshSubject('the groups list', reloadGroups, isActive);
+
   // Re-resolve the pushed group against the live list so a refresh while drilled in
   // updates the detail view instead of stranding it on the snapshot that was pushed.
   const pushedGroup = nav.currentEntry;
@@ -368,8 +381,10 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     nav.reset();
     setSearchMode('cached');
     filters.clearFilters();
-    if (listView === 'empty') filters.setSizeFilter('empty');
-    else filters.setRuleFilter('unruled');
+    // Both axes for `empty-no-rules`, which is the Home card's finding: the
+    // count it states is the intersection, so the list it opens has to be too.
+    if (listView !== 'no-rules') filters.setSizeFilter('empty');
+    if (listView !== 'empty') filters.setRuleFilter('unruled');
 
     if (groups.length === 0 && !loading) void loadAllGroups();
     onListViewConsumed?.();
@@ -446,13 +461,20 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
         identityKey={identity?.key}
         identity={identity ? <EntityIdentity rows={identity.rows} /> : undefined}
         badge={
+          /*
+            The selection is NOT here. `PageHeader` describes what you are
+            browsing (ADR-0032), and a badge that flipped from `214 Cached` to
+            `3 Selected` overwrote a durable property of the rung with a
+            transient property of the pointer — so the one statement of what the
+            rung holds disappeared the moment you ticked anything. The count is
+            now stated once, in prose, on `GroupsListPanel`'s own line beneath
+            the list: `Showing 128 of 214 · 3 selected`.
+          */
           identity
             ? identity.badge
-            : selectedGroupIds.size > 0
-              ? { text: `${selectedGroupIds.size} Selected`, variant: 'primary' }
-              : searchMode === 'cached'
-                ? { text: `${groups.length} Cached`, variant: 'success' }
-                : { text: 'Live', variant: 'primary' }
+            : searchMode === 'cached'
+              ? { text: `${groups.length} Cached`, variant: 'success' }
+              : { text: 'Live', variant: 'primary' }
         }
         actions={
           identity ? (
@@ -472,16 +494,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             >
               Load All Groups
             </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              icon="refresh"
-              onClick={() => void loadAllGroups(true)}
-              loading={loading}
-            >
-              Refresh
-            </Button>
-          )
+          ) : null
         }
         cornerAction={
           detailGroup && (
@@ -651,6 +664,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             activeFilterCount={activeFilterCount}
             filteredGroups={filteredGroups}
             selectedGroupIds={selectedGroupIds}
+            selectedCount={selectedGroupIds.size}
             onToggleSelect={selection.toggleSelect}
             oktaOrigin={oktaOrigin}
             onLoadAllGroups={() => void loadAllGroups()}

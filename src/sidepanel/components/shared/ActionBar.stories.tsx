@@ -48,6 +48,16 @@ const meta = {
         'Always-visible caller UI inside the band, under the verbs and above the tier — a list ' +
         "rung's search field. Never measured, so unlike a descriptor it may carry JSX.",
     },
+    register: {
+      description:
+        'The **selection register** — a second measured row of selection-scoped verbs, rendered ' +
+        'below `subRow` and separated from the action row by a tonal step alone: no border, no ' +
+        'rule, no divider. It shares rather than stacks (pass it whenever the rung has a ' +
+        'selection at all, so the first tick adds controls to a row that already exists instead ' +
+        'of pushing the list down), it overflows independently of the action row, and both rows ' +
+        'spill into the one tier behind the one **More**. Its leading descriptor must be a ' +
+        'selection control (ADR-0051 §2).',
+    },
     sticky: {
       description:
         'Pin below the tab rail and the page header while the page scrolls under it, merging into the header as it docks. Defaults to `true`; pass `false` in an already-fixed region, which also opts out of the merge (the strip then simply keeps its resting card).',
@@ -641,4 +651,101 @@ export const AlignsWithTheRung: Story = {
       </DetailSection>
     </div>
   ),
+};
+
+/**
+ * The **selection register**: the strip's second row, holding the verbs whose
+ * object is what the reader has ticked rather than the page.
+ *
+ * The two families used to share one row, where nothing distinguished *Export
+ * list* (acts on the filter, present always) from *Export (3)* (acts on the
+ * ticked rows, gone the moment they are unticked). They are separated here by a
+ * **tonal step and nothing else** — the register is a recessed well one step
+ * below the band's white chrome, with no border, rule or divider between them, so
+ * the band reads as two surfaces at two elevations.
+ *
+ * **Position one of the register is a safety property** (ADR-0051 §2): every
+ * other control in it appears and disappears with the selection size, so whatever
+ * leads changes as you tick rows. `Deselect all` leads once anything is ticked and
+ * `Select all (M)` when nothing is — two controls whose worst outcome is another
+ * click — and never *Merge*, which empties the source groups.
+ *
+ * The tone step itself is **not** verified by this story: the headless runner
+ * loads no Tailwind, so elevation, inset and colour are only checkable in a
+ * CSS-bearing browser.
+ */
+export const WithSelectionRegister: Story = {
+  args: {
+    ariaLabel: 'Actions for the groups list',
+    actions: [
+      {
+        id: 'export-list',
+        label: 'Export list',
+        icon: 'download',
+        variant: 'primary',
+        onClick: fn(),
+      },
+      { id: 'cross-search', label: 'Cross-search', icon: 'search', onClick: fn() },
+    ],
+    register: {
+      ariaLabel: 'Actions for the selected groups',
+      actions: [
+        { id: 'deselect-all', label: 'Deselect all', onClick: fn(), priority: 'pinned' },
+        { id: 'select-all', label: 'Select all (34)', onClick: fn(), priority: 'pinned' },
+        { id: 'compare', label: 'Compare (3)', icon: 'chart', onClick: fn() },
+        { id: 'merge', label: 'Merge (3)', icon: 'link', onClick: fn(), priority: 'tier' },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const register = canvas.getByRole('group', { name: 'Actions for the selected groups' });
+    const first = within(register).getAllByRole('button')[0];
+    await expect(first).toHaveAccessibleName('Deselect all');
+
+    // A page verb never lands in the register.
+    await expect(
+      within(register).queryByRole('button', { name: 'Export list' }),
+    ).not.toBeInTheDocument();
+
+    // `Merge` starts behind **More**, in the one shared tier — the register grows
+    // no second disclosure of its own.
+    await expect(canvas.getAllByRole('button', { name: 'More' })).toHaveLength(1);
+    await userEvent.click(canvas.getByRole('button', { name: 'More' }));
+    await expect(canvas.getByRole('button', { name: 'Merge (3)' })).toBeVisible();
+  },
+};
+
+/**
+ * The register **shares, it does not stack**: at rest it holds only
+ * `Select all (M)`, and it is still a row.
+ *
+ * That is the whole point of passing a register whenever the rung has a selection
+ * *at all*. A register that materialised on the first tick would push everything
+ * below the band down by a row, under the pointer that was ticking a checkbox — so
+ * the reader's next click lands on the row beneath the one they meant.
+ */
+export const TheRegisterHoldsItsRowWhenEmpty: Story = {
+  args: {
+    ariaLabel: 'Actions for the groups list',
+    actions: [
+      {
+        id: 'export-list',
+        label: 'Export list',
+        icon: 'download',
+        variant: 'primary',
+        onClick: fn(),
+      },
+    ],
+    register: {
+      ariaLabel: 'Actions for the selected groups',
+      actions: [{ id: 'select-all', label: 'Select all (34)', onClick: fn(), priority: 'pinned' }],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const register = canvas.getByRole('group', { name: 'Actions for the selected groups' });
+    await expect(register).toBeInTheDocument();
+    await expect(within(register).getAllByRole('button')).toHaveLength(1);
+  },
 };

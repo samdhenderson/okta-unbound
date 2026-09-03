@@ -14,28 +14,36 @@
  * its `subRow`, and the filter chips live behind that field's `FilterToggle`. What is
  * left above the list is the strip and the list.
  *
- * ## The blue button, and where `primary` goes (ADR-0061)
+ * ## Where `primary` goes (ADR-0068 §2, rule 2)
  *
- * ADR-0051 spends `primary` on *which inline panel is open*, on the reasoning that a list
- * rung has no page-level verb — its verbs are gated by a selection, and which one matters
- * is a property of what the admin is doing rather than of the page.
+ * This strip used to open with a **Load rules** / **Refresh** descriptor, and ADR-0061
+ * made it *the* reference example of a list rung's `primary`. Both halves of that
+ * argument are gone. ADR-0069 §6 makes the tab fetch when it is opened and §4 moves every
+ * rung-level refresh into the one chrome control beside the Pin, so the descriptor does
+ * not exist here any more; ADR-0068 §2 then excludes a fetch from `primary` absolutely —
+ * on any rung, in any state — so it could not come back even if the fetch did.
  *
- * This rung is the counter-example. Rules do not load on mount; **Load rules** is the one
- * thing that has to happen before the rung means anything, and once loaded **Refresh** is
- * the same control. That is a page-level verb in the ADR-0030 sense, so it takes `primary`
- * here, and the open panel is named the way ADR-0051 §4 already names counts — in its own
- * label, which swaps to `Hide …`.
+ * What is left is a rung with **no acting verb**. That claim is not a judgement call: the
+ * enumeration above the descriptor array names every verb the rung offers in any state,
+ * on the strip or off it, and the question each one fails, because that is what a reviewer
+ * has to be able to re-check. It comes out empty, so ADR-0068 §2's rule 2 applies and the
+ * rung's one whole-rung export — **Export rules** — holds `primary` and stays in the row.
+ * A host that does not wire the export gets rule 3 instead: no `primary` at all, which is
+ * a real answer rather than a gap to fill.
  *
- * That is not merely a substitution. A `primary` wash is colour-only state: an
- * `ActionDescriptor` carries no `aria-pressed`, so a screen reader was told nothing, and
- * neither was anyone who cannot pick the hue out of a row of buttons. `RuleCard`'s own
- * docblock already records this exact correction being made once, to the rule status dot:
- * *the status is stated in text, not hue.* A strip is no different.
+ * That `primary` is **constant** in the ADR-0068 §3 sense. It does not move with which
+ * panel is open, with whether anything has loaded, or with a selection — this rung has
+ * none. Re-coupling emphasis to state would reinstate exactly the colour-only state
+ * ADR-0061 removed: an `ActionDescriptor` carries no `aria-pressed`, so a wash tells a
+ * screen reader nothing, and tells nobody who cannot pick a hue out of a row of buttons.
+ * `RuleCard`'s own docblock records this correction being made once already, to the rule
+ * status dot: *the status is stated in text, not hue.* A strip is no different.
  *
- * Both of ADR-0051's safety properties survive. At most one `primary` per strip holds by
- * construction — it is the load verb, which is always present and always `pinned`. And an
- * open panel's trigger still takes `priority: 'pinned'`, so the control that **closes** a
- * panel can never overflow behind **More** while the panel it toggles sits open below.
+ * Position one is constant for a second reason, which is ADR-0051 §2's safety property.
+ * The set of verbs here genuinely varies with state — panel toggles appear and disappear
+ * with their objects, and an open one is pulled into the row — so whatever sits under the
+ * leading pixel must be a control whose worst outcome is cheap. `Export rules` is a
+ * navigation to the Export tab's column picker: nothing is written and nothing is spent.
  *
  * ## Why all three panels start in the tier
  *
@@ -45,7 +53,7 @@
  * never up, and never brings a confirm `Modal` with it. `Cleanup` is the precedent.
  * Reading rules is the common act; auditing duplicates, checking the current group's
  * relations and reading the stat tiles are the occasional ones, and they should not spend
- * row width that **Refresh** and **Export rules** want at 360px.
+ * row width at 360px.
  *
  * ## No verb without an object
  *
@@ -61,9 +69,17 @@
  * label only when there is one to state, exactly as `Cross-search (5)` does on the Groups
  * rung.
  *
- * `Export rules` is not a transient disabled state at all — the Group Rules export
- * descriptor fetches its own rows from Okta and does not read this tab's loaded list, so
- * it is live whether or not anything has been loaded here.
+ * `Export rules` is not gated on the loaded list at all — the Group Rules export
+ * descriptor fetches its own rows from Okta and does not read this tab's rules, so it is
+ * live whether or not anything has been loaded here. That is also what lets it hold a
+ * `primary` that never blinks.
+ *
+ * ## Where the initial load went
+ *
+ * Into the list panel's own empty state, which is where an initial load belongs and where
+ * `RulesListPanel` already had it. A rung whose on-open fetch failed, or which was never
+ * eligible to run, still offers **Load Rules** there — so deleting the strip verb costs
+ * no recovery path (ADR-0069 §4, §6).
  */
 import React from 'react';
 import { ActionBar, type ActionDescriptor } from '../shared';
@@ -80,12 +96,8 @@ interface RulesListActionBarProps {
    * thing they filter.
    */
   search?: React.ReactNode;
-  /** Whether any rules are loaded — decides `Load rules` vs `Refresh`, and gates *Stats*. */
+  /** Whether any rules are loaded. Gates *Stats*, whose object is the loaded list. */
   hasRules: boolean;
-  /** Whether a load is in flight. */
-  isLoading: boolean;
-  /** Loads (or reloads) the rules. */
-  onLoad: () => void;
   /** Number of duplicate-condition clusters found. Below 1 the *Duplicates* verb is omitted. */
   duplicateClusterCount: number;
   /**
@@ -100,7 +112,11 @@ interface RulesListActionBarProps {
   activePanel: RulesPanel;
   /** Toggles the given panel open/closed. */
   onTogglePanel: (panel: RulesPanel) => void;
-  /** Opens the Export tab on the Group Rules descriptor. Omitted when not wired. */
+  /**
+   * Opens the Export tab on the Group Rules descriptor, and is this rung's `primary`
+   * under ADR-0068 §2's rule 2. Omitted when not wired (ADR-0039 §3), in which case the
+   * rung has no `primary` at all — rule 3.
+   */
   onExportRules?: () => void;
 }
 
@@ -112,8 +128,6 @@ interface RulesListActionBarProps {
  * <RulesListActionBar
  *   search={<RulesSearchRow … />}
  *   hasRules={rules.length > 0}
- *   isLoading={data.isLoading}
- *   onLoad={() => loadRules(rules.length > 0)}
  *   duplicateClusterCount={mergeableClusters.length}
  *   hasCurrentGroup={Boolean(currentGroupId)}
  *   currentGroupRelationCount={currentGroupRelationCount}
@@ -126,8 +140,6 @@ interface RulesListActionBarProps {
 const RulesListActionBar: React.FC<RulesListActionBarProps> = ({
   search,
   hasRules,
-  isLoading,
-  onLoad,
   duplicateClusterCount,
   hasCurrentGroup,
   currentGroupRelationCount,
@@ -158,27 +170,42 @@ const RulesListActionBar: React.FC<RulesListActionBarProps> = ({
     };
   };
 
+  /*
+    ADR-0068 §2's enumeration, which is the whole of the argument for `Export rules`
+    holding `primary`. Rule 2 is only available on a rung with **no acting verb**, and
+    that is the easy thing to claim, so it is listed rather than asserted: every verb the
+    rung offers in any state — every branch of the spreads below, plus every page-scoped
+    verb it renders outside this strip — with the §1 question each one fails.
+
+      Q1 — is its object the whole page?    Q2 — does pressing it act?
+
+    | Candidate                                       | Fails                                                          |
+    | ----------------------------------------------- | -------------------------------------------------------------- |
+    | `Load Rules` (the list panel's empty state)     | Q2 — a fetch, excluded from `primary` absolutely. It is also    |
+    |                                                 | no longer on this strip at all (ADR-0069 §4).                   |
+    | Search field, `Filters (N)`, the filter chips   | Q1 — their object is the filter, not the rung.                  |
+    | `Duplicates (N)`, `This group (N)`, `Stats`     | Q2 — read-only panel toggles. They reveal; they never commit.   |
+    | `Merge` (inside the duplicates panel)           | Q1 — object is one duplicate cluster. It acts, forcefully, and  |
+    |                                                 | that is the ordinary scoped case rather than a counter-example. |
+    | A rule card, `View` (relations panel)           | Q1 — object is one rule, and it navigates rather than acting.   |
+    | Activate / Deactivate / Preview impact          | Not this rung's verbs. They belong to `RuleActionBar` on the    |
+    |                                                 | pushed rule-detail rung, and are declared there.                |
+    | `Export rules`                                  | Nothing — Q1 passes (every group rule in the org) and Q2 is     |
+    |                                                 | the export case rule 2 exists for.                              |
+
+    Nothing here acts on the whole rung, and nothing acting on the whole rung is rendered
+    off the strip either. If the rung later grows one — a *Create rule*, say — that verb
+    takes `primary` in the same change and `Export rules` moves to `priority: 'tier'`
+    under rule 1.
+  */
   const actions: ActionDescriptor[] = [
-    {
-      // The rung's page-level verb, and the reason this strip has a `primary` at all
-      // (ADR-0061). `primary` implies `pinned`, so it never leaves the row.
-      id: 'load',
-      label: hasRules ? 'Refresh' : 'Load rules',
-      icon: 'refresh',
-      variant: 'primary',
-      onClick: onLoad,
-      disabled: isLoading,
-      loading: isLoading,
-      title: hasRules
-        ? 'Re-fetch every group rule from Okta, bypassing the cache'
-        : 'Fetch every group rule in the org',
-    },
     ...(onExportRules
       ? [
           {
             id: 'export-rules',
             label: 'Export rules',
             icon: 'download',
+            variant: 'primary',
             onClick: onExportRules,
             title: 'Export every group rule as CSV (opens the Export tab with a column picker)',
           } satisfies ActionDescriptor,

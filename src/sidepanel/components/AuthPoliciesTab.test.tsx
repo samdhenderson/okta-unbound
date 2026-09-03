@@ -197,8 +197,12 @@ describe('AuthPoliciesTab', () => {
 
     expect(api.listPolicies).not.toHaveBeenCalled();
 
-    // Exact name: the empty state's "Reload Policies" action is a different button.
-    await user.click(screen.getByRole('button', { name: 'Load Policies' }));
+    // Retargeted from the header's "Load Policies" button, which ADR-0069 §4
+    // moved into the app-level control in the top chrome. The empty state keeps
+    // its own load prompt — that is where an initial load belongs — so the
+    // behaviour pinned here (no tab, no fetch, and the reason said out loud) is
+    // unchanged and simply reached from the one remaining control.
+    await user.click(screen.getByRole('button', { name: 'Reload Policies' }));
     await waitFor(() => expect(screen.getByText('No Okta tab connected')).toBeInTheDocument());
     expect(api.listPolicies).not.toHaveBeenCalled();
   });
