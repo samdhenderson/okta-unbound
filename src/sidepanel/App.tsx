@@ -95,6 +95,8 @@ import { useGroupContext } from './hooks/useGroupContext';
 import { useOktaPageContext } from './hooks/useOktaPageContext';
 import { useSessionExpiry } from './hooks/useSessionExpiry';
 import { useAppRefresh } from './hooks/useRefreshSubject';
+import { useEntityHandoff } from './hooks/useEntityHandoff';
+import type { JumpKind } from './hooks/useJumpResolver';
 import { SchedulerProvider } from './contexts/SchedulerContext';
 import { NavigationProvider } from './contexts/NavigationContext';
 import { OrgEntityIndexProvider } from './contexts/OrgEntityIndexContext';
@@ -438,6 +440,36 @@ const App: React.FC = () => {
     ],
   );
 
+  /*
+    The handoff offer: the live Okta tab is on something the panel can open, so
+    the masthead's identity region offers to open it. This generalises the Users
+    tab's detected-user banner to all four detectable kinds and costs no row —
+    the banner spent one inside the tab body, and only users ever had one.
+
+    Reachability is asked, never assumed. `navigationHandlers` above covers five
+    kinds and `isLivePinnable` covers two; a shared affordance that widened past
+    either would be a control that only refuses (ADR-0039). `admin` and
+    `unknown` have no entity at all and are filtered inside the hook.
+
+    Withheld while pinned: a pin is a deliberate instruction to stop following
+    the live tab, and the bar already carries its own *Unpin & switch* hint for
+    that state.
+  */
+  const canNavigateToKind = useCallback(
+    (kind: JumpKind) => typeof navigationHandlers[kind] === 'function',
+    [navigationHandlers],
+  );
+  const navigateToKind = useCallback(
+    (kind: JumpKind, id: string) => navigationHandlers[kind]?.(id),
+    [navigationHandlers],
+  );
+  const handoff = useEntityHandoff({
+    page,
+    suppressed: isPinned,
+    canNavigateTo: canNavigateToKind,
+    navigateTo: navigateToKind,
+  });
+
   // Open the Export tab pre-scoped to a descriptor + context entity (deep-linked
   // from an entity's page-level export action).
   const handleNavigateToExport = (request: ExportRequest) => {
@@ -545,6 +577,9 @@ const App: React.FC = () => {
               onRefresh={handleRefresh}
               refreshSubjectName={refreshSubjectName}
               onReconnect={handleReconnect}
+              handoff={handoff.offer}
+              onAcceptHandoff={handoff.accept}
+              onDismissHandoff={handoff.dismiss}
             />
 
             {/* One statement, once, for a fact that belongs to the connection

@@ -170,9 +170,21 @@ const compareSearchInput = () => screen.getByPlaceholderText('Search by email, n
  */
 const compareView = () => within(screen.getByTestId('user-comparison-view'));
 
-/** Loads Ada into the tab via the detected-user banner, mirroring UsersTab.test.tsx. */
+/**
+ * Loads Ada into the tab by searching for her and picking the result.
+ *
+ * RETARGET (ADR-0022): this used to press the detected-user banner's Load
+ * button. That banner is deleted, generalised into the masthead's handoff offer,
+ * which lives above this tab and cannot be reached from here. The search path is
+ * the tab's own, unchanged selection affordance and reaches the same detail rung
+ * — which is all these cases ever needed of it. A locator, not an assertion.
+ *
+ * Deliberately not `selectedUserId`: the deep-link case below needs a selection
+ * that did *not* arrive as a deep link, so it can then observe one arriving.
+ */
 async function selectAda(uev: ReturnType<typeof userEvent.setup>) {
-  await uev.click(screen.getByRole('button', { name: 'Load' }));
+  await uev.type(screen.getByPlaceholderText('Search by email, name, or login...'), 'ada');
+  await uev.click(await screen.findByText('Ada Lovelace', {}, { timeout: 3000 }));
   await screen.findByRole('heading', { name: 'Ada Lovelace' });
 }
 
@@ -271,7 +283,11 @@ describe('UsersTab sub-navigation', () => {
     const uev = userEvent.setup();
     await renderWithAda(uev);
 
-    await uev.type(tabSearchInput(), 'ada');
+    // The query that selected Ada is already in the box (`selectAda` typed it),
+    // so nothing more is typed here — a second `type` would append to it. The
+    // property under test is unchanged: whatever the box held before the push
+    // still holds after the pop.
+    expect(tabSearchInput()).toHaveValue('ada');
     const trigger = await pushCompare(uev);
 
     // The Compare button — and the whole profile card behind it — is still mounted,

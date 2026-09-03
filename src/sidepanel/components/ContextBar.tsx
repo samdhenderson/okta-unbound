@@ -54,12 +54,29 @@
  * not the only carrier** (ADR-0061): the status is stated in words to assistive
  * technology at all times through a `role="status"` line, and visibly in the
  * strip whenever it is anything other than healthy.
+ *
+ * ## The identity region morphs; the verbs do not
+ *
+ * When the live Okta tab is on something the panel can open, the identity region
+ * turns into the offer to open it — the same name, made pressable, plus a
+ * control to decline. It gains no row, and neither does the band: the region is
+ * `flex-1 min-w-0` and truncates, so everything the offer costs is taken from
+ * the name it was already showing.
+ *
+ * That replaces the Users tab's `DetectedUserBanner`, which asked this question
+ * for **users only** and spent a full row inside the tab body asking it. Three
+ * of its properties are carried over deliberately: it offers and never navigates
+ * (admin navigation cannot hijack the panel), declining is scoped to that one
+ * entity, and a different entity brings the offer back. The logic lives in
+ * {@link module:sidepanel/hooks/useEntityHandoff}; this component renders it.
  */
 import React from 'react';
 import { Button, IconButton } from './shared';
 import Icon from './shared/Icon';
+import { KIND_ICON, destinationLabel } from './home/jumpDestinations';
 import type { ConnectionStatus } from '../hooks/useOktaTabContext';
 import type { PageType } from '../hooks/useOktaPageContext';
+import type { HandoffOffer } from '../hooks/useEntityHandoff';
 
 /** Props for {@link ContextBar}. */
 interface ContextBarProps {
@@ -112,6 +129,20 @@ interface ContextBarProps {
    * that cannot work.
    */
   onReconnect?: () => void;
+  /**
+   * The live Okta tab's entity, offered to be opened in the panel, or
+   * `null`/omitted when there is nothing to hand over.
+   *
+   * Rendered **into the identity region**, in place of the plain name — the
+   * region already names this entity, so the offer is that same name made
+   * pressable rather than a second statement of it. It costs no row of its own,
+   * which is what the Users tab's detected-user banner cost.
+   */
+  handoff?: HandoffOffer | null;
+  /** Open the offered entity in the panel. Required when `handoff` is supplied. */
+  onAcceptHandoff?: () => void;
+  /** Decline the offer for that entity only. Required when `handoff` is supplied. */
+  onDismissHandoff?: () => void;
 }
 
 // One distinct hue per detected entity kind. `warning` reads as a *category* here,
@@ -155,6 +186,9 @@ const ContextBar: React.FC<ContextBarProps> = ({
   onRefresh,
   refreshSubjectName,
   onReconnect,
+  handoff,
+  onAcceptHandoff,
+  onDismissHandoff,
 }) => {
   const displayName = error
     ? 'Not connected'
@@ -236,9 +270,42 @@ const ContextBar: React.FC<ContextBarProps> = ({
       </div>
 
       <div className="px-(--sp-gutter) py-1.5 flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-900">
-          {displayName}
-        </span>
+        {/*
+          The identity region, which morphs rather than growing. With an offer it
+          holds a pressable version of the same name plus a decline control; with
+          none it holds the name as text. Both forms are `flex-1 min-w-0` and
+          truncate, so the trailing verb group below never moves — a control that
+          changes identity under the reader's pointer is the failure the whole
+          composition is arranged to avoid.
+        */}
+        {handoff ? (
+          <div className="min-w-0 flex-1 flex items-center gap-(--sp-inline)">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={KIND_ICON[handoff.kind]}
+              onClick={onAcceptHandoff}
+              className="min-w-0"
+              title={`Open ${handoff.name} in ${destinationLabel(handoff.kind)}`}
+            >
+              <span className="min-w-0 truncate">{handoff.name}</span>
+              <Icon type="handoff" size="sm" />
+            </Button>
+            <IconButton
+              label={`Dismiss ${handoff.name}`}
+              onClick={onDismissHandoff}
+              variant="ghost"
+              size="sm"
+              title="Keep browsing what is on screen"
+            >
+              <Icon type="close" size="sm" />
+            </IconButton>
+          </div>
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-900">
+            {displayName}
+          </span>
+        )}
 
         {/*
           Everything that varies with connection or context varies to the left of
