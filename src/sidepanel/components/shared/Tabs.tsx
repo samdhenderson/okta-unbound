@@ -164,12 +164,17 @@ const TAB_BASE = 'relative flex items-center text-xs focus-visible:outline-none'
 /** Focus treatment for the two non-rail variants: the panel's standard outset ring. */
 const RING_FOCUS = 'focus-visible:ring-2 focus-visible:ring-primary';
 
-/** The count pill, shared by every variant; only its colours vary. */
+/**
+ * The count pill, shared by every variant; only its colours vary. `text-xs`
+ * rather than an off-scale `text-[10px]`, and `tabular-nums` so a count that
+ * ticks does not twitch inside its own box — the half of ADR-0044's convention
+ * {@link StableWidth} cannot do for it.
+ */
 const BADGE_BASE =
-  'inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold leading-none';
+  'inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 text-xs font-bold tabular-nums leading-none';
 
 /** The two-digit floor a `nonzero` count's slot is held open at. */
-const BADGE_RESERVE = 'inline-flex min-w-[18px] px-1.5 text-[10px] leading-none';
+const BADGE_RESERVE = 'inline-flex min-w-[18px] px-1.5 text-xs leading-none';
 
 /**
  * Accessible tab bar. Selection is controlled by the caller via
@@ -289,7 +294,12 @@ const Tabs: React.FC<TabsProps> = ({
         const tabClasses = isRail
           ? railClasses
           : isSegmented
-            ? `${TAB_BASE} ${RING_FOCUS} flex-1 justify-center gap-1.5 rounded-md px-3 py-1.5 font-semibold transition-all duration-(--dur-instant) ${
+            ? // `press press-subtle` (both classes together — see `tailwind.css`) rather
+              // than a `transition-all`: a segmented tab stretches to fill its share of
+              // the strip, so it is a row-width target and takes the flatter of the two
+              // press scales. `.press` already transitions background, shadow and colour
+              // at `--dur-instant`, which is what the utility used to do here.
+              `${TAB_BASE} ${RING_FOCUS} press press-subtle flex-1 justify-center gap-1.5 rounded-md px-3 py-1.5 font-semibold ${
                 active
                   ? 'bg-white text-neutral-900 shadow-sm'
                   : 'text-neutral-600 hover:text-neutral-900'
