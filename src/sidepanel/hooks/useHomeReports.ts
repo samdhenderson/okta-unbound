@@ -6,9 +6,15 @@
  * by {@link module:sidepanel/hooks/useOrgEntityIndex} for the jump bar and
  * shared with {@link module:sidepanel/hooks/useOrgFigures}, so every report is a
  * join over the same handles: **zero requests, zero extra IndexedDB reads,
- * zero extra broadcast listeners.** The dormant report is free for the same
- * reason as the others — `lastMembershipUpdated` is already on the group rows
- * the snapshot holds, and `lastFullWalkAt` is already on the handle.
+ * zero extra broadcast listeners.**
+ *
+ * One report, and that is a budget rather than an accident. "Empty groups
+ * nothing fills" was promoted onto the org card above, because it costs no walk
+ * of its own; the dormant-access report left Home entirely, because "dormant"
+ * is a threshold this panel does not own. Both survive where their cost is
+ * already paid: the Groups tab's cleanup panel, and the org-report export. The
+ * four tests a Home finding has to pass are written down in
+ * {@link module:sidepanel/hooks/useOrgFigures}.
  *
  * There is no sync ladder here for the same reason. `useOrgFigures` already owns
  * the one top-up Home is allowed to spend per mount; a second consumer deciding
@@ -17,11 +23,9 @@
  * The joins live in {@link module:sidepanel/components/groups/ruleOrphans} and
  * the honesty rules in {@link module:sidepanel/components/home/homeReports},
  * both pure. What is left here is the projection from snapshot rows onto their
- * inputs — and the two details that only exist at this layer: an app-group
+ * inputs — and the one detail that only exists at this layer: an app-group
  * assignment's app is recoverable only from the snapshot's compound record id,
- * so this reads `records`, never `rows`; and the dormant report's clock is read
- * off the group handle's `lastFullWalkAt` here and passed down, so the pure
- * module never reaches for a wall clock of its own (ADR-0067 §3).
+ * so this reads `records`, never `rows`.
  */
 import { useMemo } from 'react';
 import { buildReport, type HomeReport } from '../components/home/homeReports';
