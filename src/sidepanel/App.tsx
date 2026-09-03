@@ -94,6 +94,7 @@ const AuditLogViewer = lazy(() => import('./components/AuditLogViewer'));
 import { useGroupContext } from './hooks/useGroupContext';
 import { useOktaPageContext } from './hooks/useOktaPageContext';
 import { useSessionExpiry } from './hooks/useSessionExpiry';
+import { useAppRefresh } from './hooks/useRefreshSubject';
 import { SchedulerProvider } from './contexts/SchedulerContext';
 import { NavigationProvider } from './contexts/NavigationContext';
 import { OrgEntityIndexProvider } from './contexts/OrgEntityIndexContext';
@@ -320,6 +321,19 @@ const App: React.FC = () => {
     void refetchPageContext();
   }, [refetchPageContext]);
 
+  // The panel's one refresh (ADR-0069). Its subject is whatever the panel is
+  // showing: the rung on screen registers what "again" means for itself, and
+  // this composes that with the context re-probe above. The two halves are
+  // independent — the pin governs whether the panel follows the live tab, so the
+  // probe is skipped while pinned; it says nothing about whether the roster on
+  // screen is current, so the data half always runs. That is why the control is
+  // no longer disabled under a pin, which is what it was when it re-probed and
+  // nothing else.
+  const { subjectName: refreshSubjectName, refresh: handleRefresh } = useAppRefresh(
+    refetchPageContext,
+    isPinned,
+  );
+
   // Reconnect: reload the Okta tab so a fresh content script is injected, then
   // re-detect. Used when the connection is genuinely down (e.g. the script was
   // orphaned by an extension reload). Needs no extra permission — reloading a
@@ -528,7 +542,8 @@ const App: React.FC = () => {
               liveContextChanged={liveContextChanged}
               liveEntityName={liveIdentity?.name}
               onTogglePin={handleTogglePin}
-              onRefresh={handleRefreshAll}
+              onRefresh={handleRefresh}
+              refreshSubjectName={refreshSubjectName}
               onReconnect={handleReconnect}
             />
 

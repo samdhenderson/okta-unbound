@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, within } from 'storybook/test';
 import ContextBar from './ContextBar';
 
 /**
@@ -40,7 +40,14 @@ const meta = {
       description: 'Optional name of the live entity, shown in the switch hint when known.',
     },
     onTogglePin: { description: 'Toggle the pin on/off.' },
-    onRefresh: { description: 'Re-detect the live context (disabled while pinned).' },
+    onRefresh: {
+      description:
+        'Re-read whatever the panel is showing, and re-probe the live context. Never disabled while pinned.',
+    },
+    refreshSubjectName: {
+      description:
+        "What Refresh will act on, in the reader's words. Reaches the control's tooltip and accessible name only — never visible text in the band.",
+    },
     onReconnect: {
       description:
         'Reload the Okta tab to re-establish the content script, then re-detect. Shown only on error.',
@@ -65,6 +72,61 @@ type Story = StoryObj<typeof meta>;
 
 /** A resolved group page, unpinned. */
 export const Default: Story = {};
+
+/**
+ * The refresh control **names its subject** — the rung on screen supplies it
+ * through `useRefreshSubject` — but only in the tooltip and the accessible name.
+ *
+ * The band's own readout describes the *live Okta tab*, which may be on a
+ * different entity entirely; printing the browsed entity's name here as label
+ * text, a badge or a count is the ADR-0032 §1 convergence. So the play function
+ * asserts both halves: the control is reachable by that name, and the name
+ * appears nowhere a reader can see it.
+ */
+export const RefreshNamesItsSubject: Story = {
+  args: {
+    entityName: 'Engineering Team',
+    refreshSubjectName: 'Payments Team',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    const refresh = canvas.getByRole('button', { name: 'Refresh Payments Team' });
+    await expect(refresh).toBeEnabled();
+    await expect(refresh).toHaveAttribute('title', 'Refresh Payments Team');
+
+    // The subject is not visible anywhere in the band — only the live tab's
+    // entity is, and the two are deliberately different here.
+    await expect(canvasElement).toHaveTextContent('Engineering Team');
+    await expect(canvasElement).not.toHaveTextContent('Payments Team');
+  },
+};
+
+/**
+ * With no rung claiming the control (a section that has registered no subject),
+ * the name degrades to a bare *Refresh* rather than to a deictic guess.
+ */
+export const RefreshUnclaimed: Story = {
+  args: { refreshSubjectName: null },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
+  },
+};
+
+/**
+ * Pinned, and Refresh is still live. The pin governs which entity the panel
+ * follows; it says nothing about whether the data under it is current, so only
+ * the context re-probe half of a press is skipped (ADR-0069 §2). It used to be
+ * disabled here, which was right for a control that only re-probed context.
+ */
+export const PinnedRefreshStaysEnabled: Story = {
+  args: { isPinned: true, refreshSubjectName: 'Payments Team' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Refresh Payments Team' })).toBeEnabled();
+  },
+};
 
 /** A resolved user page (accent dot). */
 export const UserPage: Story = {

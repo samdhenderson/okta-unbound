@@ -91,8 +91,10 @@ import { useRemoveDeprovisioned } from './useRemoveDeprovisioned';
 import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
 import { useCreateFeedingRule } from '../../../hooks/useCreateFeedingRule';
 import { useWorkingSetEntry } from '../../../hooks/useWorkingSetEntry';
+import { useRefreshSubject } from '../../../hooks/useRefreshSubject';
 import { invalidate } from '../../../cache/entityCache';
 import { cacheKeys } from '../../../cache/keys';
+import { invalidateGroupDetail } from '../../../cache/rungInvalidation';
 import { OKTA_PAGE_SIZE } from '../../../../shared/utils/oktaPagination';
 import type { GroupSummary } from '../../../../shared/types';
 
@@ -248,6 +250,35 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     invalidate(cacheKeys.mfaScan(group.id));
     source.analyzeMembers();
   }, [group.id, source]);
+
+  /*
+    This rung's answer to the app-level refresh control (ADR-0069 §2): drop the
+    group's cache entries, then re-run every load the rung performs on open. It
+    is `onCleanupDone`'s shape over the rung's full key set — the drop is
+    `invalidateGroupDetail`, which is where the exact set is written down and
+    tested.
+
+    The member walk is the one load that is *conditionally* re-run. It is the
+    only expensive read here, and on a group above `AUTO_LOAD_MEMBER_CAP` the
+    reader has to ask for it explicitly; re-running it unasked would spend, on a
+    press meaning "re-read what I am looking at", exactly the budget the gate
+    exists to withhold. `memberStatus === 'idle'` is precisely "never paid for",
+    so a refresh re-walks the roster if and only if there is a roster on screen.
+  */
+  const membersLoaded = source.memberStatus !== 'idle';
+  const refreshRung = useCallback(() => {
+    invalidateGroupDetail(group.id);
+    source.refreshRules();
+    references.reload();
+    accessGrants.reload();
+    if (membersLoaded) source.analyzeMembers();
+  }, [group.id, source, references, accessGrants, membersLoaded]);
+
+  // Named by the group, not deictically: the chrome band describes the live Okta
+  // tab, which may be on a different entity entirely, and "Refresh this group" is
+  // ambiguous in exactly that state. The name reaches the tooltip and the
+  // accessible name only — never visible text in the band.
+  useRefreshSubject(group.name, refreshRung, isActive);
   const removeDeprovisioned = useRemoveDeprovisioned(group.id, targetTabId, onCleanupDone);
 
   // The Members tab's per-row ADR-0031 proof: one call about one membership, from

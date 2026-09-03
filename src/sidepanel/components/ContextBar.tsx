@@ -59,8 +59,26 @@ interface ContextBarProps {
   liveEntityName?: string;
   /** Toggle the pin on/off. */
   onTogglePin: () => void;
-  /** Re-detect the live context (disabled while pinned). */
+  /**
+   * Re-read whatever the panel is showing, and re-probe the live context
+   * (ADR-0069 §2). Not disabled while pinned: the pin freezes which entity the
+   * panel follows, not whether the data under it is current.
+   */
   onRefresh: () => void;
+  /**
+   * What {@link ContextBarProps.onRefresh} will act on, in the reader's words —
+   * `Payments Team`, `the apps list`. Supplied by the rung on screen through
+   * `useRefreshSubject`; `undefined` when no rung has claimed the control.
+   *
+   * Reaches the control's `title` and accessible name and **nothing else**. It
+   * is deliberately never rendered as visible text, a badge or a count: this
+   * band's readout describes the *live Okta tab*, and printing the browsed
+   * entity's name beside it is the ADR-0032 §1 convergence. The deictic
+   * alternative ("Refresh this group") was rejected for being ambiguous in
+   * exactly the state where the two differ — which is the state the band exists
+   * to make legible.
+   */
+  refreshSubjectName?: string | null;
   /**
    * Reload the Okta tab to re-establish the content script, then re-detect.
    * Shown only when a connection error is present. Omit when there is no tab to
@@ -106,6 +124,7 @@ const ContextBar: React.FC<ContextBarProps> = ({
   liveEntityName,
   onTogglePin,
   onRefresh,
+  refreshSubjectName,
   onReconnect,
 }) => {
   const displayName = error
@@ -127,6 +146,9 @@ const ContextBar: React.FC<ContextBarProps> = ({
       : 'Connected';
 
   const liveChanged = isPinned && liveContextChanged;
+
+  // Names the subject, never renders it. See `refreshSubjectName`'s doc.
+  const refreshLabel = refreshSubjectName ? `Refresh ${refreshSubjectName}` : 'Refresh';
 
   return (
     // No border of its own: this is the first band of the top-chrome slab, not a
@@ -163,12 +185,11 @@ const ContextBar: React.FC<ContextBarProps> = ({
             </Button>
           ) : (
             <IconButton
-              label="Refresh context"
+              label={refreshLabel}
               onClick={onRefresh}
               variant="ghost"
               size="sm"
-              disabled={isPinned}
-              title={isPinned ? 'Unpin to refresh live context' : 'Refresh context'}
+              title={refreshLabel}
             >
               <Icon type="refresh" size="sm" className={isLoading ? 'animate-spin' : ''} />
             </IconButton>
