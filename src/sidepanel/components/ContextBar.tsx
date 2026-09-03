@@ -286,6 +286,11 @@ const ContextBar: React.FC<ContextBarProps> = ({
               icon={KIND_ICON[handoff.kind]}
               onClick={onAcceptHandoff}
               className="min-w-0"
+              // The visible label is the entity's name, which is a noun: on its
+              // own it tells a screen-reader user nothing about what pressing it
+              // does. `title` cannot carry that — on an element with content it
+              // becomes the accessible description, not the name.
+              ariaLabel={`Open ${handoff.name} in ${destinationLabel(handoff.kind)}`}
               title={`Open ${handoff.name} in ${destinationLabel(handoff.kind)}`}
             >
               <span className="min-w-0 truncate">{handoff.name}</span>

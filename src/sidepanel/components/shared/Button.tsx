@@ -61,6 +61,19 @@ interface ButtonProps {
   expanded?: boolean;
   /** `id` of the region this button shows/hides — reflected as `aria-controls`. */
   controls?: string;
+  /**
+   * Overrides the accessible name when the visible label is not a sentence a
+   * screen-reader user could act on.
+   *
+   * Use it sparingly and never to restate the label. The case it exists for is
+   * a button whose visible text is a **noun** — an entity name, a filename —
+   * where the verb lives in the surrounding layout rather than in the words:
+   * `Payments Team` says nothing about what pressing it does, while
+   * `Open Payments Team in Groups` does. A `title` cannot fix that, because a
+   * `title` on an element that already has content becomes the accessible
+   * *description*, and a description is not a name.
+   */
+  ariaLabel?: string;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -124,6 +137,7 @@ const Button: React.FC<ButtonProps> = ({
   title,
   expanded,
   controls,
+  ariaLabel,
 }) => {
   const baseClasses = `
     inline-flex items-center justify-center gap-2
@@ -144,6 +158,7 @@ const Button: React.FC<ButtonProps> = ({
       disabled={disabled || loading}
       className={`${baseClasses} ${className}`}
       title={title}
+      aria-label={ariaLabel}
       aria-expanded={expanded}
       aria-controls={controls}
       style={{ fontFamily: 'var(--font-heading)' }}
