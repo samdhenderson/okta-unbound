@@ -164,3 +164,64 @@ eight identical hand-copied tab roots and 74 `space-y-3`s.
 **Five breakpoints.** Rejected. Below 400 and above 560 are perceptibly different
 layouts; intermediate steps were not distinguishable when compared side by side, and an
 imperceptible token is a token people set wrong.
+
+---
+
+## Amendment — 2026-09-02: a seventh role, `--sp-toolbar` (I-022)
+
+**The base decision above is unchanged.** This section adds one role to the table; it
+does not revise the six, the density scopes, or the `@theme static` reasoning.
+
+### What was measured
+
+Four tab roots build the same zone — search field, filter toggle, disclosed filter
+panel, selection/analysis panel, error banner — stacked above a card list. They do not
+agree:
+
+| Call site                                | Today                 | Renders               |
+| ---------------------------------------- | --------------------- | --------------------- |
+| `GroupsTab.tsx` (toolbar wrapper)        | raw `space-y-3`       | 12px at every density |
+| `AppsTab.tsx` (toolbar + banner wrapper) | raw `space-y-3`       | 12px at every density |
+| `AuthPoliciesTab.tsx` (search + caption) | raw `space-y-2`       | 8px at every density  |
+| `RulesTab.tsx` ("the toolbar zone")      | `space-y-(--sp-rung)` | 12 / 16 / 24          |
+
+Three raw sites, four zones. The refusal arm — "toolbar rhythm is deliberately outside
+the system" — was rejected on this evidence. The values have already drifted (12 vs 8),
+and because they are frozen literals they drift **further as the panel widens**: at
+comfortable density the Rules toolbar breathes at 24px while the identical Apps toolbar
+stays at 12. That is precisely the failure ADR-0048 exists to catch, and a documented
+refusal would make it permanent rather than legible.
+
+### The role
+
+| Token          | Role                                               |
+| -------------- | -------------------------------------------------- |
+| `--sp-toolbar` | Gap inside a toolbar cluster, above the card stack |
+
+| Scope       | `--sp-toolbar` | (`--sp-rung`) | (`--sp-inline`) |
+| ----------- | -------------- | ------------- | --------------- |
+| compact     | 8px            | 12            | 6               |
+| default     | 12px           | 16            | 8               |
+| comfortable | 16px           | 24            | 10              |
+
+Structural, so it snaps to the 4px grid. The two constraints that fix these numbers:
+it stays **strictly tighter than `--sp-rung`** at every density (that gap is the whole
+reason the role exists) and **strictly looser than `--sp-inline`** (a toolbar gap
+separates composite blocks, not chips). In `tailwind.css` that is six edits: the
+`@theme static` default (12px), the two media-query overrides, and all three
+`[data-density]` blocks — then re-check a production build for the token, per the
+`@theme static` section above.
+
+### Conversions, and the one exception
+
+Convert `GroupsTab.tsx`, `AppsTab.tsx` and `AuthPoliciesTab.tsx` to
+`space-y-(--sp-toolbar)`, deleting the three inline comments that stand in for this
+section. `RulesTab.tsx` follows in the same wave **only if** its `RulesListActionBar`
+remains a direct child of the rung: a `sticky` element travels only inside its own
+parent's box, and the `.dock-sentinel` timeline hoists onto that parent (ADR-0051 §5).
+Anything that docks stays in the rung; the toolbar wrapper holds what scrolls.
+
+### For the next toolbar
+
+Write `space-y-(--sp-toolbar)` on the wrapper. No inline justification is needed —
+this section is it.

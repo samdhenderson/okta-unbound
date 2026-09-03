@@ -923,6 +923,102 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Status:** open
 - **Related:** `I-009`, `I-010`, `D-103`
 
+### D-108 · The non-answer register fails AA contrast, at half the required ratio
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/comparison/AppScopeIndicator.tsx`
+  (`nonAnswerClasses`), `src/sidepanel/components/users/comparison/GroupSourceIndicator.tsx`
+  (the same treatment), and any later adopter of the register
+- **Verified:** 2026-09-02 — measured while scoping `I-017`.
+- **Problem:** Both indicators render their non-answer states as
+  `italic text-neutral-400`. `--color-neutral-400` is `#aeaeae`, which computes
+  to **2.22:1 on white and 2.02:1 on `--color-neutral-50`** — under half the
+  4.5:1 WCAG AA floor for normal text. These are not decorative strings: they
+  are the states that tell a reader the app does _not_ know something
+  (`Source unknown`, `Source not compared`, a deduction that must not be read
+  as proven), so they are exactly the text a reader most needs to notice.
+
+  The story gate did not catch it. `a11y.test` is `'error'` in
+  `.storybook/preview.tsx` and `tailwind.css` is imported by the preview, so
+  axe both ran and had the styles. The likely explanation is that axe reports
+  `incomplete` rather than `violation` when it cannot resolve the background
+  behind inline text, and `incomplete` does not fail a run — **this is
+  unproven and worth proving**, because if it holds, every colour-contrast
+  guarantee the story suite appears to give is weaker than it looks.
+
+  `I-017`'s three unresolved-entity chips deliberately chose `text-neutral-600`
+  (4.64:1 on neutral-50, 5.10:1 on white) _over_ this precedent, and its filing
+  worried that was a deviation. It is not a deviation; it is the correction.
+
+- **Done when:** the non-answer register clears 4.5:1 on the backgrounds it
+  actually renders against — `text-neutral-600` is the register `I-017` already
+  settled on and the cheap route. Both indicators use it, their stories still
+  pass, and the axe-`incomplete` hypothesis above is either confirmed (and
+  recorded, since it weakens a gate the repo trusts) or disproven.
+- **Risk:** Low to change. The finding it makes is that a green gate proved
+  less than it appeared to.
+- **Status:** open
+- **Related:** `I-017` (chose the correct value and doubted itself), ADR-0010,
+  ADR-0014
+
+### D-109 · `AppListItem`'s header is click-to-expand but not keyboard-operable
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/components/apps/AppListItem.tsx:197-203`
+- **Verified:** 2026-09-02 — read directly while scoping `I-023`.
+- **Problem:** The card body is a raw `<div className="press-subtle …"
+onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
+  anywhere in its header; a keyboard user cannot reach that target at all. The
+  file says so itself at :199-202 — _"No keyboard affordance on this body …
+  giving the row itself one means a `StretchedButton` overlay. Deliberately out
+  of scope here."_ The disclosure is still reachable via the adjacent
+  `IconButton`, so this is a missing parallel affordance rather than a trapped
+  control, which is why it was survivable to defer.
+
+  It stopped being survivable when it became the pattern. `I-023` was filed as
+  "make `PolicyCard`'s header toggle **like its siblings**" — and of the two
+  siblings, `RuleCard` uses `StretchedButton` correctly while this one does not.
+  A consistency item pointed at the wrong neighbour propagates the defect
+  instead of the pattern. `I-023` was implemented against `RuleCard` for exactly
+  this reason.
+
+- **Done when:** `AppListItem`'s header is operable by keyboard, via the shared
+  `StretchedButton` overlay the file's own comment names, with the trailing
+  `IconButton` still working and `aria-expanded` on exactly one control. A story
+  covers the keyboard path. The `PolicyCard` implementation shipped under
+  `I-023` is the reference.
+- **Risk:** Low — one file, and a landed sibling to copy.
+- **Status:** open
+- **Related:** `I-023` (fixed the same defect on `PolicyCard`), `D-103`
+
+### D-110 · The `Icon` catalog story does not show six registry glyphs
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/shared/Icon.stories.tsx` (the `AllIcons`
+  grid), `src/sidepanel/components/shared/Icon.tsx` (the `IconType` union, for
+  reference)
+- **Verified:** 2026-09-02 — enumerated the union against the story: 37 registry
+  entries, 6 absent.
+- **Problem:** `AllIcons` is the catalog a component author reads to find out
+  what glyphs exist before hand-rolling one. It is missing `clock`, `close`,
+  `external-link`, `filter`, `pin` and `terminal` — so the browsing surface
+  under-reports the registry by 16%, and the failure mode is precisely the one
+  `I-021` existed to fix: someone inlines an `<svg>` for a glyph that was
+  already there. Predates `I-021`, which added its two new entries to the grid
+  correctly and did not widen scope to the pre-existing gap.
+- **Done when:** the catalog renders every member of `IconType`, derived from
+  the union rather than hand-listed — a hand-maintained copy of a type is what
+  drifted in the first place.
+- **Risk:** Low — story-only.
+- **Status:** open
+- **Related:** `I-021`
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk

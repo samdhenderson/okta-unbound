@@ -146,7 +146,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low. Note `title` is a hover/focus affordance, not a substitute
   for an accessible name — the name text is already in the accessibility
   tree, so this is about the visual reader.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 
 ### I-012 · Tiered snapshot depth, and the reporting it unlocks
 
@@ -474,7 +474,7 @@ block says they mean — same vocabulary, one definition, defined there.
   `Icon` at a registry size; no inline `<svg>` remains in it.
 - **Risk:** Low — the glyphs are decorative, both call sites already carry
   their own `aria-label`.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 
 ### I-022 · A spacing role for the toolbar cluster, or a documented refusal
 
@@ -499,7 +499,7 @@ block says they mean — same vocabulary, one definition, defined there.
   gains a short section stating that toolbar rhythm is deliberately outside
   the role system and why, so the raw values stop reading as unfinished work.
 - **Risk:** Low — either outcome is additive or documentation-only.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -523,7 +523,7 @@ block says they mean — same vocabulary, one definition, defined there.
   either kept as a redundant affordance or removed — and the story covers
   both the header click and the keyboard path.
 - **Risk:** Low — one component, existing pattern to copy from two siblings.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
