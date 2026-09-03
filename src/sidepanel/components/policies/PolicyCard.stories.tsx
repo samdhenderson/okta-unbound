@@ -111,6 +111,38 @@ export const Expanded: Story = {
   },
 };
 
+/**
+ * Clicking anywhere in the header — not just the trailing `IconButton` — toggles
+ * the disclosure (I-023). The click lands on the `StretchedButton` overlay, whose
+ * accessible name is deliberately shorter than the `IconButton`'s
+ * (`Show rules`, not `Show rules for Any two factors`) so the two controls read
+ * as related rather than as one announcement doubled.
+ */
+export const HeaderClickToggles: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Show rules' }));
+    await waitFor(() => expect(canvas.getByText('Trusted device, no prompt')).toBeInTheDocument());
+    await expect(canvas.getByRole('button', { name: 'Hide rules' })).toBeInTheDocument();
+  },
+};
+
+/**
+ * The keyboard path: the trailing `IconButton` stays a real, focusable button
+ * carrying `aria-expanded`/`aria-controls`, so Tab-and-Enter opens the
+ * disclosure exactly like a mouse click on either control does.
+ */
+export const KeyboardToggles: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole('button', { name: 'Show rules for Any two factors' });
+    toggle.focus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.getByText('Trusted device, no prompt')).toBeInTheDocument());
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  },
+};
+
 /** Expanded when the rules fetch fails — the inline `danger` state. */
 export const RulesLoadFailure: Story = {
   args: {
