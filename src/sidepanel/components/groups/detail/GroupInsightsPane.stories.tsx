@@ -201,6 +201,39 @@ export const MfaError: Story = {
 export const Disabled: Story = { args: { canAnalyze: false } };
 
 /**
+ * The composition reports, moved here off the Members tab.
+ *
+ * They describe the roster rather than control it, and on the Members tab they
+ * were one of seven surfaces stacked above the first member row. Here every
+ * value is a jump: the pane holds no member list, so a click applies the filter
+ * on Members and moves — which the copy says before anybody clicks.
+ */
+export const CompositionJumpsToMembers: Story = {
+  args: { members, memberStatus: 'done', onFilterMembers: fn() },
+  play: async ({ args, canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Composition/ }));
+    await expect(canvas.getByText('Pick a value to open the Members tab filtered by it.'));
+
+    await userEvent.click(canvas.getByRole('button', { name: /Engineering/ }));
+    await expect(args.onFilterMembers).toHaveBeenCalledWith(
+      expect.objectContaining({ dimension: 'department', value: 'Engineering' }),
+    );
+  },
+};
+
+/**
+ * Without a caller able to honour a jump the section is **absent**, not inert.
+ * It is made of nothing but value clicks, so an unwired copy of it would be a
+ * grid of controls that do nothing (ADR-0039).
+ */
+export const CompositionOmittedWithNowhereToGo: Story = {
+  args: { members, memberStatus: 'done' },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('button', { name: /Composition/ })).toBeNull();
+  },
+};
+
+/**
  * Forty members over nine cost centres — more distinct values than a card's
  * summary keeps, so three of them get folded into `Other (3 values)`.
  */

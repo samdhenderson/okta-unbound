@@ -157,6 +157,11 @@ export interface GroupMembersSectionProps {
   onConfirmRemove: () => void;
   removeStatus: MemberWriteStatus;
   removeError: string | null;
+  /**
+   * Moves to this group's Insights tab, where the composition reports now live.
+   * Absent ⇒ the explorer draws no pointer at all (ADR-0039).
+   */
+  onOpenInsights?: () => void;
 }
 
 /**
@@ -187,6 +192,7 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
   onConfirmRemove,
   removeStatus,
   removeError,
+  onOpenInsights,
 }) => {
   const hasMembers = memberCount > 0;
   const readOnlyReason = READ_ONLY_REASON[groupType];
@@ -267,6 +273,7 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
             ) : undefined
           }
           onProveMemberSource={proveMemberSource}
+          onOpenInsights={onOpenInsights}
           /* Withheld, not disabled, on the read-only group types (ADR-0039). */
           onRemoveMember={readOnlyReason ? undefined : onRequestRemove}
         />

@@ -35,7 +35,6 @@ import Modal from '../shared/Modal';
 import MemberSearchBar from './MemberSearchBar';
 import MemberFilterPanel from './MemberFilterPanel';
 import CopyMembersModal from './CopyMembersModal';
-import CompositionReports from './CompositionReports';
 import BreakdownDetailsModal from './BreakdownDetailsModal';
 import MemberList from './MemberList';
 import MemberSourceFilterBar from './MemberSourceFilterBar';
@@ -48,8 +47,6 @@ import type { MemberSourceBucket } from '../groups/memberSourceBuckets';
 import {
   type SortField,
   computeDimensionBreakdown,
-  computeMfaBreakdown,
-  discoverAttributeBreakdowns,
   filterMembers,
   sortMembers,
   getObservedFactorLabels,
@@ -129,6 +126,12 @@ interface MemberExplorerProps {
     membership: GroupMembership,
     userId: string,
   ) => Promise<MemberRuleAttribution>;
+  /**
+   * Moves to the group's Insights tab, where the composition reports now live.
+   * Absent ⇒ no pointer is drawn, because a surface with no way to reach
+   * Insights should not claim there is one (ADR-0039).
+   */
+  onOpenInsights?: () => void;
 }
 
 /** Number of member rows revealed per page / "Load more". */
@@ -151,6 +154,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   sourceDetail,
   onRemoveMember,
   onProveMemberSource,
+  onOpenInsights,
 }) => {
   const [query, setQuery] = useState('');
   /*
@@ -171,10 +175,8 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   const debouncedQuery = useDebouncedValue(query, 200);
 
   // Distributions are computed over the full member set (stable while faceting).
-  const attributes = useMemo(() => discoverAttributeBreakdowns(members), [members]);
   const statusRows = useMemo(() => computeDimensionBreakdown(members, 'status'), [members]);
   const factorLabels = useMemo(() => getObservedFactorLabels(mfaResults), [mfaResults]);
-  const mfaRows = useMemo(() => computeMfaBreakdown(members, mfaResults), [members, mfaResults]);
 
   /*
     Resolve the meter's aggregated tail.
@@ -305,19 +307,20 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         />
       )}
 
-      {/* Composition: attribute distribution + MFA factor breakdown, sectioned together */}
-      <CompositionReports
-        attributes={attributes}
-        filters={filters}
-        onToggle={memberFilters.toggleRow}
-        onExpand={setDetailKey}
-        mfaRows={mfaRows}
-        mfaResults={mfaResults}
-        scanStatus={scanStatus}
-        memberCount={members.length}
-        onToggleMfa={(row) => memberFilters.toggleMfaValue(row.value, row.label)}
-        onRunScanClick={handleScanClick}
-      />
+      {/* Composition moved to the Insights tab: the attribute and factor
+          distributions are analysis, not a member control, and Insights is
+          where this group's analysis lives. A pointer stays here because the
+          reader who wanted it looked for it on this tab (ADR-0032: one home per
+          fact, and say where it went). Omitted when the caller cannot honour
+          it, rather than shipped as a link that goes nowhere (ADR-0039). */}
+      {onOpenInsights && (
+        <p className="text-xs text-neutral-500">
+          Attribute and MFA-factor distributions for this group live on{' '}
+          <Button variant="secondary" size="sm" onClick={onOpenInsights}>
+            Insights
+          </Button>
+        </p>
+      )}
 
       {/* Member list */}
       <div className="space-y-3">

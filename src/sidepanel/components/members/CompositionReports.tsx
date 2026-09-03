@@ -7,6 +7,18 @@
  * (the scan's factor distribution). Both describe "what this group is made of",
  * so they share a home. Value clicks bubble up as member-list facet toggles;
  * "View all" requests the full-distribution modal for an attribute.
+ *
+ * ## It lives on Insights, not on Members
+ *
+ * This was the fifth of seven control surfaces the Members tab stacked above
+ * its first member row. It is a *distribution of* the roster rather than a
+ * control *over* it, and the Insights tab is where this group's analysis lives,
+ * so that is where it is mounted — `GroupInsightsPane`, which has no member
+ * list of its own. A value click there therefore **leaves**: it applies the
+ * filter on the Members tab and moves, which is what the copy below says
+ * before anybody clicks. The pane omits this section entirely when it has no
+ * way to honour that (ADR-0039), since the section is made of nothing but
+ * value clicks.
  */
 import React, { useMemo, useState } from 'react';
 import type { MemberMfaResult, MfaScanStatus } from '../../../shared/types';
@@ -110,7 +122,9 @@ const CompositionReports: React.FC<CompositionReportsProps> = ({
           ) : (
             <div className="space-y-(--sp-rung)">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-neutral-500">Click any value to filter the members.</p>
+                <p className="text-xs text-neutral-500">
+                  Pick a value to open the Members tab filtered by it.
+                </p>
                 {attributes.length > SEARCH_THRESHOLD && (
                   <Input
                     value={attrQuery}
@@ -159,7 +173,9 @@ const CompositionReports: React.FC<CompositionReportsProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-xs text-neutral-500">Click any factor to filter the members.</p>
+              <p className="text-xs text-neutral-500">
+                Pick a factor to open the Members tab filtered by it.
+              </p>
               <BreakdownReport
                 rows={mfaRows}
                 activeValues={mfaActive}
