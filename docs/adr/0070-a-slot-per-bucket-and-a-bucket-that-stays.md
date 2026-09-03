@@ -336,11 +336,24 @@ waits is a test of this section, not an oversight to fix.
 
 ## Consequences
 
-- **No single Okta bucket is hit harder than it is today.** Four is below the
-  five that ships now, so the per-family request rate this change permits is
-  lower in every case, and higher only across families that Okta meters
-  separately. That is the argument for why raising the global ceiling is safe to
-  do at all, and it is the sentence a reviewer should check first.
+- **No single Okta bucket is hit harder than it is today — in _concurrency_.**
+  Four is below the five that ships now, so the number of requests this change
+  permits in flight against one family is lower in every case, and higher only
+  across families that Okta meters separately. That is the argument for why
+  raising the global ceiling is safe to do at all, and it is the sentence a
+  reviewer should check first. Read the scope of it literally: the guarantee is
+  about parallelism, and the bullet below is the part it does not cover.
+- **The extension starts backing off later than it does today.** This follows
+  from §4 and is the honest cost of it. Today a bucket observed at 12% remaining
+  arms a cooldown while three requests to an unrelated family are in flight,
+  because those three are charged to its budget; after §4 they are not, so it
+  dispatches. The old behaviour was arming on a phantom, and correcting it is
+  the point — but the correction only ever moves in one direction, and the
+  raised ceiling multiplies the occasions on which it applies, because more
+  cross-family traffic is in flight at any moment for the phantom to have been
+  drawn from. On a loaded org the practical effect is a measurably later first
+  soft gate. Anyone reading the concurrency bullet alone would conclude
+  something stronger than this design delivers.
 - **The accepted failure mode is a wider cold start.** Before any family's first
   response, up to ten requests can be in flight against budgets the detector
   knows nothing about, versus five today. If an org is already near a limit when

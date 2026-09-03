@@ -306,8 +306,9 @@ bar, ⑥ user comparison, ⑦ the top bar (context, connection, refresh, handoff
 **No UI code for items 3, 4, 5, 6-visual, 7-UI, 9 or 12 lands until the matching
 return is in hand and approved.**
 
-The first ② return failed and its prompt was rewritten; the revised version lives at
-`.claude/plans/the-primary-actionbar-action-humble-dream.md`. The failure modes worth
+The first ② return failed and its prompt was rewritten. That revised prompt was a
+session-local plan file and is not in the repo, so what it taught is written out
+here rather than cited. The failure modes worth
 knowing, because ① and ⑤ share the same prompt weakness: a design prompt that opens
 with an inventory of the current build gets a re-render of the current build back;
 rules parked at the bottom lose to descriptions at the top; and asking for "two or
