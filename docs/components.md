@@ -164,6 +164,17 @@ checkbox). Because every card in a list shares one `label`, pass `describedBy`
 pointing at that card's title. First consumer: `GroupListItem`'s row-body
 drill-in.
 
+When the card it covers **discloses** a region rather than navigating, pass
+`expanded` and `controls` — the same disclosure contract `IconButton` documents,
+so a card and a chevron announce a collapse identically. Two traps the
+`AttributeHealthCard` consumer had to solve, and the next one will too. Scope
+the overlay to the card's **header** region (`ListRow`'s `headerClassName`),
+or the button covers the body it just opened and a click inside it collapses
+the card. And give the button a `label` that names its subject — a grid of
+cards otherwise offers a screen-reader user a list of identically-named
+controls, and `describedBy` does not fix that, because a description is not a
+name.
+
 `Tabs` is the accessible tab-bar primitive (`role="tablist"/"tab"`, roving
 `tabindex`, arrow-key nav) with three variants: `underline` (section nav),
 `segmented` (compact toggle) and `rail` (icon-first primary nav). **Never
