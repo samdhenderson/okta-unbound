@@ -12,6 +12,11 @@
  * fetch-less consumers — every row's compact meter in the groups list — can show
  * the split without paying for it again.
  *
+ * `open` is a lifecycle event, not a refresh — it resets the member analysis with
+ * the rules. When only the rules changed (an admin created a feeding rule from
+ * this rung), `refreshRules` reloads that half alone and leaves the paid-for
+ * member walk standing.
+ *
  * Both halves of the analysis read through a cache, so re-opening the same group
  * costs nothing: the rules half is served by `RulesCache` inside
  * {@link module:hooks/useOktaApi/groupDiscovery}, and the member half by the
@@ -85,6 +90,27 @@ export interface UseGroupSourceReturn {
   /** Open the insight for a group and load its feeding rules. */
   open: (group: GroupSummary) => void;
   /**
+   * Reload **only** the feeding rules for the group already open, leaving the
+   * member-source analysis exactly as it stands.
+   *
+   * This exists because {@link UseGroupSourceReturn.open} is not a refresh: it
+   * resets `breakdown`, `memberSourceIndex` and `memberStatus`, so using it to
+   * pick up a rule the admin just created would silently discard a member walk
+   * they already paid for (`ceil(N/200)` scheduled requests). A rules write
+   * changes the rules, not the roster, so nothing about the analysis is stale —
+   * and this reload does not touch it.
+   *
+   * A no-op while the hook holds no group, which is also the guard for a create
+   * that resolves after the reader closed or left the group. Late responses are
+   * dropped by the same `runIdRef` check every other load in this hook uses.
+   *
+   * One cache-backed `getGroupRulesForGroup`, through the scheduler like every
+   * other call here. It sees the new rule because the write itself dropped the
+   * org-wide `RulesCache` snapshot (ADR-0064) — this reload cooperates with that
+   * invalidation rather than repeating it.
+   */
+  refreshRules: () => void;
+  /**
    * Run the gated member-source analysis for the open group. Both reads are
    * cache-backed, so a repeat analysis of a group analyzed earlier this session
    * costs no scheduler requests.
@@ -107,7 +133,7 @@ export interface UseGroupSourceReturn {
  * Manage the group-source insight lifecycle for a single group.
  *
  * @param targetTabId - Connected Okta tab id (operations no-op when absent).
- * @returns State plus `open`/`analyzeMembers`/`close` controls.
+ * @returns State plus `open`/`refreshRules`/`analyzeMembers`/`close` controls.
  */
 export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
   const api = useOktaApi({ targetTabId: targetTabId ?? null });
@@ -157,6 +183,44 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     },
     [getGroupRulesForGroup],
   );
+
+  /**
+   * Reload just the feeding rules for the open group. See
+   * {@link UseGroupSourceReturn.refreshRules} for why this is not `open`.
+   *
+   * Deliberately does not clear `error` on entry: that field is shared with the
+   * member analysis, and blanking it here would erase a member failure the
+   * reader is still looking at. A rules failure sets it, and every section reads
+   * it behind its own status.
+   */
+  const refreshRules = useCallback(() => {
+    if (!group) return;
+    const runId = runIdRef.current;
+
+    // Announce `loading` only when there is nothing on screen to preserve.
+    // `GroupRulesSection` renders its spinner *instead of* the list, so a
+    // refresh over a populated pane would blank every row — and the inline
+    // condition blocks under them (I-031) — for the duration of the reload.
+    // The reader just pressed a verb on this pane; the list flinching away is
+    // the opposite of the continuity this reload exists to provide. The
+    // empty-state case, which is the one that prompts the create verb in the
+    // first place, still shows the spinner: there the empty message is what
+    // gets replaced, and holding it would read as "the rule did not land".
+    if (feedingRules.length === 0) setRulesStatus('loading');
+
+    getGroupRulesForGroup(group.id)
+      .then((rules) => {
+        if (runId !== runIdRef.current) return;
+        setFeedingRules(rules);
+        setRulesStatus('done');
+      })
+      .catch((err) => {
+        if (runId !== runIdRef.current) return;
+        log.error('Failed to refresh feeding rules:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load feeding rules');
+        setRulesStatus('error');
+      });
+  }, [group, feedingRules.length, getGroupRulesForGroup]);
 
   const analyzeMembers = useCallback(() => {
     if (!group) return;
@@ -281,6 +345,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     memberSourceIndex,
     error,
     open,
+    refreshRules,
     analyzeMembers,
     resummarize,
     close,

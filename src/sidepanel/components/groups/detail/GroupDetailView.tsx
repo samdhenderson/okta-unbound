@@ -295,7 +295,8 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   // (`ruleWrites.createGroupRule`), and Okta creates the rule INACTIVE, so this
   // hook grants nothing on its own — see its module doc for why the verb is
   // behind a confirm regardless, and for what it declines to predict.
-  const createFeedingRule = useCreateFeedingRule({ targetTabId, group });
+  const onRuleCreated = isActive ? source.refreshRules : undefined;
+  const createFeedingRule = useCreateFeedingRule({ targetTabId, group, onCreated: onRuleCreated });
 
   // Compare with another group. Two dialogs in sequence, deliberately: the picker
   // supplies the second operand, and the comparison itself is the same

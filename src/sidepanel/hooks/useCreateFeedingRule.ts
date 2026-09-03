@@ -46,18 +46,21 @@
  * every group rule that would otherwise hide the new one from every surface that
  * reads it. This hook does not make that call: it belongs to the write itself and
  * lives in {@link module:hooks/useOktaApi/ruleWrites} (ADR-0064), so no rule
- * write can skip it. The open Rules pane's own list is
- * **not** re-fetched in place — `useGroupSource.open` is the only reload it has
- * and it resets the member-source analysis with it, which would silently throw
- * away a walk the admin already paid for. The created rule is reachable from
- * the success step instead.
+ * write can skip it.
+ *
+ * That invalidation is what makes the second half honest: a successful create
+ * calls the optional `onCreated`, which the Group Detail rung wires to
+ * {@link module:sidepanel/hooks/useGroupSource.useGroupSource}'s `refreshRules`,
+ * so the open Rules pane shows the new rule without a reopen. `refreshRules`
+ * reloads the rules **only** — `open` would reset the member-source analysis and
+ * throw away a walk the admin already paid for (`I-032`).
  *
  * Security: the draft is tenant data (a rule name and an EL expression over
  * profile attributes), so nothing here logs either one — outcomes and the
  * created rule id only.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOktaApi } from './useOktaApi';
 import { parseRuleExpression } from '../../shared/ruleEvaluator';
 import { unevaluableReasonText } from '../../shared/rules/unevaluableReasonText';
@@ -79,6 +82,18 @@ export interface UseCreateFeedingRuleOptions {
   targetTabId: number | null;
   /** The group the new rule assigns users into — the rule's one target. */
   group: GroupSummary;
+  /**
+   * Called once the create has landed, so the caller can reload the pane the
+   * admin is looking at — `useGroupSource.refreshRules`, which reloads the rules
+   * alone and leaves the member analysis standing.
+   *
+   * **Read at call time, not at confirm time.** The latest value wins, which is
+   * what lets a caller withdraw it: a Group Detail rung passes `undefined` while
+   * its tab is hidden, so a create that resolves after the reader switched tabs
+   * issues no follow-up read (ADR-0018). Omitted entirely, the create simply
+   * reports its result as before.
+   */
+  onCreated?: (() => void) | undefined;
 }
 
 /** Return shape of {@link useCreateFeedingRule}. */
@@ -140,6 +155,7 @@ export interface UseCreateFeedingRuleReturn {
 export function useCreateFeedingRule({
   targetTabId,
   group,
+  onCreated,
 }: UseCreateFeedingRuleOptions): UseCreateFeedingRuleReturn {
   const { createGroupRule } = useOktaApi({ targetTabId });
 
@@ -150,6 +166,14 @@ export function useCreateFeedingRule({
   const [error, setError] = useState<string | null>(null);
   const [createdRuleName, setCreatedRuleName] = useState<string | null>(null);
   const [createdRuleId, setCreatedRuleId] = useState<string | null>(null);
+
+  // Held in a ref so `confirm` does not change identity with the callback, and —
+  // the point of it — so the value read after the write is the current one, not
+  // the one captured when the button was pressed.
+  const onCreatedRef = useRef(onCreated);
+  useEffect(() => {
+    onCreatedRef.current = onCreated;
+  }, [onCreated]);
 
   const trimmedName = name.trim();
   const trimmedExpression = expression.trim();
@@ -218,6 +242,9 @@ export function useCreateFeedingRule({
       log.info('Created group rule', { ruleId: created.rule.id, groupId: group.id });
       setCreatedRuleName(created.rule.name);
       setCreatedRuleId(created.rule.id);
+      // The pane that prompted this verb is still showing the empty state that
+      // asked for a rule. Let the caller reload it (`I-032`).
+      onCreatedRef.current?.();
     } catch (err) {
       log.error('Failed to create group rule', err);
       setError(err instanceof Error ? err.message : 'Failed to create the rule');

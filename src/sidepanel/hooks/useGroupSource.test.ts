@@ -340,3 +340,194 @@ describe('useGroupSource.resummarize — nothing to summarise against', () => {
     expect(result.current.breakdown).toBeNull();
   });
 });
+
+/**
+ * `refreshRules` is the rules-only reload (`I-032`): a rule created from the
+ * Group Detail rung has to appear in the pane that prompted it, and `open` — the
+ * hook's only other reload — would reset the member-source analysis to do it,
+ * silently discarding a member walk the admin already paid for. These pin both
+ * halves: the rules do change, and the analysis does not.
+ */
+describe('useGroupSource.refreshRules — reloading the rules alone', () => {
+  /** Open `groupA`, analyze its members, and settle both loads. */
+  async function openAndAnalyze() {
+    api.getGroupRulesForGroup.mockResolvedValue([ruleA]);
+    api.getAllGroupMembers.mockResolvedValue([makeMember(0), makeMember(1)]);
+
+    const { result } = renderHook(() => useGroupSource(1));
+    await act(async () => {
+      result.current.open(groupA);
+    });
+    await waitFor(() => expect(result.current.rulesStatus).toBe('done'));
+    await act(async () => {
+      result.current.analyzeMembers();
+    });
+    await waitFor(() => expect(result.current.memberStatus).toBe('done'));
+    return result;
+  }
+
+  it('picks up a newly created rule while leaving the member analysis intact', async () => {
+    const result = await openAndAnalyze();
+
+    // What the paid-for walk produced, before the refresh touches anything.
+    const breakdownBefore = result.current.breakdown;
+    const indexBefore = result.current.memberSourceIndex;
+    expect(breakdownBefore?.total).toBe(2);
+    expect(indexBefore).not.toBeNull();
+    const memberWalks = api.getAllGroupMembers.mock.calls.length;
+
+    // The write dropped the org-wide snapshot (ADR-0064), so this read sees the
+    // rule the admin just created.
+    api.getGroupRulesForGroup.mockResolvedValue([ruleA, ruleB]);
+    await act(async () => {
+      result.current.refreshRules();
+    });
+    await waitFor(() => expect(result.current.rulesStatus).toBe('done'));
+
+    expect(result.current.feedingRules).toEqual([ruleA, ruleB]);
+    // The whole reason this is not `open()`: the analysis survives, and no
+    // second member walk is paid for.
+    expect(result.current.breakdown).toEqual(breakdownBefore);
+    expect(result.current.memberSourceIndex).toEqual(indexBefore);
+    expect(result.current.memberStatus).toBe('done');
+    expect(api.getAllGroupMembers).toHaveBeenCalledTimes(memberWalks);
+  });
+
+  it('holds a populated list on screen instead of flashing a spinner', async () => {
+    const result = await openAndAnalyze();
+    expect(result.current.feedingRules).toEqual([ruleA]);
+
+    // A refresh over a populated pane must never announce `loading`:
+    // `GroupRulesSection` renders its spinner *instead of* the list, so doing
+    // so would blank every row the reader is looking at mid-create.
+    let release: (rules: FormattedRule[]) => void = () => {};
+    api.getGroupRulesForGroup.mockReturnValue(
+      new Promise<FormattedRule[]>((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    await act(async () => {
+      result.current.refreshRules();
+    });
+
+    // In flight: the old list is still standing, still marked done.
+    expect(result.current.rulesStatus).toBe('done');
+    expect(result.current.feedingRules).toEqual([ruleA]);
+
+    await act(async () => {
+      release([ruleA, ruleB]);
+    });
+    await waitFor(() => expect(result.current.feedingRules).toEqual([ruleA, ruleB]));
+  });
+
+  it('does show the spinner when the empty state is what gets replaced', async () => {
+    // The case that prompts the create verb in the first place. Holding the
+    // empty message through the reload would read as "the rule did not land",
+    // so `loading` is the honest status here.
+    api.getGroupRulesForGroup.mockResolvedValue([]);
+    const { result } = renderHook(() => useGroupSource(1));
+    await act(async () => {
+      result.current.open(groupA);
+    });
+    await waitFor(() => expect(result.current.rulesStatus).toBe('done'));
+    expect(result.current.feedingRules).toEqual([]);
+
+    let release: (rules: FormattedRule[]) => void = () => {};
+    api.getGroupRulesForGroup.mockReturnValue(
+      new Promise<FormattedRule[]>((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    await act(async () => {
+      result.current.refreshRules();
+    });
+    expect(result.current.rulesStatus).toBe('loading');
+
+    await act(async () => {
+      release([ruleA]);
+    });
+    await waitFor(() => expect(result.current.rulesStatus).toBe('done'));
+  });
+
+  it('does nothing when no group is open', async () => {
+    const { result } = renderHook(() => useGroupSource());
+
+    await act(async () => {
+      result.current.refreshRules();
+    });
+
+    expect(api.getGroupRulesForGroup).not.toHaveBeenCalled();
+    expect(result.current.rulesStatus).toBe('idle');
+  });
+
+  it('drops a refresh that lands after the insight was closed', async () => {
+    const result = await openAndAnalyze();
+
+    const late = deferred<FormattedRule[]>();
+    api.getGroupRulesForGroup.mockReturnValue(late.promise);
+    await act(async () => {
+      result.current.refreshRules();
+    });
+    await act(async () => {
+      result.current.close();
+    });
+
+    await act(async () => {
+      late.resolve([ruleA, ruleB]);
+      await late.promise;
+    });
+
+    expect(result.current.feedingRules).toEqual([]);
+    expect(result.current.rulesStatus).toBe('idle');
+  });
+
+  it('surfaces a refresh failure without discarding the analysis on screen', async () => {
+    const result = await openAndAnalyze();
+    const breakdownBefore = result.current.breakdown;
+
+    api.getGroupRulesForGroup.mockRejectedValue(new Error('Okta said no'));
+    await act(async () => {
+      result.current.refreshRules();
+    });
+
+    await waitFor(() => expect(result.current.rulesStatus).toBe('error'));
+    expect(result.current.error).toBe('Okta said no');
+    expect(result.current.breakdown).toEqual(breakdownBefore);
+    expect(result.current.memberStatus).toBe('done');
+  });
+
+  it('falls back to a generic message when the rejection is not an Error', async () => {
+    const result = await openAndAnalyze();
+
+    api.getGroupRulesForGroup.mockRejectedValue('not-an-error');
+    await act(async () => {
+      result.current.refreshRules();
+    });
+
+    await waitFor(() => expect(result.current.rulesStatus).toBe('error'));
+    expect(result.current.error).toBe('Failed to load feeding rules');
+  });
+
+  it('swallows a refresh failure that lands after close', async () => {
+    const result = await openAndAnalyze();
+
+    const late = deferred<FormattedRule[]>();
+    api.getGroupRulesForGroup.mockReturnValue(late.promise);
+    await act(async () => {
+      result.current.refreshRules();
+    });
+    await act(async () => {
+      result.current.close();
+    });
+
+    await act(async () => {
+      late.reject(new Error('Okta said no'));
+      await late.promise.catch(() => {});
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.rulesStatus).toBe('idle');
+  });
+});
