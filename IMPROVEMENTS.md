@@ -675,7 +675,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Medium. Getting it wrong in the eager direction re-walks every
   collection on every release, which is exactly the cost ADR-0040 exists to
   avoid. Wants an ADR before code.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -941,6 +941,55 @@ block says they mean — same vocabulary, one definition, defined there.
   chapter that shows the interns cohort.
 - **Status:** open
 - **Related:** `I-026` (found it), `ADR-0043`
+
+### I-039 · The demo org seeds a snapshot with no parse version
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/demo/control.ts` (the `patchMeta` calls),
+  `src/sidepanel/components/HomeTab.stories.tsx`,
+  `src/sidepanel/components/AppsTab.stories.tsx`
+- **Verified:** 2026-09-02 — found by the `I-027` writer; ADR-0066 names it
+  directly ("must stamp the current versions, or a demo will try to walk a fake
+  origin").
+- **Problem:** `I-027` made an absent `parseVersion` mean "not knowable", which
+  resolves to one full walk of the collection. The demo's seeded snapshot and the
+  two tab stories all `patchMeta` without stamping a version, so they describe a
+  snapshot that reads as stale on sight. In practice nothing walks today —
+  `snapshotBridge` gates every sync on `tabIsOnOrigin`, and the demo origin
+  (`https://example.okta.com`) has no real tab, so `syncOrg` is refused before
+  the version check is reached — which makes this a latent trap rather than a
+  live bug: the day that gate changes, the demo tries to walk a fake origin.
+- **Done when:** each `patchMeta` call stamps `parseVersion` from the
+  corresponding spec, so seeded demo data claims the version it was actually
+  written against. One line per call site.
+- **Risk:** Low — demo and story fixtures only, no production path.
+- **Status:** open
+- **Related:** `I-027` (created the field and found this), `ADR-0066`
+
+### I-040 · Browser globals are undeclared for `src/shared`, so lint warns on them
+
+- **Category:** tooling
+- **Priority:** P4
+- **Size:** S
+- **Files:** `eslint.config.js`, `src/shared/snapshot/snapshotSync.ts:396`,
+  `src/shared/snapshot/snapshotSync.test.ts:550`
+- **Verified:** 2026-09-02 — noticed by the `I-027` writer; pre-existing, not
+  introduced by that change.
+- **Problem:** `URLSearchParams` raises `no-undef` in `src/shared/snapshot`. It
+  is an ordinary browser global and the code is correct; the lint config simply
+  does not declare browser globals for these files. Warnings are legacy debt in
+  this repo rather than errors, so it does not fail the build — but a warning
+  that is always wrong trains readers to skim the warning list, which is how a
+  real one gets missed.
+- **Done when:** the lint config declares the browser globals for the file set
+  that legitimately uses them, and the two warnings go away without an inline
+  disable comment. Confirm `npm run lint` reports two fewer warnings.
+- **Risk:** Low, but it edits shared lint config, so check the warning count
+  moves by exactly the expected amount and no rule is disabled wholesale.
+- **Status:** open
+- **Related:** `I-027` (found it)
 
 ## Archive
 
