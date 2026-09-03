@@ -1392,6 +1392,33 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Status:** open
 - **Related:** `ADR-0045`, `ADR-0043`, `I-029` (filmed clean alongside these)
 
+### D-122 · The cooldown arms on a global count the gate no longer uses
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/shared/scheduler/apiScheduler.ts`
+- **Verified:** 2026-09-03 — found while implementing `ADR-0070` §4.
+- **Problem:** `ADR-0070` §4 stopped charging every in-flight request to every
+  bucket's budget, but scoped the correction to `gateFor()` only. The cooldown
+  arming path still adds the global `activeRequests.size` to a single bucket's
+  observed usage when deciding whether that bucket is close enough to its limit
+  to warrant a cooldown. So the gate and the cooldown now disagree about how
+  much of the org's in-flight work belongs to the same bucket: the gate counts
+  only that bucket's requests, the cooldown counts all of them. The disagreement
+  errs toward cooling down early, which is the safe direction and is what ships
+  today, so this is not urgent — but two code paths reading the same number two
+  different ways is how a later change breaks one of them without touching it.
+- **Done when:** the cooldown-arming path charges the same per-bucket count the
+  gate charges, or a comment at both sites states why the asymmetry is
+  deliberate and what would break if it were removed. A test pins whichever
+  answer is chosen.
+- **Risk:** Low. Touches the rate-limit surface, so it needs the
+  `security-logging-reviewer` pass `CLAUDE.md` requires — and the safe-direction
+  argument must be re-checked, not assumed, if the charge is narrowed.
+- **Status:** open
+- **Related:** `ADR-0070`, `ADR-0059`
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
