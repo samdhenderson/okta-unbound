@@ -73,7 +73,7 @@ const meta = {
   component: GroupMembersSection,
   tags: ['autodocs'],
   parameters: {
-    // The "Attributed to" heading starts at `<h3>` with no page heading above it
+    // The roster's own outline starts at `<h3>` with no page heading above it
     // in isolation — the pane that mounts this supplies the surrounding levels.
     a11y: { config: { rules: [{ id: 'heading-order', enabled: false }] } },
     docs: {

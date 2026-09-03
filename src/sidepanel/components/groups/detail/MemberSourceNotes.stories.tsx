@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import MemberSourceNotes from './MemberSourceNotes';
 import type { MemberSourceBreakdown } from '../../../../shared/membership/groupSource';
 
@@ -18,8 +18,9 @@ const meta = {
   tags: ['autodocs'],
   parameters: {
     layout: 'padded',
-    // The "Attributed to" heading is an `<h3>` with no page heading above it in
-    // isolation; the pane that mounts this supplies the surrounding levels.
+    // The "Attributed to" heading is an `<h5>` — the right rank under the
+    // filter drawer's `<h4>Source</h4>`, where this is actually composed, but
+    // with nothing above it in isolation. The drawer supplies the levels.
     a11y: { config: { rules: [{ id: 'heading-order', enabled: false }] } },
     docs: {
       description: {
@@ -119,6 +120,38 @@ export const NothingAttributed: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No member was attributed to a specific rule.')).toBeVisible();
+  },
+};
+
+/**
+ * A group fed by seven rules. The note names the top three and defers the rest
+ * to a reveal — a dozen rows inside the Members tab's filter drawer is a report,
+ * not a note, and the tail is deferred with its count stated rather than
+ * silently dropped.
+ */
+export const ManyRulesCapsAtThree: Story = {
+  args: {
+    breakdown: {
+      total: 28,
+      direct: 0,
+      ruleBased: 28,
+      unattributed: 0,
+      byRule: Array.from({ length: 7 }, (_, i) => ({
+        ruleId: `0prFAKE${i + 1}`,
+        ruleName: `Feeding rule ${i + 1}`,
+        count: 7 - i,
+      })),
+    },
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByText('Feeding rule 3')).toBeVisible();
+    await expect(canvas.queryByText('Feeding rule 4')).toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: /4 more rules/ }));
+
+    const dialog = await within(canvasElement).findByRole('dialog');
+    await expect(within(dialog).getByText('Feeding rule 7')).toBeVisible();
+    await expect(within(dialog).getByText('Feeding rule 1')).toBeVisible();
   },
 };
 

@@ -46,15 +46,19 @@
  *    closed. Moved here (and out of its old always-visible position below the tab
  *    card) because it answers the rarest questions of the five tabs.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Button, CollapsibleSection, DetailSection } from '../../shared';
 import GroupMetadataSection from './GroupMetadataSection';
 import AttributeSpreadSection from './AttributeSpreadSection';
 import GroupMfaCoverageSection from './GroupMfaCoverageSection';
 import BreakdownDetailsModal from '../../members/BreakdownDetailsModal';
+import CompositionReports from '../../members/CompositionReports';
+import { mfaScanNeedsConfirm } from '../../../hooks/useMemberMfaScan';
 import {
   computeDimensionBreakdown,
+  computeMfaBreakdown,
   dimensionTitle,
+  discoverAttributeBreakdowns,
   type MemberFilter,
 } from '../../members/memberAnalytics';
 import type { AttributeReferencingRule } from '../../../../shared/rules/groupAttributeIndex';
@@ -119,6 +123,9 @@ interface GroupInsightsPaneProps {
 /** No value can be an active filter here — this pane has no member list. */
 const EMPTY_ACTIVE_VALUES: Set<string> = new Set();
 
+/** Same reason, in the shape the composition reports read. */
+const NO_ACTIVE_FILTERS: MemberFilter[] = [];
+
 /**
  * Renders the attribute-spread cards, the gated MFA-coverage scan, and the
  * folded "About this group" metadata for one group.
@@ -158,6 +165,38 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
     () => (detailKey && members ? computeDimensionBreakdown(members, detailKey) : []),
     [detailKey, members],
   );
+
+  /*
+    The composition reports, moved off the Members tab. They are a distribution
+    of the roster, not a control over it, and the Members tab was stacking them
+    between a reader and the first member row.
+
+    Here every value is a *jump*: this pane has no member list, so a click
+    applies the filter over there and moves. That is why the whole section is
+    gated on `onFilterMembers` rather than rendered inert — the reports are
+    entirely made of value clicks, and a grid of them that does nothing is worse
+    than the section being absent (ADR-0039).
+  */
+  const attributes = useMemo(
+    () => (members ? discoverAttributeBreakdowns(members) : []),
+    [members],
+  );
+  const mfaRows = useMemo(
+    () => computeMfaBreakdown(members ?? [], mfaResults),
+    [members, mfaResults],
+  );
+
+  const jumpToMembers = useCallback(
+    (dimension: string, value: string, label: string) => {
+      onFilterMembers?.({ dimension, value, label });
+    },
+    [onFilterMembers],
+  );
+
+  const handleScanClick = useCallback(() => {
+    if (mfaScanNeedsConfirm(memberCount)) onRequestConfirm();
+    else onRunScan();
+  }, [memberCount, onRequestConfirm, onRunScan]);
 
   return (
     <div className="space-y-(--sp-rung)">
@@ -203,6 +242,23 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
           />
         )}
       </DetailSection>
+
+      {rosterReady && onFilterMembers && (
+        <CompositionReports
+          attributes={attributes}
+          filters={NO_ACTIVE_FILTERS}
+          onToggle={(dimension, row) =>
+            jumpToMembers(dimension, row.value, `${dimensionTitle(dimension)}: ${row.label}`)
+          }
+          onExpand={setDetailKey}
+          mfaRows={mfaRows}
+          mfaResults={mfaResults}
+          scanStatus={scanStatus}
+          memberCount={memberCount}
+          onToggleMfa={(row) => jumpToMembers('mfa', row.value, row.label)}
+          onRunScanClick={handleScanClick}
+        />
+      )}
 
       {/* Stage three: every value, including the ones a card's tail folded away.
         A row here *leaves* — it filters the Members tab — so it runs in
