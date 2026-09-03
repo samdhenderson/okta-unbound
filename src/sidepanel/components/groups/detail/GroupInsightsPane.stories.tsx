@@ -210,11 +210,21 @@ export const Disabled: Story = { args: { canAnalyze: false } };
  */
 export const CompositionJumpsToMembers: Story = {
   args: { members, memberStatus: 'done', onFilterMembers: fn() },
-  play: async ({ args, canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: /Composition/ }));
+  play: async ({ args, canvas, canvasElement }) => {
+    const disclosure = canvas.getByRole('button', { name: /Composition/ });
+    await userEvent.click(disclosure);
     await expect(canvas.getByText('Pick a value to open the Members tab filtered by it.'));
 
-    await userEvent.click(canvas.getByRole('button', { name: /Engineering/ }));
+    // Two things in this region are buttons named for the value: the spread
+    // bar's `Engineering` segment (`Department: Engineering, 5 members`) and
+    // the value row itself. A bare /Engineering/ matches both, so the click
+    // would depend on document order. Scope to the region through the
+    // disclosure's own `aria-controls` — the region's contract, not a test id
+    // — and anchor the name, which the segment's `Department:` prefix fails.
+    const regionId = disclosure.getAttribute('aria-controls')!;
+    const composition = within(canvasElement.querySelector(`#${regionId}`) as HTMLElement);
+
+    await userEvent.click(composition.getByRole('button', { name: /^Engineering/ }));
     await expect(args.onFilterMembers).toHaveBeenCalledWith(
       expect.objectContaining({ dimension: 'department', value: 'Engineering' }),
     );

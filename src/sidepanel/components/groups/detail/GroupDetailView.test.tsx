@@ -155,8 +155,23 @@ vi.mock('../../../hooks/useCreateFeedingRule', () => ({
 vi.mock('./GroupOverviewPane', () => ({
   default: () => <div data-testid="stub-overview" />,
 }));
+/*
+  These two stubs take part in the Insights → Members jump rather than ignoring
+  it, because the jump is the one thing this rung does that neither pane can do
+  alone: Insights raises a request, this view routes it, Members receives it.
+
+  Note what is asserted downstream: not "GroupDetailView passed a prop to a mock"
+  — ADR-0023 bans that, and it would pass even if the panes never switched — but
+  that pressing a control in one pane lands the reader in the other with the
+  filter in hand. The stubs behave like the real components at that seam so the
+  routing is what is under test.
+*/
 vi.mock('./GroupMembersSection', () => ({
-  default: () => <div data-testid="stub-members" />,
+  default: ({ pendingFilter }: { pendingFilter?: { label: string } | null }) => (
+    <div data-testid="stub-members">
+      {pendingFilter ? `filtered by ${pendingFilter.label}` : ''}
+    </div>
+  ),
 }));
 vi.mock('./GroupAccessSection', () => ({
   default: () => <div data-testid="stub-access" />,
@@ -168,7 +183,22 @@ vi.mock('./GroupPushSection', () => ({
   default: () => <div data-testid="stub-push" />,
 }));
 vi.mock('./GroupInsightsPane', () => ({
-  default: () => <div data-testid="stub-insights" />,
+  default: ({
+    onFilterMembers,
+  }: {
+    onFilterMembers?: (f: { dimension: string; value: string; label: string }) => void;
+  }) => (
+    <div data-testid="stub-insights">
+      <button
+        type="button"
+        onClick={() =>
+          onFilterMembers?.({ dimension: 'department', value: '', label: 'department is blank' })
+        }
+      >
+        Filter Members
+      </button>
+    </div>
+  ),
 }));
 vi.mock('./AddGroupMemberModal', () => ({
   default: () => <div data-testid="stub-add-modal" />,
@@ -219,6 +249,22 @@ describe('GroupDetailView', () => {
     roster and still be looking at an un-analyzed meter. Its readout is the strip
     inside the roster now, and its commentary is `MemberSourceNotes`.
   */
+  it('carries an Insights row click to the Members pane with its filter applied', async () => {
+    const user = userEvent.setup();
+    render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Insights' }));
+    await user.click(screen.getByRole('button', { name: 'Filter Members' }));
+
+    // Both halves matter. Landing on Members without the filter would strand the
+    // reader on an unfiltered roster having asked a specific question; applying
+    // the filter without switching panes would apply it somewhere they cannot
+    // see. Neither half is a valid outcome on its own.
+    expect(screen.getByRole('tab', { name: 'Members' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('stub-members')).toHaveTextContent('filtered by department is blank');
+    expect(screen.queryByTestId('stub-insights')).not.toBeInTheDocument();
+  });
+
   it('switches to the Members tab, rendering its one section and unmounting Overview', async () => {
     const user = userEvent.setup();
     render(<GroupDetailView group={makeGroup()} targetTabId={1} />);

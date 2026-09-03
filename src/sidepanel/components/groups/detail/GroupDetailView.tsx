@@ -73,6 +73,7 @@ import GroupAccessSection from './GroupAccessSection';
 import GroupRulesSection from './GroupRulesSection';
 import GroupPushSection from './GroupPushSection';
 import GroupInsightsPane from './GroupInsightsPane';
+import type { MemberFilter } from '../../members/memberAnalytics';
 import GroupActionBar from './GroupActionBar';
 import AddGroupMemberModal from './AddGroupMemberModal';
 import CompareGroupModal from './CompareGroupModal';
@@ -189,6 +190,33 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   // initializer runs once, so a later prop change does not retroactively move a
   // reader who is already looking at a tab.
   const [activeTab, setActiveTab] = useState<GroupDetailTab>(initialPane ?? 'overview');
+
+  /*
+    The Insights → Members jump. Insights asks a question about one attribute
+    value ("who are the 12 people whose department is blank?"); Members is where
+    that question is answered, so picking a row switches the pane and arrives
+    with the filter already applied.
+
+    The request is held here rather than pushed into the explorer because this is
+    the only place that owns both panes. It is identified by **object
+    reference**, not by value: `useMemberFilters` applies a new reference once
+    and then forgets it, so re-picking the same dimension and value is a fresh
+    request rather than a no-op, and a re-render is never mistaken for one.
+
+    Deliberately not `initialFilters`: tabs stay mounted (ADR-0018), so the
+    explorer is alive and already holding filters by the time Insights asks, and
+    an initial value would be read at mount and silently dropped. Firing it would
+    take a remount on a `key`, which discards the search text, sort, paging
+    window and scroll position to deliver a single filter.
+  */
+  const [pendingMemberFilter, setPendingMemberFilter] = useState<MemberFilter | null>(null);
+
+  const filterMembersBy = useCallback((filter: MemberFilter) => {
+    setPendingMemberFilter(filter);
+    setActiveTab('members');
+  }, []);
+
+  const openInsights = useCallback(() => setActiveTab('insights'), []);
 
   // Two lines, and the reason they are *here* rather than in the navigation
   // machinery: this rung is the only surface that knows all four facts at once —
@@ -447,6 +475,8 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                   onConfirmRemove={membersSection.confirmRemove}
                   removeStatus={membersSection.removeStatus}
                   removeError={membersSection.removeError}
+                  onOpenInsights={openInsights}
+                  pendingFilter={pendingMemberFilter}
                 />
               </div>
             )}
@@ -484,6 +514,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             {activeTab === 'insights' && (
               <div role="tabpanel" aria-label="Insights">
                 <GroupInsightsPane
+                  onFilterMembers={filterMembersBy}
                   groupId={group.id}
                   memberCount={group.memberCount}
                   members={membersSection.members}
