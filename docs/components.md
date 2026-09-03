@@ -374,6 +374,10 @@ Where that leaves an export is a **ranking**, not a ban:
 2. **On a rung with no acting verb, the whole-rung export may hold `primary`** and stay in
    the row. `GroupsListActionBar` is that rung: it ships `export-list` as `primary` and
    keeps it. Any _other_ export there is selection-scoped and still goes to the tier.
+   `RulesListActionBar` is the second: three read-only panel toggles and one whole-rung
+   `Export rules`, so the export holds the fill. That rung is also where the rule's
+   reference example used to be — its _Load rules_ / _Refresh_ was ADR-0061's — and it is
+   gone, which is why the ranking is worded from `GroupActionBar`'s **Add** instead.
 3. **Otherwise the rung has no `primary` at all**, which is a real answer rather than a
    gap to fill — a strip of evenly-weighted peers.
 

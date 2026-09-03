@@ -497,17 +497,15 @@ const RulesTab: React.FC<RulesTabProps> = ({
   );
 
   /**
-   * The strip's Load/Refresh verb — cache-first once rules are already loaded, forced
-   * the first time. Stabilised so it (and the plain `onLoad` below) don't hand
-   * `RuleCard`'s memoised siblings a fresh function identity on every render, which
-   * would defeat the shallow compare they rely on for skipping unaffected rows
-   * (`D-046`).
+   * Load rules on demand from the empty-state prompt inside the list panel — the one
+   * place an initial load still lives (ADR-0069 §4). The strip's dual-purpose
+   * *Load rules* / *Refresh* verb is gone: the rung fetches on open, and re-fetching is
+   * the chrome control's job.
+   *
+   * Stabilised so it doesn't hand `RuleCard`'s memoised siblings a fresh function
+   * identity on every render, which would defeat the shallow compare they rely on for
+   * skipping unaffected rows (`D-046`).
    */
-  const handleLoadOrRefresh = useCallback(() => {
-    loadRules(rules.length > 0);
-  }, [loadRules, rules.length]);
-
-  /** Load rules on demand from the empty-state prompt inside the list panel. */
   const handleLoadFromEmptyState = useCallback(() => {
     loadRules(false);
   }, [loadRules]);
@@ -634,8 +632,6 @@ const RulesTab: React.FC<RulesTabProps> = ({
             ) : undefined
           }
           hasRules={rules.length > 0}
-          isLoading={data.isLoading}
-          onLoad={handleLoadOrRefresh}
           duplicateClusterCount={mergeableClusters.length}
           hasCurrentGroup={Boolean(currentGroupId)}
           currentGroupRelationCount={currentGroupRelationCount}
