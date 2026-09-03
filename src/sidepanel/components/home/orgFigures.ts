@@ -257,10 +257,10 @@ export interface OrgBox extends OrgFigure {
  *   reports need this and the findings do not: "app access no rule maintains"
  *   draws its population from the app-group assignments, where every finding on
  *   the org card counts one collection and subtracts from others.
- * - `gates` may not be anything but `ok`. "Groups no rule fills" is computed by
- *   subtracting the groups some rule targets, so a rule list missing half its
- *   pages does not under-report; it reports every group those missing rules fed
- *   as unfilled. That is not a floor with a caveat, it is a wrong number, and
+ * - `gates` may not be anything but `ok`. "Groups with no members that no rule
+ *   fills" is computed by subtracting the groups some rule targets, so a rule
+ *   list missing half its pages does not under-report; it reports every group
+ *   those missing rules fill as unfilled. That is not a floor with a caveat, it is a wrong number, and
  *   there is no honest way to label it. So a gate that is anything but `ok`
  *   suppresses the count entirely.
  *
