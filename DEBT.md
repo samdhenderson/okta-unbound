@@ -1275,6 +1275,57 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Status:** open
 - **Related:** `I-019` (grew it and reported it), `D-091`, `ADR-0024`
 
+### D-118 · `App.tsx` is 732 lines and mounts its provider stack inline
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/App.tsx`
+- **Verified:** 2026-09-02 — 732 lines after `I-033`, which added 10 for a
+  provider wrapper and reported the overrun rather than absorbing it.
+- **Problem:** `App` composes four providers inline
+  (`SchedulerProvider`, `ProgressProvider`, `NavigationProvider`,
+  `OrgEntityIndexProvider`) around a render body that is already the largest
+  component in the repo. Every new cross-cutting concern costs another nesting
+  level in the file least able to afford one, and the reindent makes each such
+  change look far larger in review than it is — `I-033`'s ten substantive lines
+  showed up as 306 changed lines until read with `git diff -w`.
+- **Done when:** the provider stack moves into an `AppProviders` component
+  (its own file) taking the values it needs and rendering `children`, so
+  `App.tsx` nests one level and adding a provider stops touching it at all.
+  Pure refactor: no provider's `enabled` semantics change, and ADR-0018 gating
+  stays bit-for-bit — `App.tabpersistence`, `App.contextengine` and the palette
+  suites must pass untouched. If an assertion needs rewriting, the extraction
+  is wrong.
+- **Risk:** Low-medium. No behaviour change, but it moves the tree's root; the
+  reindent hides mistakes, so review with `git diff -w`.
+- **Status:** open
+- **Related:** `I-033` (grew it and proposed this), `D-117`, `D-091`
+
+### D-119 · Nothing checks the docs' context inventory against the code
+
+- **Category:** tooling
+- **Priority:** P4
+- **Size:** S
+- **Files:** `scripts/check-cited-paths.mjs`, `docs/state-management.md`,
+  `docs/architecture.md`
+- **Verified:** 2026-09-02 — found by the `I-033` writer: both docs asserted
+  "exactly two contexts" and had been wrong since ADR-0030 added
+  `NavigationContext`. Corrected in that commit; the absence of a check is not.
+- **Problem:** Two specs state a closed inventory of React contexts, and a
+  third context existed for months without either noticing. A closed list with
+  nothing enforcing it is worse than no list: readers trust it, and it silently
+  decays. The repo already has a path checker that fails the build on a stale
+  citation — this is the same class of rot, unguarded.
+- **Done when:** the checker counts `src/sidepanel/contexts/*Context.tsx`
+  against the inventory the docs claim and fails when they disagree, so adding
+  a context forces the doc update in the same commit. Prove it non-vacuously by
+  adding a throwaway context file and confirming the check goes red.
+- **Risk:** Low — build tooling; the failure mode is a false red, which is
+  visible immediately.
+- **Status:** open
+- **Related:** `I-033` (found it), `ADR-0030`
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk

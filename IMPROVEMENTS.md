@@ -715,7 +715,7 @@ block says they mean — same vocabulary, one definition, defined there.
   claims it makes are stronger than the existing ones, so it wants an ADR
   fixing the wording before the code. Depends on `D-076` for the numbers to be
   trustworthy on a long-lived snapshot.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -862,7 +862,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Medium — every Home consumer of `index` (`useOrgFigures`,
   `useHomeReports`, the jump bar) reads through the same object, so the
   provider's identity stability is load-bearing in three more places.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** ADR-0040, ADR-0062
 
 ### I-036 · `RuleDetailView` keeps a private copy of the condition renderer
