@@ -1354,6 +1354,44 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Status:** open
 - **Related:** `I-020` (found it and added to it), `ADR-0065`, `D-118`, `D-117`
 
+### D-121 · Two demo chapters cannot be filmed
+
+- **Category:** tooling
+- **Priority:** P2
+- **Size:** M
+- **Files:** `.storybook/scripts/capture/walks/users-cause.mjs`,
+  `.storybook/scripts/capture/walks/rules.mjs`,
+  `.storybook/scripts/capture/selectors.mjs` (`readRuleStats`)
+- **Verified:** 2026-09-02 — `npm run capture` fails on both, and **both
+  reproduce identically on `main` at `be78181`**, so this is pre-existing and
+  not caused by the `improve/2026-09-02-backlog-pass` work. Confirmed by
+  checking out `main` and filming each chapter alone.
+- **Problem:** Two of the ten chapters abort:
+  - `users-cause`, beat `cause` — _"Fix a profile attribute" accounts for no
+    groups_. The walk asserts the cause analysis attributes at least one group
+    to the attribute it is about to fix, and it attributes none.
+  - `rules`, beat `load` — _readRuleStats: no stats grid on screen (saw )_. The
+    "saw" list is **empty**, meaning no title/value pair was found at all, so
+    the stats grid is absent rather than merely slow or differently worded.
+
+  Filed as one item because both sit on the rule-attribution path and are
+  likely one root cause; split it if investigation shows otherwise. Note
+  `rules-impact` — a new chapter over the same tab, added by `I-029` — films
+  clean, which bounds the problem: the Rules tab loads and renders, so the
+  failure is narrower than "the tab is broken".
+
+- **Done when:** both chapters film, and the walks fail loudly on the _cause_
+  rather than on a downstream symptom — an empty `saw` list should say the grid
+  never mounted, not report a read that found nothing. Whatever the root cause,
+  add the assertion that would have caught it at its origin.
+- **Risk:** Medium. `npm run capture` is not in the verification ladder, so
+  this does not fail CI — which is exactly why it went unnoticed. The reel
+  cannot be rendered complete until it is fixed, and a demo that silently films
+  nine of ten chapters is the failure mode `ADR-0045` and the capture rig's
+  own judging step exist to prevent.
+- **Status:** open
+- **Related:** `ADR-0045`, `ADR-0043`, `I-029` (filmed clean alongside these)
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk

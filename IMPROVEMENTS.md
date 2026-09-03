@@ -1045,6 +1045,63 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
 - **Status:** open
 - **Related:** `I-020` (created the second copy and reported it)
 
+### I-043 · Two new row idioms sit beside the one `ListRow` exists to be
+
+- **Category:** structure
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/home/EntityChooser.tsx`
+  (`EntityChoiceRow`), `src/sidepanel/components/home/ReportRow.tsx`
+  (`RowDisclosure`), `src/sidepanel/components/shared/ListRow.tsx`
+- **Verified:** 2026-09-02 — raised by `ui-reviewer` over this pass's diff.
+  Neither breaks a token or a11y rule today; both are structural.
+- **Problem:** `I-019` added two row treatments that reimplement what `ListRow`
+  already owns. `EntityChoiceRow` is an `<li>` with padding, rounded corners and
+  a hover wash plus a `StretchedButton` overlay — `GroupListItem`'s documented
+  pattern, hand-built. `RowDisclosure` is a `<button>` that _is_ the row, with
+  hover, `.press`, row-spacing tokens and a chevron — `ListRow`'s `body`-slot
+  disclosure, rebuilt. Both are internally consistent and their comments
+  explicitly compare themselves to `ListRow`, which is the tell: the author knew
+  the primitive existed and could not use it. `ADR-0029` bans hand-rolled row
+  containers precisely so a fourth recipe cannot accrete, and this is the third.
+- **Done when:** `ListRow` grows the two variants that were missing — a dense or
+  nested size, and an `as="button"` disclosure mode — and both call sites
+  compose it instead. Neither call site should need a `className` carrying
+  chrome afterwards; if it does, the variant is wrong. Their stories keep
+  passing unchanged, and the axe checks stay clean.
+- **Risk:** Low-medium — it touches a shared primitive every list in the panel
+  renders through, so land it tests-first, one call site at a time, per the
+  working agreement.
+- **Status:** open
+- **Related:** `I-019` (added both), `ADR-0029`, `I-016`, `I-017`
+
+### I-044 · Raw spacing values in three rows that otherwise use the roles
+
+- **Category:** ux
+- **Priority:** P4
+- **Size:** S
+- **Files:** `src/sidepanel/components/groups/detail/GroupRulesSection.tsx`
+  (the inline "When" block), `src/sidepanel/components/users/comparison/ClauseGroupList.tsx`,
+  `src/sidepanel/components/policies/PolicyCard.tsx` (the disclosure body)
+- **Verified:** 2026-09-02 — raised by `ui-reviewer` over this pass's diff.
+- **Problem:** Three rows mix the sanctioned spacing roles with raw Tailwind
+  steps in the same element or the same block — `py-1.5` beside
+  `gap-(--sp-inline)`, `px-2 py-1` where `--sp-row-x`/`--sp-row-y` apply, and a
+  disclosure body carrying `space-y-3 px-4 pb-4 pt-3`. `docs/design-system.md`
+  is explicit that a raw spacing value is a defect the same way a raw `150ms`
+  is, and a role token sitting next to a raw step in one `className` is the
+  clearest form of it.
+- **Done when:** each raw value is either replaced by the role that fits or, if
+  none does, the exception is stated in a comment saying why — the same standard
+  `--sp-toolbar` was held to when `I-022` argued for a seventh role rather than
+  hard-coding three call sites.
+- **Risk:** Low — spacing only, covered by stories. Check the density variants,
+  since a role token and a raw step diverge at the wider settings, which is
+  exactly the drift `I-022` measured.
+- **Status:** open
+- **Related:** `I-022` (the seventh role and its reasoning), `I-015`, `I-031`,
+  `I-023`
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
