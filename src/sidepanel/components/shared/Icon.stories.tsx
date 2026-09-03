@@ -118,6 +118,20 @@ export const Settings: Story = {
   },
 };
 
+/** Upload icon. */
+export const Upload: Story = {
+  args: {
+    type: 'upload',
+  },
+};
+
+/** Pencil (edit/rename) icon. */
+export const Pencil: Story = {
+  args: {
+    type: 'pencil',
+  },
+};
+
 /** With custom color class. */
 export const WithCustomColor: Story = {
   args: {
@@ -142,8 +156,10 @@ export const AllIcons: Story = {
       'lock',
       'refresh',
       'download',
+      'upload',
       'settings',
       'trash',
+      'pencil',
       'plus',
       'minus',
       'search',
