@@ -115,7 +115,7 @@ const ResetTimeline: React.FC<ResetTimelineProps> = ({ buckets, now }) => {
         ))}
       </div>
 
-      <div aria-hidden="true" className="flex justify-between text-[0.625rem] text-neutral-500">
+      <div aria-hidden="true" className="flex justify-between text-xs text-neutral-600">
         <span>now</span>
         <span className="tabular-nums">+{countdown(windowMs)}</span>
       </div>

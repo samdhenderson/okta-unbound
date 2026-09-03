@@ -31,7 +31,7 @@ function idleView(overrides: Partial<ActivityView> = {}): ActivityView {
     total: 0,
     percentage: 0,
     elapsedLabel: undefined,
-    etaLabel: undefined,
+    eta: null,
     apiCalls: undefined,
     queueLength: 0,
     activeRequests: 0,
@@ -67,10 +67,11 @@ describe('ActivityBarView', () => {
     expect(screen.queryByTestId('activity-operation-name')).not.toBeInTheDocument();
   });
 
-  it('keeps the metric slots and action area mounted across idle → active (no reflow)', () => {
+  it('keeps the summary slots and action area mounted across idle → active (no reflow)', () => {
     const { unmount } = render(<ActivityBarView view={idleView()} onCancel={vi.fn()} />);
-    // The stable slots exist even when their values are empty.
-    for (const id of ['activity-queue', 'activity-active', 'activity-rate-limit', 'activity-eta']) {
+    // The stable slots exist even when their values are empty. "Active" is no
+    // longer among them — the in-flight count is drawn by the rack's lanes.
+    for (const id of ['activity-queue', 'activity-rate-limit', 'activity-eta']) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
     }
     expect(screen.getByTestId('activity-actions')).toBeInTheDocument();
@@ -93,7 +94,7 @@ describe('ActivityBarView', () => {
       />,
     );
     // Same stable slots are present in the active render.
-    for (const id of ['activity-queue', 'activity-active', 'activity-rate-limit', 'activity-eta']) {
+    for (const id of ['activity-queue', 'activity-rate-limit', 'activity-eta']) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
     }
     expect(screen.getByTestId('activity-actions')).toBeInTheDocument();
@@ -109,7 +110,7 @@ describe('ActivityBarView', () => {
         total: 20,
         percentage: 20,
         elapsedLabel: '0:12',
-        etaLabel: '~0:48 left',
+        eta: { kind: 'point', lowerMs: 48_000, label: '~0:48 left' },
         apiCalls: 4,
       }),
     );
@@ -144,10 +145,42 @@ describe('ActivityBarView', () => {
     expect(screen.queryByTestId('activity-op-breakdown')).not.toBeInTheDocument();
   });
 
-  it('shows queue and active counts when present', () => {
+  it('shows the queue depth when there is one', () => {
     renderView(idleView({ queueLength: 7, activeRequests: 3 }));
     expect(screen.getByTestId('activity-queue')).toHaveTextContent('7');
-    expect(screen.getByTestId('activity-active')).toHaveTextContent('3');
+  });
+
+  it('renders the ETA as a range once a cooldown widens it', () => {
+    renderView(
+      idleView({
+        operationActive: true,
+        operationName: 'Exporting members',
+        busy: true,
+        current: 10,
+        total: 20,
+        eta: { kind: 'range', lowerMs: 20_000, upperMs: 110_000, label: '0:20–1:50 left' },
+      }),
+    );
+
+    expect(screen.getByTestId('activity-eta')).toHaveTextContent('0:20–1:50 left');
+  });
+
+  it('renders the unknown ETA as words, never as an optimistic number', () => {
+    renderView(
+      idleView({
+        operationActive: true,
+        operationName: 'Exporting members',
+        busy: true,
+        current: 1,
+        total: 800,
+        eta: { kind: 'unknown', label: 'estimating…' },
+      }),
+    );
+
+    const eta = screen.getByTestId('activity-eta');
+    expect(eta).toHaveTextContent('estimating');
+    // "does not know" must be visibly different from "fast".
+    expect(eta.textContent).not.toMatch(/\d/);
   });
 
   it('shows a cooldown countdown when cooling down', () => {
@@ -206,8 +239,8 @@ describe('ActivityBarView', () => {
       expect(screen.getByTestId('activity-processed-compact')).toHaveTextContent('118');
       expect(screen.getByTestId('activity-processed-compact')).toHaveTextContent('3 failed');
       // …but the boxed metric slots are not rendered in the condensed layout.
+      expect(screen.queryByTestId('activity-summary')).not.toBeInTheDocument();
       expect(screen.queryByTestId('activity-queue')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('activity-active')).not.toBeInTheDocument();
       expect(screen.queryByTestId('activity-eta')).not.toBeInTheDocument();
       expect(screen.queryByTestId('activity-op-breakdown')).not.toBeInTheDocument();
     });
@@ -278,7 +311,7 @@ describe('ActivityBarView', () => {
       );
       // Full slots are back…
       expect(screen.getByTestId('activity-queue')).toHaveTextContent('7');
-      expect(screen.getByTestId('activity-active')).toHaveTextContent('3');
+      expect(screen.getByTestId('activity-rate-limit')).toHaveTextContent('600/600');
       // …and the chevron now offers to hide them again.
       expect(
         screen.getByRole('button', { name: /hide extra activity stats/i }),
@@ -392,6 +425,27 @@ describe('per-bucket headroom', () => {
     );
 
     expect(screen.queryByTestId('activity-buckets')).not.toBeInTheDocument();
+  });
+
+  it('draws no per-bucket lanes when condensed, and draws them when expanded', () => {
+    // Bars are expanded-only. A lane a few pixels wide is not a smaller version
+    // of the rack, it is an unreadable one — so the condensed tree omits them
+    // entirely rather than shrinking them.
+    const view = idleView({
+      buckets: [
+        bucket({ bucket: '/api/v1/users', queued: 20, lastActiveAt: FIXED_NOW - 1_000 }),
+        bucket({ bucket: '/api/v1/groups', lastActiveAt: FIXED_NOW - 30_000 }),
+      ],
+    });
+
+    const { unmount } = render(
+      <ActivityBarView view={view} onCancel={vi.fn()} collapsible collapsed />,
+    );
+    expect(screen.queryAllByTestId(/^activity-bucket-/)).toHaveLength(0);
+    unmount();
+
+    render(<ActivityBarView view={view} onCancel={vi.fn()} collapsible collapsed={false} />);
+    expect(screen.queryAllByTestId(/^activity-bucket-/)).toHaveLength(2);
   });
 });
 

@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import BucketList from './BucketList';
-import BucketRow, { isStrained, headroomPercent } from './BucketRow';
+import BucketRow, { deservesTrack, isStrained, headroomPercent } from './BucketRow';
 import type { BucketState } from '@/shared/scheduler/types';
 
 const NOW = 1_760_000_000_000;
@@ -83,6 +83,26 @@ describe('isStrained', () => {
   });
 });
 
+describe('deservesTrack', () => {
+  it('keeps the lane of a bucket that has just gone quiet', () => {
+    // The case the whole ADR-0070 memory exists for: the queue drained, so the
+    // bucket is no longer strained — and it must not vanish from under the user
+    // at that exact instant.
+    const justFinished = bucket({ bucket: '/api/v1/users', lastActiveAt: NOW - 4_000 });
+
+    expect(isStrained(justFinished, 10)).toBe(false);
+    expect(deservesTrack(justFinished, 10)).toBe(true);
+  });
+
+  it('still collapses a bucket that has never settled anything', () => {
+    expect(deservesTrack(bucket({ bucket: '/api/v1/policies' }), 10)).toBe(false);
+  });
+
+  it('keeps a strained bucket whether or not it has ever settled anything', () => {
+    expect(deservesTrack(bucket({ bucket: '/api/v1/users', queued: 3 }), 10)).toBe(true);
+  });
+});
+
 describe('BucketList', () => {
   it('renders nothing at all when no bucket has been seen', () => {
     const { container } = render(<BucketList buckets={[]} lowThresholdPercent={10} now={NOW} />);
@@ -127,6 +147,23 @@ describe('BucketList', () => {
     expect(row).toHaveTextContent('30/600');
     expect(row).toHaveTextContent('500 planned');
     expect(screen.getByTestId('activity-buckets-quiet')).toHaveTextContent('2 buckets idle');
+  });
+
+  it('keeps a lane for a bucket that has finished working, and collapses one that never did', () => {
+    render(
+      <BucketList
+        buckets={[
+          bucket({ bucket: '/api/v1/users', lastActiveAt: NOW - 30_000 }),
+          bucket({ bucket: '/api/v1/policies' }),
+        ]}
+        lowThresholdPercent={10}
+        now={NOW}
+      />,
+    );
+
+    expect(screen.getByTestId('activity-bucket-/api/v1/users')).toBeInTheDocument();
+    expect(screen.queryByTestId('activity-bucket-/api/v1/policies')).not.toBeInTheDocument();
+    expect(screen.getByTestId('activity-buckets-quiet')).toHaveTextContent('1 bucket idle');
   });
 
   it('names what it dropped rather than truncating silently', () => {
@@ -225,6 +262,67 @@ describe('BucketRow', () => {
     expect(screen.getByTestId('activity-bucket-cooldown-/api/v1/users')).toHaveTextContent(
       '1m 35s',
     );
+  });
+
+  /**
+   * ADR-0070's load-bearing half. A remembered bucket keeps its lane after its
+   * queue drains, its plan is reaped and its header observation expires — and
+   * what is retained is the lane's *existence*, never a number. These assert the
+   * negative, because the failure mode is not an absent figure but a stale one
+   * presented as current.
+   */
+  describe('a remembered, idle bucket', () => {
+    const remembered = bucket({
+      bucket: '/api/v1/users',
+      limit: null,
+      remaining: null,
+      resetAt: null,
+      lastActiveAt: NOW - 125_000,
+    });
+
+    it('says it is at rest, and says how long ago in words', () => {
+      render(<BucketRow bucket={remembered} lowThresholdPercent={10} now={NOW} />);
+
+      const row = screen.getByTestId('activity-bucket-/api/v1/users');
+      expect(row).toHaveAttribute('data-state', 'at-rest');
+      expect(row).toHaveTextContent('at rest');
+      expect(row).toHaveTextContent('last active 2m ago');
+    });
+
+    it('shows no budget figure that could be mistaken for a live reading', () => {
+      render(<BucketRow bucket={remembered} lowThresholdPercent={10} now={NOW} />);
+
+      const row = screen.getByTestId('activity-bucket-/api/v1/users');
+      expect(row).toHaveTextContent('not reported');
+      // No `remaining/limit` pair anywhere in the lane, and no percentage — the
+      // two shapes a stale reading would take.
+      expect(row.textContent).not.toMatch(/\d+\s*\/\s*\d+/);
+      expect(row.textContent).not.toMatch(/%/);
+      // Nor any of the work counts, which are genuinely zero and are drawn as an
+      // empty lane rather than printed as "0 in flight".
+      expect(row).not.toHaveTextContent('in flight');
+      expect(row).not.toHaveTextContent('queued');
+      expect(row).not.toHaveTextContent('planned');
+      expect(row).not.toHaveAttribute('data-low');
+      expect(row).not.toHaveAttribute('data-gated');
+    });
+
+    it('says only "at rest" when the worker was evicted and lastActiveAt is null', () => {
+      // No timestamp is fabricated and none is persisted to survive eviction:
+      // the activity a timestamp would describe did not survive it either.
+      render(
+        <BucketRow
+          bucket={{ ...remembered, lastActiveAt: null }}
+          lowThresholdPercent={10}
+          now={NOW}
+        />,
+      );
+
+      const row = screen.getByTestId('activity-bucket-/api/v1/users');
+      expect(row).toHaveTextContent('at rest');
+      expect(row).not.toHaveTextContent('last active');
+      expect(row).not.toHaveTextContent('ago');
+    });
   });
 
   it('omits the planned figure when nothing is planned', () => {
