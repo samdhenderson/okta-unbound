@@ -562,6 +562,12 @@ const WATERMARK = '2026-08-20T09:00:00.000Z';
 /**
  * Put the groups collection in the state a completed walk would have left it,
  * so the freshness ladder has something to reason about.
+ *
+ * `parseVersion` is stamped to the spec's, because that is what a walk by *this*
+ * build leaves behind (ADR-0066). Without it these rows would read as written by
+ * an older parser and every case below would escalate to a full walk before it
+ * reached the rung it is about. The version-mismatch cases pass an explicit
+ * `parseVersion` override instead.
  */
 async function seedSyncedCollection(
   rows: ReturnType<typeof group>[],
@@ -582,6 +588,7 @@ async function seedSyncedCollection(
     cursor: null,
     walkStartedAt: null,
     deltaSupported: true,
+    parseVersion: GROUPS_SPEC.parseVersion,
     ...meta,
   });
 }
@@ -778,6 +785,137 @@ describe('the freshness ladder', () => {
   });
 });
 
+describe('the parse version (ADR-0066)', () => {
+  it('serves a snapshot at the current version from cache, never re-walking it', async () => {
+    // The control case for the two below: complete, fresh, delta-capable, and
+    // recorded at the version this build walks. Nothing about it is re-fetched.
+    await seedSyncedCollection([group('00g1', 'Eng')]);
+    const { request, urls } = scriptedRequest({
+      [deltaUrlFor(WATERMARK)]: { success: true, data: [], headers: {} },
+    });
+
+    const outcome = await syncCollection(GROUPS_SPEC, { origin: ORIGIN, request, now: NOW + 1000 });
+
+    // The cheap rung, and the full listing never requested.
+    expect(outcome.mode).toBe('delta');
+    expect(urls).toEqual([deltaUrlFor(WATERMARK)]);
+    await expect(storedGroupNames()).resolves.toEqual(['Eng']);
+  });
+
+  it('re-walks a collection whose stored rows were written by an older parser', async () => {
+    // Everything here says "leave me alone": complete, walked seconds ago, a
+    // watermark to delta from, and a proven delta filter. The only thing wrong
+    // with it is that the walk that wrote it asked Okta a different question.
+    await seedSyncedCollection([group('00g1', 'Eng')], { parseVersion: 0 });
+    const { request, urls } = scriptedRequest({
+      [GROUPS_SPEC.firstUrl]: {
+        success: true,
+        data: [group('00g1', 'Eng'), group('00g2', 'Sales')],
+        headers: {},
+      },
+    });
+
+    const outcome = await syncCollection(GROUPS_SPEC, { origin: ORIGIN, request, now: NOW + 1000 });
+
+    // A mismatch outranks every cheap rung: no count probe, no delta listing,
+    // just the full walk. A delta only rewrites rows Okta reports as changed, so
+    // it could never repair a row that is merely old-shaped.
+    expect(outcome.mode).toBe('full');
+    expect(urls).toEqual([GROUPS_SPEC.firstUrl]);
+    await expect(storedGroupNames()).resolves.toEqual(['Eng', 'Sales']);
+  });
+
+  it('re-walks a collection that has never recorded a version at all', async () => {
+    // The population that exists in the field today: rows written before
+    // ADR-0066, whose meta has no such field. One upgrade walk each, once.
+    await seedSyncedCollection([group('00g1', 'Eng')], { parseVersion: undefined });
+    const stored = await orgSnapshotStore.getMeta('groups', ORIGIN);
+    expect(stored.parseVersion ?? null).toBeNull();
+
+    const { request } = scriptedRequest({
+      [GROUPS_SPEC.firstUrl]: { success: true, data: [group('00g1', 'Eng')], headers: {} },
+    });
+
+    const outcome = await syncCollection(GROUPS_SPEC, { origin: ORIGIN, request, now: NOW + 1000 });
+
+    expect(outcome.mode).toBe('full');
+  });
+
+  it('records the new version once the upgrade walk completes, and stops re-walking', async () => {
+    await seedSyncedCollection([group('00g1', 'Eng')], { parseVersion: 0 });
+    const pages = {
+      [GROUPS_SPEC.firstUrl]: {
+        success: true,
+        data: [group('00g1', 'Eng')],
+        headers: {},
+      },
+    };
+
+    await syncCollection(GROUPS_SPEC, {
+      origin: ORIGIN,
+      request: scriptedRequest(pages).request,
+      now: NOW + 1000,
+    });
+
+    expect((await orgSnapshotStore.getMeta('groups', ORIGIN)).parseVersion).toBe(
+      GROUPS_SPEC.parseVersion,
+    );
+
+    // The upgrade is once, not every attempt — that distinction is the whole
+    // cost argument for putting the version on the spec rather than globally.
+    const second = scriptedRequest({
+      [deltaUrlFor(WATERMARK)]: { success: true, data: [], headers: {} },
+    });
+    const outcome = await syncCollection(GROUPS_SPEC, {
+      origin: ORIGIN,
+      request: second.request,
+      now: NOW + 2000,
+    });
+
+    expect(outcome.mode).toBe('delta');
+    expect(second.urls).not.toContain(GROUPS_SPEC.firstUrl);
+  });
+
+  it('leaves the old version in place when the upgrade walk is interrupted', async () => {
+    // Half a collection at the new version is the state ADR-0066 exists to make
+    // impossible: it would mark itself upgraded and never revisit the pages it
+    // never reached.
+    await seedSyncedCollection([group('00g1', 'Eng')], { parseVersion: 0 });
+    const page2 = '/api/v1/groups?limit=200&after=cur1';
+    const { request } = scriptedRequest({
+      [GROUPS_SPEC.firstUrl]: {
+        success: true,
+        data: [group('00g1', 'Eng')],
+        headers: linkTo(page2),
+      },
+      [`${page2}&expand=stats&expand=app`]: { success: false, error: 'rate limited' },
+    });
+
+    const outcome = await syncCollection(GROUPS_SPEC, { origin: ORIGIN, request, now: NOW + 1000 });
+
+    expect(outcome.complete).toBe(false);
+    expect((await orgSnapshotStore.getMeta('groups', ORIGIN)).parseVersion).toBe(0);
+  });
+
+  it('keeps serving the old rows while the upgrade walk runs, rather than clearing them', async () => {
+    // Deleting on a bump would turn every field addition into a cold load — the
+    // panel painting nothing while the walk runs — which is precisely the
+    // regression ADR-0040 exists to prevent.
+    await seedSyncedCollection([group('00g1', 'Eng')], { parseVersion: 0 });
+    let duringWalk: string[] = [];
+    const request: PageRequest = async (url) => {
+      duringWalk = await storedGroupNames();
+      if (url !== GROUPS_SPEC.firstUrl) throw new Error(`unscripted URL: ${url}`);
+      return { success: true, data: [group('00g1', 'Engineering')], headers: {} };
+    };
+
+    await syncCollection(GROUPS_SPEC, { origin: ORIGIN, request, now: NOW + 1000 });
+
+    expect(duringWalk).toEqual(['Eng']);
+    await expect(storedGroupNames()).resolves.toEqual(['Engineering']);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Sharded walks
 // ---------------------------------------------------------------------------
@@ -801,6 +939,7 @@ function shardedSpec(appIds: string[]): CollectionSpec<{ id: string }> {
     collection: 'apps',
     firstUrl: '/api/v1/apps?limit=200',
     schema: assignmentSchema,
+    parseVersion: 1,
     context: 'GET /api/v1/apps/{id}/groups',
     shards: async () => appIds.map((key) => ({ key, firstUrl: shardUrl(key) })),
     identify: (row, shard) => {
@@ -971,5 +1110,77 @@ describe('a sharded walk', () => {
     // that would sweep the entire collection.
     expect(outcome).toMatchObject({ complete: false, written: 0, swept: 0 });
     await expect(storedShardKeys()).resolves.toEqual(['0oaA::00g1']);
+  });
+});
+
+describe('the parse version, on a fan-out (ADR-0066)', () => {
+  /** The state a completed fan-out leaves, at a chosen parse version. */
+  async function seedCompletedFanOut(parseVersion: number | null): Promise<void> {
+    await orgSnapshotStore.patchMeta('apps', ORIGIN, {
+      complete: true,
+      lastFullWalkAt: NOW,
+      cursor: null,
+      walkStartedAt: null,
+      completedShards: [],
+      deltaSupported: false,
+      itemCount: 1,
+      parseVersion,
+    });
+  }
+
+  it('leaves a fan-out alone inside its interval when the version matches', async () => {
+    await seedCompletedFanOut(1);
+    const { request, urls } = scriptedRequest({});
+
+    const outcome = await syncCollection(shardedSpec(['0oaA']), {
+      origin: ORIGIN,
+      request,
+      now: NOW + 1000,
+    });
+
+    // Six hours have not passed, and the rows were written by this build's walk.
+    expect(outcome.mode).toBe('none');
+    expect(urls).toEqual([]);
+  });
+
+  it('re-runs a fan-out on a version mismatch, ignoring its refresh interval', async () => {
+    // The interval exists to stop a *fresh* snapshot being re-derived; a
+    // version-mismatched one is not fresh, it is known-incomplete (ADR-0066 §4).
+    // This is the expensive case the ADR accepts deliberately — a fan-out is the
+    // costliest walk in the system, which is exactly why the version is
+    // per-collection rather than global.
+    await seedCompletedFanOut(0);
+    const { request, urls } = scriptedRequest({
+      [shardUrl('0oaA')]: { success: true, data: [{ id: '00g1' }], headers: {} },
+    });
+
+    const outcome = await syncCollection(shardedSpec(['0oaA']), {
+      origin: ORIGIN,
+      request,
+      now: NOW + 1000,
+    });
+
+    expect(outcome.mode).toBe('full');
+    expect(urls).toEqual([shardUrl('0oaA')]);
+    expect((await orgSnapshotStore.getMeta('apps', ORIGIN)).parseVersion).toBe(1);
+  });
+
+  it('does not record the new version when a shard failed', async () => {
+    await seedCompletedFanOut(0);
+    const { request } = scriptedRequest({
+      [shardUrl('0oaA')]: { success: true, data: [{ id: '00g1' }], headers: {} },
+      [shardUrl('0oaB')]: { success: false, error: 'rate limited' },
+    });
+
+    const outcome = await syncCollection(shardedSpec(['0oaA', '0oaB']), {
+      origin: ORIGIN,
+      request,
+      now: NOW + 1000,
+    });
+
+    // A fan-out that lost a leg has not re-walked the collection, so it has not
+    // earned the new version any more than it has earned the sweep.
+    expect(outcome.complete).toBe(false);
+    expect((await orgSnapshotStore.getMeta('apps', ORIGIN)).parseVersion).toBe(0);
   });
 });

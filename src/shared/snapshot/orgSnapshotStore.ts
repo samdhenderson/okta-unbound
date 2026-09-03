@@ -15,6 +15,11 @@
  * and writes to a no-op.
  *
  * @see {@link module:shared/snapshot/syncMeta} for the pure freshness decisions.
+ * @see {@link module:shared/snapshot/parseVersion} for `SyncMeta.parseVersion`,
+ * which records what a collection's stored rows were walked with (ADR-0066).
+ * The store persists it like any other meta field — `DB_VERSION` stays at `1`,
+ * because a parse-version mismatch is resolved by re-reading the collection, not
+ * by migrating the database.
  */
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';

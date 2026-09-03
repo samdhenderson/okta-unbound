@@ -111,6 +111,30 @@ export interface SyncMeta {
    */
   status: number | null;
   /**
+   * The `CollectionSpec.parseVersion` the stored rows were last **completely**
+   * walked at, or absent when that is not knowable (ADR-0066).
+   *
+   * It records what the walk asked Okta for and what it did with the answer —
+   * never the database layout (that is `DB_VERSION`, which does not move for
+   * this) and never what a reader does with a row it already has. A mismatch
+   * against the current spec makes the next sync attempt for this collection a
+   * full walk, once; the rows are neither deleted nor hidden while it runs.
+   *
+   * **Optional, and `undefined` means the same as `null`: not knowable, treated
+   * as a mismatch.** Every record written before ADR-0066 landed genuinely
+   * lacks the field, so the type models its absence rather than pretending a
+   * value was stored. Version 0 is not knowable retroactively, so those orgs get
+   * exactly one upgrade walk per collection on the release that adopts this.
+   * Read it through `readParseVersion` rather than directly, so the two
+   * spellings of "no version" collapse in one place.
+   *
+   * Written **only when a walk completes**, alongside {@link complete} and
+   * {@link lastFullWalkAt}. An interrupted walk must not mark itself upgraded:
+   * half a collection at the new version is exactly the state ADR-0066 exists to
+   * make impossible.
+   */
+  parseVersion?: number | null;
+  /**
    * For a **sharded** collection, the shard keys already walked under the
    * current {@link walkStartedAt} mark.
    *

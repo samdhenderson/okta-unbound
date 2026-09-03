@@ -13,7 +13,14 @@
  * it does **not** conclude a deletion from anything but a walk it watched
  * complete — see {@link runFullWalk}'s sweep.
  *
+ * Each {@link CollectionSpec} also carries a `parseVersion` recording what its
+ * walk asks Okta for and what it does with the answer (ADR-0066). A spec whose
+ * version has moved past the one stored for an org re-walks that collection once
+ * — the only repair available, since a mapper cannot recover bytes that were
+ * never fetched.
+ *
  * @see {@link module:shared/snapshot/syncMeta} for the freshness decisions.
+ * @see {@link module:shared/snapshot/parseVersion} for the version comparison.
  * @see {@link module:shared/utils/oktaPagination} for the walk itself.
  */
 
@@ -34,6 +41,7 @@ import {
 } from '../utils/oktaPagination';
 import { createLogger } from '../utils/logger';
 import { orgSnapshotStore } from './orgSnapshotStore';
+import { isParseVersionStale } from './parseVersion';
 import {
   advanceWatermark,
   driftVerdict,
@@ -99,6 +107,30 @@ export interface CollectionSpec<T = unknown> {
   firstUrl: string;
   /** Per-row boundary schema; malformed rows drop leniently (ADR-0006). */
   schema: z.ZodType<T, z.ZodTypeDef, unknown>;
+  /**
+   * What this build's walk asks Okta for and stores (ADR-0066).
+   *
+   * Persisted per `(origin, collection)` in {@link SyncMeta.parseVersion} when a
+   * walk completes; a mismatch makes the next sync attempt a full walk, once.
+   *
+   * **Bump it when the request or the write-time transform changes** — a new
+   * `expand=`, a different {@link shards} selection or shard-key grammar, a
+   * change to {@link identify}, a move to another endpoint, or a schema that
+   * starts narrowing rather than passing through. None of those can be repaired
+   * later, because the bytes are not in the store.
+   *
+   * **Do not bump it for a read-side change.** The list schemas are
+   * `.passthrough()` and the store persists the parsed row, so a mapper that
+   * learns to read a field Okta was already sending lights up existing rows for
+   * free; a bump there would re-walk the org to buy nothing. The mechanical
+   * question is *is the value already in the stored row?*
+   *
+   * Required rather than optional so a new collection cannot be added without
+   * answering the question — and `parseVersion.test.ts` fingerprints every spec
+   * so a wire change that forgets its bump fails there rather than silently
+   * stranding every already-synced org.
+   */
+  parseVersion: number;
   /** Query parameters Okta may drop from its `rel="next"` link. */
   preserveParams?: string[];
   /** Label used in validation and log messages. */
@@ -324,6 +356,11 @@ export async function runFullWalk<T>(
     walkStartedAt: null,
     watermark,
     itemCount,
+    // Stamped here and nowhere else: only a walk that reached the last page has
+    // rewritten every row under the current question. The failure return above
+    // deliberately leaves the stored version alone, because half a collection at
+    // the new version is the state ADR-0066 exists to make impossible.
+    parseVersion: spec.parseVersion,
   });
 
   log.debug('Full walk complete', { collection, written, swept, itemCount });
@@ -680,6 +717,10 @@ export async function runShardedWalk<T>(
     walkStartedAt: null,
     completedShards: [],
     itemCount,
+    // Only after every shard finished. A fan-out that lost a leg has not
+    // re-walked the whole collection, so it has not earned the new version any
+    // more than it has earned the sweep above (ADR-0066 §3).
+    parseVersion: spec.parseVersion,
   });
 
   log.debug('Sharded walk complete', { collection, shards: shards.length, written, swept });
@@ -689,10 +730,12 @@ export async function runShardedWalk<T>(
 /**
  * Sync one collection by the cheapest mode that keeps the snapshot honest.
  *
- * The ladder is {@link nextSyncMode}'s, with one escalation this function owns:
- * a drift check that does **not** come back `in-sync` becomes a full walk. Both
- * `drifted` and `unknown` escalate — an org that did not answer the question has
- * not answered it in the affirmative (ADR-0040 §7).
+ * The ladder is {@link nextSyncMode}'s, with two escalations this function owns:
+ * a drift check that does **not** come back `in-sync` becomes a full walk — both
+ * `drifted` and `unknown` escalate, because an org that did not answer the
+ * question has not answered it in the affirmative (ADR-0040 §7) — and a
+ * collection whose stored `parseVersion` is behind its spec's skips the ladder
+ * entirely and walks in full, once (ADR-0066).
  *
  * @param spec - The collection.
  * @param options - See {@link FullWalkOptions}; `force` skips straight to full.
@@ -703,9 +746,28 @@ export async function syncCollection<T>(
   options: FullWalkOptions,
 ): Promise<WalkOutcome> {
   const meta = await orgSnapshotStore.getMeta(spec.collection, options.origin);
-  const mode: SyncMode = options.force
-    ? 'full'
-    : nextSyncMode(meta, options.now, spec.refreshIntervalMs);
+
+  // A version mismatch outranks every cheap rung, including `refreshIntervalMs`
+  // (ADR-0066 §4). A delta only rewrites rows Okta reports as changed, so it can
+  // never repair a row that is merely old-shaped, and the drift check would
+  // return `in-sync` across a field addition and license that delta — between
+  // them they would keep the gap forever while every check reported agreement.
+  // The interval does not gate this either: it exists to stop a *fresh* snapshot
+  // being re-derived, and a version-mismatched snapshot is not fresh, it is
+  // known-incomplete. The walk stays opportunistic in ADR-0040's sense — it runs
+  // at the next sync *attempt*, at `low` priority. A bump schedules nothing; it
+  // upgrades the next thing that was going to happen anyway.
+  const stale = isParseVersionStale(spec, meta);
+  if (stale && !options.force) {
+    log.debug('Snapshot parse version behind the spec; upgrading with a full walk', {
+      collection: spec.collection,
+      stored: meta.parseVersion ?? null,
+      expected: spec.parseVersion,
+    });
+  }
+
+  const mode: SyncMode =
+    options.force || stale ? 'full' : nextSyncMode(meta, options.now, spec.refreshIntervalMs);
 
   // A sharded collection has only two honest answers: walk the fan-out, or leave
   // it alone. There is no org-wide count to drift-check it against and no
@@ -749,6 +811,10 @@ export const GROUPS_SPEC: CollectionSpec = {
   collection: 'groups',
   firstUrl: `/api/v1/groups?limit=${OKTA_PAGE_SIZE}&expand=stats&expand=app`,
   schema: oktaGroupListItemSchema,
+  // 1 is the first knowable version: rows written before ADR-0066 record none at
+  // all, and version 0 cannot be asserted retroactively. Those orgs take one
+  // upgrade walk on the release that adopts this, and nothing after.
+  parseVersion: 1,
   preserveParams: ['expand'],
   context: 'GET /api/v1/groups',
 };
@@ -764,6 +830,7 @@ export const RULES_SPEC: CollectionSpec = {
   collection: 'rules',
   firstUrl: `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,
   schema: oktaGroupRuleSchema,
+  parseVersion: 1,
   context: 'GET /api/v1/groups/rules',
 };
 
@@ -781,6 +848,7 @@ export const APPS_SPEC: CollectionSpec = {
   collection: 'apps',
   firstUrl: `/api/v1/apps?limit=${OKTA_PAGE_SIZE}`,
   schema: oktaAppListItemSchema,
+  parseVersion: 1,
   context: 'GET /api/v1/apps',
 };
 
@@ -889,6 +957,7 @@ export const APP_GROUPS_SPEC: CollectionSpec = {
   // `countUrl` derives a path from it, and because it documents the shape.
   firstUrl: `/api/v1/apps/{appId}/groups?limit=${OKTA_PAGE_SIZE}`,
   schema: oktaAppGroupAssignmentSchema,
+  parseVersion: 1,
   context: 'GET /api/v1/apps/{appId}/groups',
   shards: pushEnabledAppShards,
   identify: (row, shard) => {
