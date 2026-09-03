@@ -255,6 +255,14 @@
   --sp-row-x: 12px; /* ListRow horizontal padding */
   --sp-inline: 8px; /* between chips, pills, icons */
   --sp-field: 10px; /* between form controls */
+  /*
+   * Seventh role (ADR-0048 amendment, I-022). Gap inside a toolbar cluster,
+   * above the card stack. Structural, so it snaps to the 4px grid, and it
+   * must stay strictly tighter than `--sp-rung` and strictly looser than
+   * `--sp-inline` at every density — that ordering is the reason the role
+   * exists.
+   */
+  --sp-toolbar: 12px; /* gap inside a toolbar cluster, above the card stack */
 
   @keyframes rise-in {
     from {
@@ -395,6 +403,7 @@
     --sp-row-x: 10px;
     --sp-inline: 6px;
     --sp-field: 8px;
+    --sp-toolbar: 8px;
     --merge-range: 8px;
   }
 }
@@ -408,6 +417,7 @@
     --sp-row-x: 16px;
     --sp-inline: 10px;
     --sp-field: 12px;
+    --sp-toolbar: 16px;
     --merge-range: 13px;
   }
 }
@@ -420,6 +430,7 @@
   --sp-row-x: 10px;
   --sp-inline: 6px;
   --sp-field: 8px;
+  --sp-toolbar: 8px;
   --merge-range: 8px;
 }
 
@@ -431,6 +442,7 @@
   --sp-row-x: 12px;
   --sp-inline: 8px;
   --sp-field: 10px;
+  --sp-toolbar: 12px;
   --merge-range: 10px;
 }
 
@@ -442,6 +454,7 @@
   --sp-row-x: 16px;
   --sp-inline: 10px;
   --sp-field: 12px;
+  --sp-toolbar: 16px;
   --merge-range: 13px;
 }
 

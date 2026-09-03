@@ -166,10 +166,7 @@ const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({
         )}
 
         {hasPolicies && (
-          // Raw `space-y-2`, not a role: this is a search input plus its own caption
-          // line, not a stack of cards (`--sp-rung`) or a row of controls
-          // (`--sp-field`) — none of ADR-0048's six roles names this relationship.
-          <div className="space-y-2">
+          <div className="space-y-(--sp-toolbar)">
             <Input
               value={searchQuery}
               onChange={setSearchQuery}

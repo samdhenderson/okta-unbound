@@ -231,13 +231,7 @@ const AppsTab: React.FC<AppsTabProps> = ({
 
       <div className="max-w-7xl mx-auto px-(--sp-gutter) py-(--sp-gutter) space-y-(--sp-rung)">
         <div className="flex flex-col h-[calc(100vh-280px)] min-h-[400px]">
-          {/*
-            Deliberately tighter than the rung above (raw `space-y-3`, not
-            `--sp-rung`): the toolbar and its error banner read as one zone, and none
-            of ADR-0048's six roles names "gap inside a toolbar cluster" — see the
-            matching note in GroupsTab.tsx.
-          */}
-          <div className="shrink-0 space-y-3">
+          <div className="shrink-0 space-y-(--sp-toolbar)">
             <AppsToolbar
               searchQuery={searchQuery}
               onSearchQueryChange={setSearchQuery}

@@ -537,15 +537,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             searchRow
           )}
 
-          {/*
-            Deliberately tighter than the rung around it (raw `space-y-3`, not
-            `--sp-rung`): filters, panels and alerts read as one toolbar zone, and
-            none of ADR-0048's six roles names "gap inside a toolbar cluster" —
-            forcing it into `--sp-field` or `--sp-inline` would misdescribe the
-            relationship. Matching the rung here would also erase the visual
-            distinction between this zone and the card stack below it.
-          */}
-          <div className="space-y-3">
+          <div className="space-y-(--sp-toolbar)">
             {/* Expandable Filter Panel */}
             {searchMode === 'cached' && showFilters && (
               <GroupFilterPanel
