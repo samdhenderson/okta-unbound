@@ -26,6 +26,7 @@
  */
 
 import type { EntityExport, ExportColumn } from '../types';
+import { dormantAccessLabel } from '../../components/groups/ruleOrphans';
 import {
   readDormantAccessRows,
   readGroupCleanupRows,
@@ -140,7 +141,9 @@ export const unmaintainedAppAccessReportDescriptor: EntityExport<ReportRow> = {
 };
 
 /**
- * *App access with no membership change* — every finding.
+ * *App access with no membership change in N months* — every finding. The
+ * name is derived from {@link dormantAccessLabel} so the threshold in the label
+ * can never drift from the threshold the join actually applies (ADR-0067 §1).
  *
  * Exported under ADR-0067 §5, which permits read-only egress from this report
  * precisely because its caveat rides along as a column. `read` takes the
@@ -150,7 +153,7 @@ export const unmaintainedAppAccessReportDescriptor: EntityExport<ReportRow> = {
 export const dormantAccessReportDescriptor: EntityExport<ReportRow> = {
   ...REPORT_SHAPE,
   id: 'report-dormant-app-access',
-  displayName: 'Report: App access with no membership change',
+  displayName: `Report: ${dormantAccessLabel()}`,
   icon: 'clock',
   description:
     'Groups holding an app open into which no membership write has landed since the ' +
