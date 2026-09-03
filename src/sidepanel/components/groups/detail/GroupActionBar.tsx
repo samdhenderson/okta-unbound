@@ -13,12 +13,30 @@
  * optional — `App.tsx` doesn't wire it through to the Groups tab yet — so the
  * omitted state is a real, reachable one, not a hypothetical.
  *
- * *Add* is the everyday, reversible verb (an add can always be undone by a
- * remove) and stays in the row at `priority: 'flex'`, mirroring
- * {@link module:sidepanel/components/users/UserActionBar}'s treatment of *Add
- * group*. *Compare* joins it there for the reason that strip puts its own
- * *Compare* in the row: a comparison reads two rosters and writes nothing, so
- * the worst a mis-press costs is a page you close again.
+ * ## *Add* is the `primary`, and *Export members* is behind **More**
+ *
+ * This strip used to lead with *Export members* in the blue button, with *Add*
+ * beside it in plain `secondary`. Both halves of that were wrong, and ADR-0068
+ * names why.
+ *
+ * `primary` marks a verb that **acts**: its object is the whole page (ADR-0030
+ * §2) *and* pressing it opens a modal or performs the operation. *Add* passes
+ * both. Its object is the group, not a selection of rows and not one section; it
+ * opens the add-members modal, which then writes. And it passes ADR-0039's
+ * consequence test in the row's favour — an add is undone by a remove, so it
+ * owes no confirmation and does not belong in the tier. It is the verb an admin
+ * came to this page to press, so it is the one wearing the fill.
+ *
+ * *Export members* takes `priority: 'tier'`, and that is a flat rule rather than
+ * a judgement about this rung: **an export descriptor is behind More in every
+ * strip, on every rung.** It does not produce a file in place — it forwards to
+ * the Export tab with its column picker and presets — so it is navigation
+ * wearing a verb's clothes, and it is never what the rung is for. It keeps that
+ * forwarding behaviour unchanged; only where it starts moved.
+ *
+ * *Compare* stays in the row for the reason `UserActionBar` puts its own
+ * *Compare* there: a comparison reads two rosters and writes nothing, so the
+ * worst a mis-press costs is a page you close again.
  *
  * ## The disclosure tier, and the two verbs in it
  *
@@ -176,30 +194,17 @@ const GroupActionBar: React.FC<GroupActionBarProps> = ({
     group.type !== 'APP_GROUP' &&
     deprovisionedCount !== undefined &&
     deprovisionedCount > 0;
-  // Declaration order is reading order and overflow order both: `Export
-  // members` is `primary` and defaults to `pinned` (never overflows), while
-  // `Add` and `Compare` are explicitly `flex` — and now that the strip has a
-  // tier, `Compare` is the first of them to move behind **More** when the panel
-  // tightens, `Add` the second.
+  // Declaration order is reading order and overflow order both. `Add` is
+  // `primary` and so defaults to `pinned` (never overflows); `Compare` is
+  // explicitly `flex` and is the first thing to move behind **More** when the
+  // panel tightens. `Export members` starts in the tier and never reaches the
+  // row at all (ADR-0068 §2).
   const actions: ActionDescriptor[] = [
-    ...(onExportGroup
-      ? [
-          {
-            id: 'export-members',
-            label: 'Export members',
-            icon: 'download',
-            variant: 'primary',
-            onClick: () => onExportGroup(group.id, group.name),
-            title:
-              "Export this group's members (opens the Export tab with column picker + presets)",
-          } satisfies ActionDescriptor,
-        ]
-      : []),
     {
       id: 'add-member',
       label: 'Add',
       icon: 'plus',
-      priority: 'flex',
+      variant: 'primary',
       onClick: onAddMember,
       disabled: targetTabId === null,
       title: 'Add a member to this group',
@@ -213,6 +218,19 @@ const GroupActionBar: React.FC<GroupActionBarProps> = ({
       disabled: targetTabId === null,
       title: 'Compare this group’s membership with another group',
     },
+    ...(onExportGroup
+      ? [
+          {
+            id: 'export-members',
+            label: 'Export members',
+            icon: 'download',
+            priority: 'tier',
+            onClick: () => onExportGroup(group.id, group.name),
+            title:
+              "Export this group's members (opens the Export tab with column picker + presets)",
+          } satisfies ActionDescriptor,
+        ]
+      : []),
     ...(canRemoveDeprovisioned
       ? [
           {

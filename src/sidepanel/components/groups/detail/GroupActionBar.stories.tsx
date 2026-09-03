@@ -31,10 +31,18 @@ const meta = {
           '`ActionBar` directly with an `export-members` descriptor shipped `disabled: !onExportGroup` ' +
           'whenever that prop was left out — a ghost action with no live wire.\n\n' +
           '**Export members** now only appears in the strip when `onExportGroup` is actually provided ' +
-          '(omitted, never disabled-forever). **Add** is the everyday, reversible verb and stays in ' +
-          "the row at `priority: 'flex'`, mirroring `UserActionBar`'s treatment of *Add group*. " +
-          '**Compare** sits beside it for the same reason that strip puts its own *Compare* in the ' +
-          'row: it reads two rosters and writes nothing.\n\n' +
+          '(omitted, never disabled-forever).\n\n' +
+          '**`Add` is the `primary` and `Export members` is behind More** (ADR-0068). This strip ' +
+          'used to lead with *Export members* in the blue button and put *Add* beside it in plain ' +
+          '`secondary`. `primary` marks a verb that **acts** — its object is the whole page *and* ' +
+          'pressing it opens a modal or performs the operation — and *Add* passes both while an ' +
+          'export passes neither: an export descriptor forwards to the Export tab with its column ' +
+          'picker and presets, which is navigation wearing a verb’s clothes. So every export ' +
+          "descriptor in the app takes `priority: 'tier'`, on every rung, as a flat rule rather " +
+          'than a per-strip judgement. *Add* also passes ADR-0039’s consequence test in the row’s ' +
+          'favour: an add is undone by a remove.\n\n' +
+          '**Compare** sits beside it for the same reason `UserActionBar` puts its own *Compare* in ' +
+          'the row: it reads two rosters and writes nothing.\n\n' +
           'The strip has a disclosure tier holding two verbs, one of each shape `ActionBar` ' +
           'offers. First, as a descriptor: **Remove deprovisioned**, ' +
           'the bulk cleanup that empties a group of every member Okta has already deprovisioned. ' +
@@ -111,10 +119,48 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * Every action wired: Export members (pinned, primary), Add and Compare (flex) in
- * the row, and Remove deprovisioned plus Create feeding rule behind **More**.
+ * Every action wired: Add (primary, pinned) and Compare (flex) in the row, with
+ * Export members, Remove deprovisioned and Create feeding rule behind **More**.
  */
 export const Default: Story = {};
+
+/**
+ * The reference shape for ADR-0068 §3: the verb that **acts** wears the fill, and
+ * the export that leaves is behind the disclosure.
+ *
+ * *Add* opens the add-members modal, which then writes — and an add is undone by
+ * a remove, so it owes no confirmation and belongs in the row. *Export members*
+ * forwards to the Export tab; it never produces a file in place, so it is never
+ * the point of the rung. Its handler and its forwarding behaviour are unchanged;
+ * only where it starts moved.
+ *
+ * Which button is *blue* is not asserted here and cannot be: the headless runner
+ * loads no Tailwind, so `variant` has no visible consequence to check. What the
+ * assertions below pin is the arrangement — who is in the row, who is behind
+ * **More** — which is the half that survives without a stylesheet.
+ */
+export const AddIsThePrimaryAndExportIsBehindMore: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Asserted structurally, through the region the **More** control names —
+    // the same shape `GroupDetailView.test.tsx` uses for the tier. "Is it
+    // visible" would not do it: a closed tier is a `0fr` grid row, which is a
+    // laid-out box either way.
+    const more = canvas.getByRole('button', { name: 'More' });
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
+    const tier = document.getElementById(more.getAttribute('aria-controls') ?? '');
+    if (!tier) throw new Error('the More control names no region');
+
+    await expect(within(tier).getByRole('button', { name: /Export members/ })).toBeInTheDocument();
+    await expect(within(tier).queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Add' })).toBeEnabled();
+
+    // And it is reachable: pressing More discloses it.
+    await userEvent.click(more);
+    await expect(more).toHaveAttribute('aria-expanded', 'true');
+  },
+};
 
 /** No `onExportGroup` — the strip renders only `Add`, never a disabled ghost button. */
 export const ExportOmitted: Story = {
