@@ -347,14 +347,36 @@ to `tier`, behind a confirm `Modal` that states the consequence in plain languag
 next to the control ("Blocks sign-in until reversed," not just "Suspend").
 A **list** rung reads the same rules with two additions (ADR-0051, ADR-0061). The tier
 may sort by **frequency** as well as consequence, though frequency may move a verb down,
-never up, and never brings a confirm `Modal` with it. And `primary` is spent on whichever
-of these the rung has:
+never up, and never brings a confirm `Modal` with it.
 
-- **A page-level verb, if there is one** — one whose object is the whole page rather
-  than a selection. `RulesListActionBar`'s _Load rules_ / _Refresh_ is the reference:
-  rules do not load on mount, so nothing on that rung means anything until it is pressed.
-- **Nothing, if there isn't** — `GroupsListActionBar` has only selection-scoped peers, so
-  it has no `primary`.
+**`primary` is a verb that acts** (ADR-0068). Two questions, both of which must answer
+yes: is its object the **whole page** — not a selection, a filter or a section — and does
+pressing it **act**, by opening a modal or performing the operation? A fetch fails the
+second, and so does a toggle that opens a read-only panel: revealing something to read is
+not acting. `GroupActionBar`'s **Add** is the reference — its object is the whole group,
+it opens a modal that writes, and adding a member is reversible, so it stays in the row.
+
+Where that leaves an export is a **ranking**, not a ban:
+
+1. **An acting verb wins.** On a rung that has one, every export takes `priority: 'tier'`
+   — `GroupActionBar`'s _Export members_ is behind **More**, under **Add**.
+2. **On a rung with no acting verb, the whole-rung export may hold `primary`** and stay in
+   the row. `GroupsListActionBar` is that rung: it ships `export-list` as `primary` and
+   keeps it. Any _other_ export there is selection-scoped and still goes to the tier.
+3. **Otherwise the rung has no `primary` at all**, which is a real answer rather than a
+   gap to fill — a strip of evenly-weighted peers.
+
+**A refresh is never `primary`, in any of the three cases**, and after ADR-0069 it is not a
+strip verb at all: one chrome control beside the Pin refreshes whatever the panel is
+showing.
+
+Rule 2 is the one that needs policing, because "this rung has no acting verb" is the easy
+thing to claim. It is an **enumeration, written as a comment above the descriptor array**:
+every verb the rung offers in any state, including verbs it renders outside the strip, each
+with the question it fails. On the Groups list rung the selection controls, `Compare`,
+`Export (N)` and `Merge` fail question 1; `Cross-search`, `Collections`, `Cleanup` and
+`Bulk actions` are read-only panels and fail question 2. A rung that later grows an acting
+verb loses the fallback in the same change.
 
 **The open inline panel is named in its label, not in a colour**: `Duplicates (3)` →
 `Hide duplicates`, plus an explicit `priority: 'pinned'` so the control that closes an
