@@ -2,10 +2,12 @@
  * @module sidepanel/components/members/MemberExplorer
  * @description Orchestrator for in-group member search, faceting, composition, MFA, and listing.
  *
- * Owns the explorer's client-side state — debounced search, the active
- * {@link MemberFilter} set, sort field/direction, and the paged visible window —
- * and derives the filtered/sorted list via the pure helpers in
- * `memberAnalytics`. Composes the search bar, filter panel, MFA scan panel,
+ * Owns the explorer's client-side state — debounced search, sort
+ * field/direction, and the paged visible window — and derives the
+ * filtered/sorted list via the pure helpers in `memberAnalytics`. The facet
+ * filter set is the exception: it lives in
+ * {@link module:sidepanel/hooks/useMemberFilters}, because it is the one piece
+ * of this state a neighbouring surface has a reason to reach. Composes the search bar, filter panel, MFA scan panel,
  * composition reports, member list, and the details/copy modals. MFA scan results
  * are owned by the parent overview and passed in.
  *
@@ -38,14 +40,12 @@ import BreakdownDetailsModal from './BreakdownDetailsModal';
 import MemberList from './MemberList';
 import MemberSourceFilterBar from './MemberSourceFilterBar';
 import { useMembershipProofs } from '../users/GroupMembershipsListProof';
+import { useMemberFilters } from '../../hooks/useMemberFilters';
 import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
 import type { GroupMembership } from '../../../shared/types';
 import type { MemberSourceIndex } from '../../../shared/membership/memberSourceIndex';
 import type { MemberSourceBucket } from '../groups/memberSourceBuckets';
 import {
-  type BreakdownRow,
-  type Dimension,
-  type MemberFilter,
   type SortField,
   computeDimensionBreakdown,
   computeMfaBreakdown,
@@ -54,11 +54,7 @@ import {
   sortMembers,
   getObservedFactorLabels,
   dimensionTitle,
-  SOURCE_DIMENSION,
 } from './memberAnalytics';
-
-/** Per-factor filter intent: unset, require-present, or require-absent. */
-type FactorMode = 'off' | 'has' | 'missing';
 
 /**
  * Everything the explorer needs to show — and filter by — where each member's
@@ -157,7 +153,13 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   onProveMemberSource,
 }) => {
   const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState<MemberFilter[]>([]);
+  /*
+    The filter set is the one piece of this component's state a neighbouring
+    surface has a reason to reach, so it is the piece that lives in a hook —
+    see `hooks/useMemberFilters` for the grammar it owns.
+  */
+  const memberFilters = useMemberFilters();
+  const { filters } = memberFilters;
   const [visibleCount, setVisibleCount] = useState(PAGE);
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState<SortField>('name');
@@ -202,11 +204,6 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   // roster cannot use the default group key.
   const proofs = useMembershipProofs(onProveMemberSource);
 
-  const activeSourceKeys = useMemo(
-    () => new Set(filters.filter((f) => f.dimension === SOURCE_DIMENSION).map((f) => f.value)),
-    [filters],
-  );
-
   const filtered = useMemo(
     () => filterMembers(members, debouncedQuery, filters, mfaResults, sourceBuckets),
     [members, debouncedQuery, filters, mfaResults, sourceBuckets],
@@ -218,77 +215,12 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
 
   // Reset the visible window whenever the result set / order changes. Done during
   // render (not in an effect) per the React pattern for deriving state.
-  const resetKey = `${debouncedQuery}__${filters
-    .map((f) => `${f.dimension}:${f.value}`)
-    .join('|')}__${members.length}__${sortBy}__${sortDesc}`;
+  const resetKey = `${debouncedQuery}__${memberFilters.key}__${members.length}__${sortBy}__${sortDesc}`;
   const [lastResetKey, setLastResetKey] = useState(resetKey);
   if (resetKey !== lastResetKey) {
     setLastResetKey(resetKey);
     setVisibleCount(PAGE);
   }
-
-  // --- Filter mutation helpers ------------------------------------------------
-  const toggleFilter = useCallback((dimension: Dimension, value: string, label: string) => {
-    setFilters((prev) => {
-      const existing = prev.find((f) => f.dimension === dimension && f.value === value);
-      if (existing) return prev.filter((f) => f !== existing);
-      return [...prev, { dimension, value, label }];
-    });
-  }, []);
-
-  const handleCompositionToggle = useCallback(
-    (dimension: Dimension, row: BreakdownRow) => {
-      toggleFilter(dimension, row.value, `${dimensionTitle(dimension)}: ${row.label}`);
-    },
-    [toggleFilter],
-  );
-
-  const handleStatusToggle = useCallback(
-    (row: BreakdownRow) => toggleFilter('status', row.value, `Status: ${row.label}`),
-    [toggleFilter],
-  );
-
-  const handleClearStatus = useCallback(
-    () => setFilters((prev) => prev.filter((f) => f.dimension !== 'status')),
-    [],
-  );
-
-  const handleMfaValueToggle = useCallback(
-    (value: string, label: string) => toggleFilter('mfa', value, label),
-    [toggleFilter],
-  );
-
-  const handleSetFactorMode = useCallback((label: string, mode: FactorMode) => {
-    setFilters((prev) => {
-      const without = prev.filter(
-        (f) =>
-          !(
-            f.dimension === 'mfa' &&
-            (f.value === `has:${label}` || f.value === `missing:${label}`)
-          ),
-      );
-      if (mode === 'off') return without;
-      const value = mode === 'has' ? `has:${label}` : `missing:${label}`;
-      const chip = `${mode === 'has' ? 'Has' : 'Missing'} ${label}`;
-      return [...without, { dimension: 'mfa', value, label: chip }];
-    });
-  }, []);
-
-  const handleSourceToggle = useCallback(
-    (key: string, label: string) => toggleFilter(SOURCE_DIMENSION, key, `Source: ${label}`),
-    [toggleFilter],
-  );
-
-  const clearSourceFilters = useCallback(
-    () => setFilters((prev) => prev.filter((f) => f.dimension !== SOURCE_DIMENSION)),
-    [],
-  );
-
-  const removeFilter = useCallback(
-    (filter: MemberFilter) => setFilters((prev) => prev.filter((f) => f !== filter)),
-    [],
-  );
-  const clearAll = useCallback(() => setFilters([]), []);
 
   const toggleSort = useCallback((field: SortField) => {
     setSortBy((prevField) => {
@@ -313,17 +245,13 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   }, [members.length, onRequestConfirm, onRunScan]);
 
   const mfaScanned = mfaResults !== null && scanStatus === 'complete';
-  const activeFilterCount = filters.length;
 
   // Full value distribution for the attribute details modal.
   const detailRows = useMemo(
     () => (detailKey ? computeDimensionBreakdown(members, detailKey) : []),
     [detailKey, members],
   );
-  const detailActiveValues = useMemo(
-    () => new Set(filters.filter((f) => f.dimension === detailKey).map((f) => f.value)),
-    [filters, detailKey],
-  );
+  const detailActiveValues = memberFilters.valuesFor(detailKey);
 
   return (
     <div className="space-y-(--sp-rung)">
@@ -334,9 +262,9 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         <div className="space-y-3">
           <MemberSourceFilterBar
             segments={memberSource.segments}
-            activeKeys={activeSourceKeys}
-            onToggle={handleSourceToggle}
-            onClearAll={clearSourceFilters}
+            activeKeys={memberFilters.sourceKeys}
+            onToggle={memberFilters.toggleSource}
+            onClearAll={memberFilters.clearSource}
             total={memberSource.index.byUserId.size}
           />
           {sourceDetail}
@@ -350,7 +278,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         </div>
         <FilterToggle
           open={showFilters}
-          activeCount={activeFilterCount}
+          activeCount={memberFilters.activeCount}
           onToggle={() => setShowFilters((prev) => !prev)}
         />
       </div>
@@ -367,13 +295,13 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
           onRunScanClick={handleScanClick}
           sortBy={sortBy}
           sortDesc={sortDesc}
-          onToggleStatus={handleStatusToggle}
-          onClearStatus={handleClearStatus}
-          onToggleMfaValue={handleMfaValueToggle}
-          onSetFactorMode={handleSetFactorMode}
+          onToggleStatus={memberFilters.toggleStatus}
+          onClearStatus={memberFilters.clearStatus}
+          onToggleMfaValue={memberFilters.toggleMfaValue}
+          onSetFactorMode={memberFilters.setFactorMode}
           onToggleSort={toggleSort}
-          onRemoveFilter={removeFilter}
-          onClearAll={clearAll}
+          onRemoveFilter={memberFilters.remove}
+          onClearAll={memberFilters.clearAll}
         />
       )}
 
@@ -381,13 +309,13 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
       <CompositionReports
         attributes={attributes}
         filters={filters}
-        onToggle={handleCompositionToggle}
+        onToggle={memberFilters.toggleRow}
         onExpand={setDetailKey}
         mfaRows={mfaRows}
         mfaResults={mfaResults}
         scanStatus={scanStatus}
         memberCount={members.length}
-        onToggleMfa={(row) => handleMfaValueToggle(row.value, row.label)}
+        onToggleMfa={(row) => memberFilters.toggleMfaValue(row.value, row.label)}
         onRunScanClick={handleScanClick}
       />
 
@@ -439,7 +367,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         title={detailKey ? dimensionTitle(detailKey) : ''}
         rows={detailRows}
         activeValues={detailActiveValues}
-        onRowClick={(row) => detailKey && handleCompositionToggle(detailKey, row)}
+        onRowClick={(row) => detailKey && memberFilters.toggleRow(detailKey, row)}
       />
 
       {/* Copy members (name / email / username) modal */}

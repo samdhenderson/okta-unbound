@@ -28,7 +28,7 @@ import MemberExplorer, { type MemberSourceContext } from './MemberExplorer';
 import { toMemberSourceSegments } from '../groups/memberSourceBuckets';
 import { buildMemberSourceIndex } from '../../../shared/membership/memberSourceIndex';
 import type { MemberSourceBreakdown } from '../../../shared/membership/groupSource';
-import type { OktaUser } from '../../../shared/types';
+import type { OktaUser, UserStatus } from '../../../shared/types';
 
 // jsdom ships no IntersectionObserver; `MemberList`'s auto-paging sentinel
 // constructs one on mount. Paging is `MemberList`'s own test, not this one's.
@@ -48,7 +48,7 @@ beforeAll(() => {
 
 function member(
   n: number,
-  status: string,
+  status: UserStatus,
   department: string,
   title: string,
   firstName = 'Ada',
