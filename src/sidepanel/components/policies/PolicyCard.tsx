@@ -36,7 +36,7 @@
  * non-identical announcements, never the same string twice.
  */
 import React, { memo, useCallback, useId, useState } from 'react';
-import { CopyableId, IconButton, ListRow, StretchedButton } from '../shared';
+import { CopyableId, Eyebrow, IconButton, ListRow, StretchedButton } from '../shared';
 import Icon from '../shared/Icon';
 import PolicyRulesList from './PolicyRulesList';
 import { useEntityQuery } from '../../cache/useEntityQuery';
@@ -111,9 +111,7 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
         >
           <div>
             <div className="space-y-3 border-t border-neutral-100 bg-neutral-50 px-4 pb-4 pt-3">
-              <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
-                Rules
-              </div>
+              <Eyebrow as="div">Rules</Eyebrow>
               <PolicyRulesList rules={rules} isLoading={isLoading} error={error} />
               {/*
                 The id goes through the shared `CopyableId` rather than being

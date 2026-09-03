@@ -32,8 +32,7 @@
  */
 import React, { useId, useMemo, useState } from 'react';
 import Icon from '../shared/Icon';
-import Input from '../shared/Input';
-import StretchedButton from '../shared/StretchedButton';
+import { Input, StretchedButton } from '../shared';
 
 /**
  * How many rows the chooser shows at once.
