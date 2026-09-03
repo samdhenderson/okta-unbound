@@ -513,7 +513,10 @@ comment at the call site:
   trade. A `Input`-level combobox mode is accepted future work, gated on a second
   consumer.)
 - **Genuinely custom controls:** the dynamic-color banner, radio-cards, the `AttributeFacet`
-  data-viz spread bars, and the Export tab's `EntityPicker` selectable entity
+  and `AttributeSpreadBar` data-viz spread bars, the Activity Bar's `BucketRow`
+  lane (a track whose fills, hatches and folded badges encode scheduler state —
+  the same dataviz category as the spread bars, not a list row, so `ListRow`
+  would fight it rather than serve it), and the Export tab's `EntityPicker` selectable entity
   cards (`role="button"` icon+title+description rows; `Button` is a centered
   CTA, so it does not fit — but `ListRow as="button"` now does, and
   `EntityPicker` is on the ADR-0029 migration list rather than a permanent

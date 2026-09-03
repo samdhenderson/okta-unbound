@@ -1444,6 +1444,32 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Status:** open
 - **Related:** `ADR-0051`, `ADR-0068`, `D-117`, `D-118`
 
+### D-124 · Three `ActivityView` fields survive with no reader
+
+- **Category:** dead-code
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useActivityBar.ts`,
+  `src/sidepanel/components/ActivityBarView.tsx`
+- **Verified:** 2026-09-03 — `message`, `elapsedLabel` and `apiCalls` lost their
+  last consumer when the "Active" metric slot was dropped.
+- **Problem:** The activity bar's four metric slots collapsed to one summary
+  line and the Active tile went with them. Three fields on `ActivityView` are
+  still computed and still passed down, and nothing renders any of them. They
+  are not caught by `knip`, which sees an object property in use because the
+  object is used. Dead state on a view model is worse than a dead export: the
+  next person to add a slot will find three plausible-looking fields already
+  wired and reach for one, without knowing it stopped meaning anything.
+- **Done when:** the three fields are gone from `ActivityView` and from
+  everything that builds one, or each carries a comment naming the consumer it
+  is being kept for. `useActivityBar.test.tsx` and the `ActivityBarView`
+  fixtures come along; no assertion is edited to accommodate the removal, since
+  nothing asserts on them today.
+- **Risk:** Low, but it touches many fixtures — the reason it was left out of
+  the redesign's diff rather than folded in. One concern, one commit.
+- **Status:** open
+- **Related:** `ADR-0008`, `ADR-0070`, `docs/dead-code.md`
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
