@@ -25,6 +25,7 @@ import {
 import userEvent from '@testing-library/user-event';
 import type { ReactElement, ReactNode } from 'react';
 import GroupsTab from './GroupsTab';
+import { useCurrentRefreshSubject } from '../hooks/useRefreshSubject';
 import { ProgressProvider } from '../contexts/ProgressContext';
 import { syncSnapshot } from '../../background/snapshotBridge';
 
@@ -349,10 +350,35 @@ function seedSnapshot(
  * and is why the "stale wins" race this suite used to pin no longer has a
  * mechanism.
  */
+/**
+ * Stands in for the chrome band's one refresh control (ADR-0069).
+ *
+ * The rung no longer renders a Refresh button of its own — it registers a
+ * subject, and `ContextBar` renders the only control. `ContextBar` is a sibling
+ * of the tab rather than a child, so a test that renders `GroupsTab` alone has
+ * no button to press. This reads the live registration through the same public
+ * hook the real control uses, so pressing it exercises the production seam
+ * rather than reaching into the rung.
+ */
+function RefreshHarness() {
+  const subject = useCurrentRefreshSubject();
+  if (!subject) return null;
+  return (
+    <button type="button" onClick={subject.run}>
+      {`Refresh ${subject.name}`}
+    </button>
+  );
+}
+
 async function renderCached(groups: Record<string, any>[], props: Record<string, any> = {}) {
   seedSnapshot('groups', groups.map(summaryToRaw));
   seedPushEnrichment(groups);
-  const result = render(<GroupsTab targetTabId={1} oktaOrigin={ORIGIN} {...props} />);
+  const result = render(
+    <>
+      <GroupsTab targetTabId={1} oktaOrigin={ORIGIN} {...props} />
+      <RefreshHarness />
+    </>,
+  );
   await act(async () => {});
   return result;
 }
@@ -812,7 +838,12 @@ describe('loadAllGroups', () => {
       ],
     }));
 
-    render(<GroupsTab targetTabId={1} oktaOrigin={ORIGIN} />);
+    render(
+      <>
+        <GroupsTab targetTabId={1} oktaOrigin={ORIGIN} />
+        <RefreshHarness />
+      </>,
+    );
     await uev.click(screen.getByRole('button', { name: 'Load All Groups' }));
 
     await waitFor(() => expect(renderedGroupNames()).toEqual(['Engineering', 'Slack Users']));
@@ -822,7 +853,11 @@ describe('loadAllGroups', () => {
       screen.getByPlaceholderText('Search by name, description, ID — or /regex/'),
     ).toBeInTheDocument();
     expect(screen.getByText('2 Cached')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Refresh/ })).toBeInTheDocument();
+    // RETARGETED (ADR-0069): the rung's own Refresh button is gone — one refresh
+    // lives in the chrome band and the rung tells it what "again" means. Same
+    // property, asserted at the seam that now carries it: a cached list is
+    // refreshable, and the control names this list rather than saying "this".
+    expect(screen.getByRole('button', { name: 'Refresh the groups list' })).toBeInTheDocument();
 
     // Every raw group was mapped to a summary: each row renders its type badge.
     expect(screen.getByText('OKTA')).toBeInTheDocument();

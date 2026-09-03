@@ -62,6 +62,7 @@ import { useViewStack } from '../hooks/useViewStack';
 import { useWorkingSet } from '../hooks/useWorkingSet';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useRefreshSubject } from '../hooks/useRefreshSubject';
 import type { GroupSummary } from '../../shared/types';
 import GroupExportModal from './groups/GroupExportModal';
 import GroupComparisonModal from './groups/GroupComparisonModal';
@@ -240,6 +241,18 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   const { groups, loading, loadAllGroups } = loader;
   const { filteredGroups, activeFilterCount } = filters;
   const { selectedGroupIds, selectedGroups } = selection;
+
+  const reloadGroups = useCallback(() => {
+    void loadAllGroups(true);
+  }, [loadAllGroups]);
+
+  // The list rung's answer to the app-level refresh control (ADR-0069 §2/§4).
+  // This used to be a `PageHeader.actions` Button beside `Load All Groups` —
+  // the slot ADR-0030 §2 exists to empty. The initial load stays in the header,
+  // because loading a list you have never loaded is not refreshing it; only the
+  // forced re-walk moves. Gated on `isActive` like every other fetch here: a
+  // hidden tab must not own the refresh (ADR-0018).
+  useRefreshSubject('the groups list', reloadGroups, isActive);
 
   // Re-resolve the pushed group against the live list so a refresh while drilled in
   // updates the detail view instead of stranding it on the snapshot that was pushed.
@@ -481,16 +494,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             >
               Load All Groups
             </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              icon="refresh"
-              onClick={() => void loadAllGroups(true)}
-              loading={loading}
-            >
-              Refresh
-            </Button>
-          )
+          ) : null
         }
         cornerAction={
           detailGroup && (
