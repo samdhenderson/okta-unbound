@@ -70,11 +70,9 @@
  * "unknown", live in {@link module:sidepanel/components/home/orgFigures}.
  */
 import React from 'react';
-import Eyebrow from '../shared/Eyebrow';
+import { Eyebrow, IconButton, ListRow, Skeleton } from '../shared';
+// `Icon` is deliberately not in the barrel, so it keeps its direct import.
 import Icon from '../shared/Icon';
-import IconButton from '../shared/IconButton';
-import ListRow from '../shared/ListRow';
-import Skeleton from '../shared/Skeleton';
 import { getRelativeTime } from '../../../shared/utils/dateFormat';
 import type { ListViewRequest, ListViewTab } from '../../listViewRequest';
 import type { OrgBox, OrgSubCount } from './orgFigures';
