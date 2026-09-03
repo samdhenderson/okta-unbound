@@ -40,6 +40,39 @@ import type { GroupFinding } from '../groups/ruleOrphans';
  */
 export const REPORT_PREVIEW_LIMIT = 25;
 
+/**
+ * What the MFA-coverage launcher says before anything is picked.
+ *
+ * The one question on this card whose answer is **not** free: a factor read per
+ * member. So the row is a scope-first launcher rather than a number, and this
+ * sentence states the cost up front — an admin who lands on the group's page and
+ * only then discovers the price has been misled by the row that sent them.
+ */
+export const MFA_SCAN_CAVEAT =
+  'This one is not free. Coverage is a factor read per member, so picking a group opens that ' +
+  'group and arms the scan there — nothing is read until you start it.';
+
+/**
+ * What the launcher says when the group collection was never walked.
+ *
+ * Same rule as a report that cannot state a number: offering a chooser built
+ * from whatever rows happened to be on disk would present an unread org as an
+ * org with three groups in it.
+ */
+export const MFA_UNAVAILABLE_NOTE =
+  'Groups have not been read yet, so there is nothing to choose from. Refresh the org snapshot ' +
+  'above, then come back.';
+
+/**
+ * What the launcher adds when the group walk did not finish.
+ *
+ * Unlike a report, a partial list is still *usable* here — every group it does
+ * name is real and scannable. What it cannot do is imply completeness, so a
+ * group missing from the filter is explained rather than left to look absent.
+ */
+export const MFA_PARTIAL_NOTE =
+  'The last group read did not finish, so a group missing from this list may simply be unread.';
+
 /** One report row. */
 export interface HomeReport {
   /** Stable key, for React and for tests. */

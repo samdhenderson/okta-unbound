@@ -72,6 +72,7 @@ import { useCommandPalette } from './hooks/useCommandPalette';
 import { migrateLegacyTabId, type TabType } from './tabs';
 import HomeTab from './components/HomeTab';
 import type { ExportRequest } from './components/export';
+import type { GroupDetailTab } from './components/groups/detail/GroupDetailView';
 import { viewFor, type ListViewRequest, type ListViewTab } from './listViewRequest';
 import ActivityBar from './components/ActivityBar';
 
@@ -170,7 +171,7 @@ function hasLiveContextMoved(pinned: PinnedContext | null, live: LiveIdentity | 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [groupNav, setGroupNav] = useState<{ id: string; pane?: GroupDetailTab } | null>(null);
   // A one-shot request to open a specific user in the Users tab (e.g. from the
   // a jump into a user); cleared by the tab once consumed.
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -367,8 +368,10 @@ const App: React.FC = () => {
     chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'rules' });
   }, []);
 
-  const handleNavigateToGroup = useCallback((groupId: string) => {
-    setSelectedGroupId(groupId);
+  // `pane` opens the group *at* a detail rung (Home's MFA launcher asks for
+  // `'insights'`); every other caller omits it and lands on the row as before.
+  const handleNavigateToGroup = useCallback((groupId: string, pane?: GroupDetailTab) => {
+    setGroupNav({ id: groupId, pane });
     setActiveTab('groups');
     chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'groups' });
   }, []);
@@ -562,6 +565,7 @@ const App: React.FC = () => {
                 oktaOrigin={tabContext.oktaOrigin ?? undefined}
                 onOpenListView={handleOpenListView}
                 onOpenTab={handleOpenTab}
+                onScanGroupMfa={(id) => handleNavigateToGroup(id, 'insights')}
               />
             ))}
             {renderTabPanel('rules', (isActive) => (
@@ -598,8 +602,9 @@ const App: React.FC = () => {
                 targetTabId={tabContext.targetTabId ?? null}
                 oktaOrigin={tabContext.oktaOrigin ?? undefined}
                 onNavigateToRule={handleNavigateToRule}
-                selectedGroupId={selectedGroupId}
-                onGroupSelected={() => setSelectedGroupId(null)}
+                selectedGroupId={groupNav?.id ?? null}
+                selectedGroupPane={groupNav?.pane}
+                onGroupSelected={() => setGroupNav(null)}
                 // The descriptor-driven Export Engine route (ADR-0030). Without
                 // it the drilled-in group's "Export members" greys itself out.
                 onExportGroup={handleExportGroup}

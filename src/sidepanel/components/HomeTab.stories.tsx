@@ -193,6 +193,7 @@ const meta = {
     oktaOrigin: ORIGIN,
     onOpenListView: fn(),
     onOpenTab: fn(),
+    onScanGroupMfa: fn(),
   },
   beforeEach: async () => {
     resetSyncSnapshotResponder();

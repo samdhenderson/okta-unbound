@@ -31,13 +31,35 @@ import {
   type OrphanCandidateGroup,
 } from '../components/groups/ruleOrphans';
 import { splitShardedId } from '../../shared/snapshot/types';
-import type { FigureSource } from '../components/home/orgFigures';
+import { pluralize } from '../../shared/utils/plural';
+import {
+  figureStatus,
+  type FigureSource,
+  type OrgFigureStatus,
+} from '../components/home/orgFigures';
+import type { EntityChoice } from '../components/home/EntityChooser';
 import type { OrgEntityIndex } from './useOrgEntityIndex';
 
 /** What {@link useHomeReports} exposes. */
 export interface UseHomeReportsResult {
   /** The report rows, in display order. */
   reports: HomeReport[];
+  /**
+   * Every group in the snapshot, as the MFA launcher's chooser offers them.
+   *
+   * The same projection the reports themselves count, so a group named by a
+   * report and a group offered by the chooser cannot disagree about its name.
+   * Uncapped on purpose: the chooser filters locally and states its own visible
+   * cap, and truncating here would hide groups from a filter that could have
+   * found them.
+   */
+  groupChoices: EntityChoice[];
+  /**
+   * Read state of the group collection behind
+   * {@link UseHomeReportsResult.groupChoices} — whether a chooser may be offered
+   * at all, and whether it has to admit to being partial.
+   */
+  groupChoicesStatus: OrgFigureStatus;
 }
 
 /** Options for {@link useHomeReports}. */
@@ -117,6 +139,19 @@ export function useHomeReports({ index }: UseHomeReportsOptions): UseHomeReports
     return ids;
   }, [appGroups.records]);
 
+  // Reuses the report rows' own projection, so the chooser and the reports name
+  // the same group the same way. `memberCount` is the snapshot's embedded stat,
+  // which is exactly the fact that decides whether a coverage scan is cheap.
+  const groupChoices = useMemo<EntityChoice[]>(
+    () =>
+      candidates.map((group) => ({
+        id: group.id,
+        name: group.name,
+        detail: pluralize(group.memberCount, 'members'),
+      })),
+    [candidates],
+  );
+
   const groupSource = toSource(groups);
   const ruleSource = toSource(rules);
   const appSource = toSource(apps);
@@ -186,5 +221,5 @@ export function useHomeReports({ index }: UseHomeReportsOptions): UseHomeReports
     ],
   );
 
-  return { reports };
+  return { reports, groupChoices, groupChoicesStatus: figureStatus(groupSource) };
 }

@@ -15,7 +15,7 @@
  * ({@link GroupInsightsPane} — attribute spread and drift cards, a
  * gated MFA-coverage scan, and the group's own reference facts folded into a
  * closed `CollapsibleSection`). `activeTab` is owned here (`useState`,
- * default `'overview'` — `'members'` when `autoAnalyze` is set; see that
+ * default `'overview'`, or whichever pane `initialPane` names; see that
  * prop's doc) — this is a page-local pane switch, not sub-navigation, so it
  * does not warrant `useViewStack` or a lifted hook.
  *
@@ -96,8 +96,8 @@ import { cacheKeys } from '../../../cache/keys';
 import { OKTA_PAGE_SIZE } from '../../../../shared/utils/oktaPagination';
 import type { GroupSummary } from '../../../../shared/types';
 
-/** Which tabbed pane of the body (below the action bar) is on screen. */
-type GroupDetailTab = 'overview' | 'members' | 'access' | 'rules' | 'insights';
+/** Which tabbed pane is on screen. Exported: a caller may push this view *at* one. */
+export type GroupDetailTab = 'overview' | 'members' | 'access' | 'rules' | 'insights';
 
 /**
  * 5 pages of the group-members walk — the auto-load/manual-gate boundary for
@@ -133,17 +133,18 @@ interface GroupDetailViewProps {
   /** Deep-links a rule in the Rules tab (from either rule list, or a contribution). */
   onNavigateToRule?: (ruleId: string) => void;
   /**
-   * Runs the gated member-source analysis as soon as the view opens, once per
-   * group. Set when the push came from a list row's "Analyze member source"
-   * action — the user already asked for the analysis, so re-asking here would be
-   * a pointless second click. Never set by a plain drill-in.
+   * Which pane the caller asked to land on; omitted by a plain drill-in, which
+   * opens on `'overview'`. A push made *in order to* read one pane names it, so
+   * what was asked for is on screen rather than one tap away.
    *
-   * Also picks the tab shell's initial pane: a plain drill-in opens on
-   * `'overview'` (the landing tab), but `autoAnalyze` opens straight on
-   * `'members'` instead, so the analysis this prop just triggered lands where
-   * its result is actually visible rather than one tap away.
+   * `'members'` additionally runs the gated member-source analysis once per
+   * group — asking for that pane is asking for the readout it exists to show.
+   * Deliberately not a separate `autoAnalyze` flag beside it: two callers naming
+   * the same pane could then disagree about whether it analyzes. No other pane
+   * reads anything — `'insights'` leaves its MFA scan armed and un-run, since
+   * that walk is per-member and nothing may spend it unasked.
    */
-  autoAnalyze?: boolean;
+  initialPane?: GroupDetailTab;
   /**
    * Whether the Groups tab is the visible top-level tab. The view stays mounted
    * while another tab is selected, so its two read-only loads are deferred rather
@@ -176,16 +177,16 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   targetTabId,
   oktaOrigin,
   onNavigateToRule,
-  autoAnalyze = false,
+  initialPane,
   isActive = true,
   onExportGroup,
 }) => {
   // Page-local pane switch, not sub-navigation — no `useViewStack`, no lifted
-  // hook. A plain drill-in lands on the Overview tiles; `autoAnalyze` skips
-  // straight to Members, where the analysis it triggers actually renders (see
-  // that prop's doc). The initializer runs once, so a later prop change does
-  // not retroactively move a reader who is already looking at a tab.
-  const [activeTab, setActiveTab] = useState<GroupDetailTab>(autoAnalyze ? 'members' : 'overview');
+  // hook. A plain drill-in lands on the Overview tiles; a caller that asked for
+  // a particular pane lands there instead (see that prop's doc). The
+  // initializer runs once, so a later prop change does not retroactively move a
+  // reader who is already looking at a tab.
+  const [activeTab, setActiveTab] = useState<GroupDetailTab>(initialPane ?? 'overview');
 
   // Two lines, and the reason they are *here* rather than in the navigation
   // machinery: this rung is the only surface that knows all four facts at once —
@@ -322,7 +323,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   //
   // Fires whenever the group's roster is cheap enough to auto-load
   // (`AUTO_LOAD_MEMBER_CAP`), not just when a list row explicitly asked for it
-  // (`autoAnalyze`) — the same "populate what's cheap, gate what isn't"
+  // (`initialPane === 'members'`) — the same "populate what's cheap, gate what isn't"
   // tiering `useGroupAccessGrants`/`useGroupRuleReferences` already apply.
   // Not gated on `isActive` directly: `openedGroupId` only becomes truthy
   // once `open()` has actually run, and `open()`'s own owed-load already
@@ -330,7 +331,8 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   // tab-visibility-safe (ADR-0018) without repeating that check here.
   const openedGroupId = source.group?.id;
   const withinAutoLoadBudget = group.memberCount <= AUTO_LOAD_MEMBER_CAP;
-  useOwedLoad(group.id, (autoAnalyze || withinAutoLoadBudget) && openedGroupId === group.id, () => {
+  const shouldAnalyze = initialPane === 'members' || withinAutoLoadBudget;
+  useOwedLoad(group.id, shouldAnalyze && openedGroupId === group.id, () => {
     analyzeMembers();
   });
 

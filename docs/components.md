@@ -384,6 +384,42 @@ gate. It is also the rung that closes ADR-0030's last unconverted layout dialect
 expandable body, whose four write verbs flex-wrapped at the bottom of a card were the exact
 "page-level verb read as a section's property" failure ADR-0030 §2 exists to stop.
 
+`EntityChooser` (`components/home/`) is the **scope-first launcher**: pick one entity out
+of a list already in memory, and hand its id back. It exists for the actions a surface
+cannot afford to run for everybody — Home's MFA-coverage row is a factor read per member,
+so the honest shape is not a number with a list behind it but a chooser that names the
+group first and lands where the scan can be started deliberately (`I-019`).
+
+It **filters; it never searches.** Everything offered arrives through `choices`, and
+typing narrows that array locally. A chooser that queried Okta per keystroke would spend
+requests to avoid spending requests, which is the whole reason the surface is a chooser
+and not a count. Its visible cap is stated on screen whenever it truncates, the same rule
+the reports card applies to a capped finding list: a list quietly cut to its first page
+reads as "your group is not in this org".
+
+| Prop          | Default                   | What it does                                                                                                          |
+| ------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `choices`     | — (required)              | every offerable `{ id, name, detail? }`, already in memory; **untrusted** names, rendered escaped                     |
+| `filterLabel` | — (required)              | accessible name _and_ placeholder of the filter field ("Filter groups")                                               |
+| `actionLabel` | — (required)              | accessible name of each row's press target — the **verb**, since the name is already announced via `aria-describedby` |
+| `onChoose`    | — (required)              | called with the chosen id; the caller decides where that goes                                                         |
+| `emptyLabel`  | `'Nothing matches that.'` | what to say when the filter matches nothing                                                                           |
+
+What it **refuses**: no `onFilterChange` or async source (see above — the caller passes
+its 20k rows and pays nothing, but this component is never the thing that fetches them);
+no `renderRow`, `className` or `variant`, because the row treatment is shared with the
+reports card's finding lists through `EntityChoiceRow` and a styling hatch is how those
+two drift apart; no `multiple`/selection state, because pressing a row is a one-shot
+hand-off with nothing to accumulate and nothing to confirm; and no fuzzy matching, since
+an admin filtering by name is recalling a name they already know and a fuzzy match's job
+— surfacing what you did not type — only buries the exact hit.
+
+It lives under `home/` rather than `shared/` because it has exactly one caller. The
+promotion trigger is `RuleExpressionText`'s: the second feature to consume it moves it to
+`shared/`, into the barrel, unchanged. `ReportRow` (`RowLines` + `RowDisclosure`) sits
+beside it for the same reason — it is the reports card's row idiom, shared by the rows
+that count and the row that scopes so the two cannot drift under a polish pass.
+
 ## Documented raw-control exceptions
 
 The button/input migration is complete; these are the raw controls that stay raw
