@@ -3,12 +3,14 @@
  * @description Home's fourth region: the questions whose answer is a list of
  * names rather than a number.
  *
- * The same row idiom as the org card directly above it — a number column, a
- * sentence, one bordered surface with hairline separators — because they are two
- * halves of the same reading. The difference is what pressing a row does. A
- * finding sends you to a filtered list; a report **opens in place**, because the
- * dozen or so groups it names are the whole answer and a tab switch to read them
- * would be ceremony.
+ * A sibling of the org card directly above it, because they are two halves of
+ * the same reading. The difference is what pressing a row does. A finding sends
+ * you to a filtered list; a report **opens in place**, because the dozen or so
+ * groups it names are the whole answer and a tab switch to read them would be
+ * ceremony. That is also why the two surfaces no longer share a row shape: the
+ * card's findings became icon-led cards when the card shrank to two rows, while
+ * a report is still a dense, table-like disclosure list (ADR-0029's second
+ * sanctioned separator pattern).
  *
  * Every report here is a join over rows the snapshot already holds, so opening
  * one costs nothing.
@@ -172,7 +174,7 @@ const ReportsCard: React.FC<ReportsCardProps> = ({
       {reports.map((report) => (
         <Report key={report.key} report={report} onOpenGroup={onOpenGroup} />
       ))}
-      {/* Last, and deliberately: the two rows above are answers, this one is a
+      {/* Last, and deliberately: the rows above are answers, this one is a
           question the reader has to scope before it can be answered. */}
       <MfaCoverageLauncher
         choices={groupChoices}

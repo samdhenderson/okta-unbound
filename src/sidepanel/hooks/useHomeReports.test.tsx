@@ -89,22 +89,16 @@ const report = (result: UseHomeReportsResult, key: string) =>
   result.reports.find((entry) => entry.key === key);
 
 describe('useHomeReports', () => {
-  it('derives both reports from rows already held, and issues nothing', () => {
+  it('derives its report from rows already held, and issues nothing', () => {
+    // One report, and only one. "Empty groups nothing fills" was promoted onto
+    // the org card above (it costs no walk of its own), and the dormant-access
+    // report was cut from Home entirely — "dormant" is a threshold this panel
+    // does not own. Both survive elsewhere: the Groups tab's cleanup panel and
+    // the org-report export.
     sync.mockClear();
     const { result } = render(makeIndex());
-    expect(result.current.reports.map((entry) => entry.key)).toEqual([
-      'group-cleanup',
-      'unmaintained-app-access',
-      'dormant-app-access',
-    ]);
+    expect(result.current.reports.map((entry) => entry.key)).toEqual(['unmaintained-app-access']);
     expect(sync).not.toHaveBeenCalled();
-  });
-
-  it('finds the abandoned group and no other', () => {
-    const { result } = render(makeIndex());
-    const cleanup = report(result.current, 'group-cleanup');
-    expect(cleanup?.value).toBe(1);
-    expect(cleanup?.findings.map((finding) => finding.name)).toEqual(['Abandoned']);
   });
 
   it('names the app from the record key, not from the assignment row', () => {
@@ -119,70 +113,14 @@ describe('useHomeReports', () => {
     ]);
   });
 
-  it('withholds both reports, names and all, when the rules were never read', () => {
-    // Rules gate both: they are subtracted, so a half-read rule list does not
-    // shorten these answers, it corrupts them.
+  it('withholds the report, names and all, when the rules were never read', () => {
+    // Rules gate it: they are subtracted, so a half-read rule list does not
+    // shorten this answer, it corrupts it.
     const { result } = render(makeIndex({ rulesOver: { complete: false, lastFullWalkAt: null } }));
     for (const entry of result.current.reports) {
       expect(entry.value).toBeNull();
       expect(entry.findings).toEqual([]);
       expect(entry.note).toBe('Needs group rules, which have not been read.');
-    }
-  });
-});
-
-/**
- * The dormant report's clock (ADR-0067 §3). The join and its copy are tested in
- * `components/groups/ruleOrphans`; what only exists here is where the anchor
- * comes from — the group handle's `lastFullWalkAt` — and what the reader is
- * shown when it cannot carry a claim.
- */
-describe('useHomeReports · the dormant report', () => {
-  const dormant = (result: UseHomeReportsResult) => report(result, 'dormant-app-access');
-
-  it('states the silence it observed, measured from the last complete group read', () => {
-    const { result } = render(makeIndex());
-    expect(dormant(result.current)?.label).toBe('App access with no membership change in 6 months');
-    expect(dormant(result.current)?.value).toBe(1);
-    expect(dormant(result.current)?.findings).toEqual([
-      {
-        id: 'g3',
-        name: 'Sales tools',
-        detail: '12 members · Slack · no membership change in 2 years',
-      },
-    ]);
-    expect(dormant(result.current)?.caveat).toContain(
-      'Measured from the last complete read of your groups,',
-    );
-  });
-
-  it('withholds the report entirely when the groups were never fully walked', () => {
-    const { result } = render(makeIndex({ complete: false, lastFullWalkAt: null }));
-    expect(dormant(result.current)?.value).toBeNull();
-    expect(dormant(result.current)?.findings).toEqual([]);
-  });
-
-  it('withholds the report when the anchor is too old to certify a silence', () => {
-    // Every collection here read cleanly — the count is suppressed purely
-    // because the walk it would be measured from is 60 days behind. Without
-    // this, a group that gained fifty members yesterday but whose profile was
-    // last edited in 2021 reads as dormant with high confidence, forever.
-    const { result } = render(makeIndex({ lastFullWalkAt: NOW - 60 * DAY }));
-    expect(dormant(result.current)).toMatchObject({ status: 'unavailable', value: null });
-    expect(dormant(result.current)?.findings).toEqual([]);
-    expect(dormant(result.current)?.note).toContain(
-      'Needs a complete read of your groups from the last 30 days.',
-    );
-    // The sibling report is unaffected: its claim does not rest on the anchor.
-    expect(report(result.current, 'unmaintained-app-access')?.value).toBe(1);
-  });
-
-  it('offers nothing to act on — the findings navigate and nothing more', () => {
-    // ADR-0067 §5. A finding is an id, a name and a line of prose; there is no
-    // verb, no selection and no path into the bulk machinery from this shape.
-    const { result } = render(makeIndex());
-    for (const finding of dormant(result.current)?.findings ?? []) {
-      expect(Object.keys(finding).sort()).toEqual(['detail', 'id', 'name']);
     }
   });
 });

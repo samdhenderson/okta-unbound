@@ -88,7 +88,7 @@ function makeIndex(options: StubOptions = {}): OrgEntityIndex {
 
 /** Find one finding by key. */
 const sub = (
-  boxes: { subCounts: { key: string; value: number | null; note?: string }[] }[],
+  boxes: { subCounts: { key: string; value: number | null; note?: string; icon: string }[] }[],
   key: string,
 ) => boxes.flatMap((box) => box.subCounts).find((s) => s.key === key);
 
@@ -123,27 +123,61 @@ describe('useOrgFigures', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW);
   });
 
-  it('derives one entry per collection from what is already mounted', () => {
+  it('derives one entry per collection the card speaks about — two, not four', () => {
+    // Applications and app-group assignments are mounted (the jump bar and the
+    // reports use them) and are deliberately absent here: no row on this card
+    // may depend on an apps walk. See the row budget in the hook's header.
     const { result } = render(makeIndex());
-    expect(result.current.boxes.map((b) => b.key)).toEqual(['groups', 'apps', 'rules']);
-    expect(result.current.boxes.map((b) => b.value)).toEqual([2, 3, 3]);
-    expect(result.current.boxes.map((b) => b.tab)).toEqual(['groups', 'apps', 'rules']);
-    expect(result.current.boxes.map((b) => b.noun)).toEqual([
-      'groups',
-      'applications',
-      'group rules',
-    ]);
+    expect(result.current.boxes.map((b) => b.key)).toEqual(['rules', 'groups']);
+    expect(result.current.boxes.map((b) => b.value)).toEqual([3, 2]);
+    expect(result.current.boxes.map((b) => b.tab)).toEqual(['rules', 'groups']);
+    expect(result.current.boxes.map((b) => b.noun)).toEqual(['group rules', 'groups']);
   });
 
   it('derives every finding from rows already held — no extra read', () => {
     const { result } = render(makeIndex());
     const { boxes } = result.current;
-    expect(sub(boxes, 'groups-empty')?.value).toBe(1);
-    expect(sub(boxes, 'groups-unruled')?.value).toBe(1);
-    expect(sub(boxes, 'apps-inactive')?.value).toBe(1);
-    expect(sub(boxes, 'apps-idle-push')?.value).toBe(1);
+    // Two findings, and both are joins over groups and rules alone.
+    expect(boxes.flatMap((box) => box.subCounts).map((s) => s.key)).toEqual([
+      'rules-paused',
+      'groups-empty-unfilled',
+    ]);
     expect(sub(boxes, 'rules-paused')?.value).toBe(2);
+    expect(sub(boxes, 'groups-empty-unfilled')?.value).toBe(1);
     expect(syncs).toEqual([]);
+  });
+
+  it('counts the INTERSECTION, not either half of it', () => {
+    // The two rows this one replaced were each a superset of it. `g2` is empty
+    // and unfilled; `g3` is empty but a rule fills it, so it is a cohort
+    // waiting for its first hire rather than a finding. A stub where the two
+    // coincided could not tell a merge from a rename.
+    const base = makeIndex();
+    const index = {
+      ...base,
+      groups: stub(
+        'groups',
+        [
+          { id: 'g1', _embedded: { stats: { usersCount: 7 } } },
+          { id: 'g2', _embedded: { stats: { usersCount: 0 } } },
+          { id: 'g3', _embedded: { stats: { usersCount: 0 } } },
+        ],
+        {},
+      ),
+      rules: stub(
+        'rules',
+        [{ id: 'r1', status: 'ACTIVE', actions: { assignUserToGroups: { groupIds: ['g3'] } } }],
+        {},
+      ),
+    } as unknown as OrgEntityIndex;
+    const { result } = render(index);
+    expect(sub(result.current.boxes, 'groups-empty-unfilled')?.value).toBe(1);
+  });
+
+  it('leads with each finding’s glyph, so the rows read as one column', () => {
+    const { result } = render(makeIndex());
+    expect(sub(result.current.boxes, 'rules-paused')?.icon).toBe('pause');
+    expect(sub(result.current.boxes, 'groups-empty-unfilled')?.icon).toBe('users');
   });
 
   it('agrees with a denominator of one — the nouns are declared plural (I-024)', () => {
@@ -154,15 +188,16 @@ describe('useOrgFigures', () => {
     const base = makeIndex();
     const index = {
       ...base,
-      apps: stub('apps', [{ id: 'a1', status: 'INACTIVE' }], {}),
+      // `g9`, not `g1`: the default index has a rule filling `g1`, which would
+      // make the denominator-of-one case a count of zero by accident.
+      groups: stub('groups', [{ id: 'g9', _embedded: { stats: { usersCount: 0 } } }], {}),
     } as unknown as OrgEntityIndex;
     const { result } = render(index);
-    expect(sub(result.current.boxes, 'apps-inactive')).toMatchObject({
+    expect(sub(result.current.boxes, 'groups-empty-unfilled')).toMatchObject({
       value: 1,
-      note: 'of 1 application',
+      note: 'of 1 group',
     });
-    // The collections with more than one of them are untouched.
-    expect(sub(result.current.boxes, 'groups-empty')?.note).toBe('of 2 groups');
+    // The collection with more than one of them is untouched.
     expect(sub(result.current.boxes, 'rules-paused')?.note).toBe('of 3 group rules');
   });
 
@@ -177,22 +212,21 @@ describe('useOrgFigures', () => {
       box.subCounts.map((subCount) => subCount.request),
     );
     expect(requests).toEqual([
-      { tab: 'groups', view: 'empty' },
-      { tab: 'groups', view: 'no-rules' },
-      { tab: 'apps', view: 'inactive' },
-      { tab: 'apps', view: 'pushes-nothing' },
       { tab: 'rules', view: 'paused' },
+      // Both axes, because the count is the intersection of both: a finding
+      // whose number disagrees with the list it opens is worse than no link.
+      { tab: 'groups', view: 'empty-no-rules' },
     ]);
   });
 
   it('suppresses a subtracting finding when the collection it subtracts was never walked', () => {
-    // Groups walked cleanly; rules never did. "Empty" is still exact — it reads
-    // only the group rows — but "no rules" must not report both groups as unfed
-    // on the strength of a rule list that does not exist.
+    // Groups walked cleanly; rules never did. The finding is computed by
+    // subtracting the rule-filled groups, so a rule list that does not exist
+    // would have it report every group those missing rules fill as unfilled.
+    // There is no honest caveat for that, so the number is withheld outright.
     const { result } = render(makeIndex({ rulesOver: { lastFullWalkAt: null, complete: false } }));
-    expect(sub(result.current.boxes, 'groups-empty')?.value).toBe(1);
-    expect(sub(result.current.boxes, 'groups-unruled')?.value).toBeNull();
-    expect(sub(result.current.boxes, 'groups-unruled')?.note).toBe(
+    expect(sub(result.current.boxes, 'groups-empty-unfilled')?.value).toBeNull();
+    expect(sub(result.current.boxes, 'groups-empty-unfilled')?.note).toBe(
       'Needs group rules, which have not been read.',
     );
   });
@@ -334,9 +368,19 @@ describe('useOrgFigures', () => {
 
   it('quotes the oldest walk behind the card', () => {
     const index = makeIndex();
-    (index.apps as { lastFullWalkAt: number | null }).lastFullWalkAt = NOW - 9000;
+    (index.rules as { lastFullWalkAt: number | null }).lastFullWalkAt = NOW - 9000;
     const { result } = render(index);
     expect(result.current.readAt).toBe(NOW - 9000);
+  });
+
+  it('does not let a collection the card never shows date it', () => {
+    // Applications re-walk on a slower schedule than the two collections the
+    // card is drawn from. Quoting one would date the card by something the
+    // reader cannot see, and send them to Refresh for numbers already current.
+    const index = makeIndex();
+    (index.apps as { lastFullWalkAt: number | null }).lastFullWalkAt = NOW - 9_000_000;
+    const { result } = render(index);
+    expect(result.current.readAt).toBe(NOW);
   });
 
   it('states no age at all when a collection has never been walked', () => {
