@@ -5,7 +5,9 @@
  * Runs in the background service worker and coordinates every Okta API call in the
  * extension to prevent rate limiting. It:
  * - Queues requests by priority (high &gt; normal &gt; low)
- * - Bounds concurrency and dispatches each request to the content script
+ * - Bounds concurrency globally **and per Okta rate-limit bucket**, so one
+ *   family's fan-out cannot occupy every seat the extension has, and dispatches
+ *   each request to the content script
  * - Parses rate-limit headers and enters cooldown near the limit, **per Okta
  *   rate-limit bucket** — an exhausted `/api/v1/apps` bucket stops app traffic
  *   without stopping a group lookup that has its own budget
@@ -37,7 +39,14 @@ import type {
 const log = createLogger('ApiScheduler');
 
 const DEFAULT_CONFIG: SchedulerConfig = {
-  maxConcurrent: 5, // Max 5 parallel requests
+  // Ten total, four per bucket (ADR-0070 §2). The per-bucket number is below
+  // the five that shipped before it, so no single Okta bucket — the only thing
+  // Okta actually meters — can be hit harder than it was; the global number is
+  // raised so a background fan-out and a user's click are not competing for the
+  // same five seats. At 10, two saturated families still leave two seats for a
+  // third, and a third saturated family cannot exist.
+  maxConcurrent: 10,
+  maxConcurrentPerBucket: 4,
   minRemainingThreshold: 10, // Cooldown when <10% remaining
   cooldownDuration: 30000, // 30 seconds cooldown fallback
   retryDelay: 2000, // 2 second base retry delay
@@ -58,6 +67,30 @@ const GLOBAL_GATE = '*';
  * the operations that were cancelled, which is a matter of seconds.
  */
 const MAX_CANCELLED_PLANS = 64;
+
+/**
+ * How long a bucket stays listed after its last request settled (ADR-0070 §5).
+ *
+ * Ten minutes outlives every clock that used to make a row vanish — the ~60s
+ * header expiry and the 5-minute `PLAN_STALE_MS` reap — with margin, so the
+ * row's disappearance is governed by one decision instead of three accidents.
+ * It also spans roughly ten Okta rate-limit windows, so a reader can watch a
+ * bucket they exhausted actually recover, while being short enough that a panel
+ * left open over lunch is not still listing this morning's work.
+ */
+const BUCKET_MEMORY_MS = 10 * 60 * 1000;
+
+/**
+ * How many settled buckets are remembered at once, least-recently-active
+ * evicted first.
+ *
+ * The source reaches ten distinct `/api/v1/{resource}` families today, so 12
+ * holds every family the extension can reach with room to spare: this is a
+ * bound on the list the UI must render, not a rationing decision. It stays
+ * regardless of that headroom, because `bucketOf` keys an unrecognised path
+ * under itself and nothing guarantees the set of paths stays this small.
+ */
+const MAX_REMEMBERED_BUCKETS = 12;
 
 /**
  * Statuses a *resolved* failure may be retried on.
@@ -118,6 +151,23 @@ export class ApiScheduler {
    * protective than the single cooldown it replaced.
    */
   private cooldowns: Map<string, number> = new Map();
+  /**
+   * Buckets that have gone quiet but are still worth listing, keyed by bucket,
+   * holding only when a request last settled there (ADR-0070 §5).
+   *
+   * A bucket used to stop being reported the moment its queue, its plan and its
+   * header observation had all gone quiet — on three unrelated clocks, so the
+   * row for work the user had just watched vanished on a schedule nobody
+   * designed. This is the one decision that replaces those three accidents.
+   *
+   * **It retains the row's existence and nothing else.** No budget number is
+   * kept here, so a lapsed header reading can never be resurrected as a current
+   * one; {@link buildBucketStates} reads every count and every limit from the
+   * live sources exactly as before. Not persisted across a service-worker
+   * suspension either: the activity it describes did not survive that, and
+   * "active 30 seconds ago" after an eight-minute sleep would be a lie.
+   */
+  private rememberedBuckets: Map<string, { lastActiveAt: number }> = new Map();
   private isPaused: boolean = false;
   private processingInterval: ReturnType<typeof setInterval> | null = null;
   // Re-entrancy guard for processQueue: notifyStateChange runs listeners
@@ -174,9 +224,34 @@ export class ApiScheduler {
 
   /**
    * @param config - Partial overrides merged over `DEFAULT_CONFIG`.
+   * @throws When `maxConcurrentPerBucket` is supplied and is not strictly
+   * between zero and the effective `maxConcurrent`. A per-bucket cap at or
+   * above the global ceiling is a cap that does nothing, and a config that
+   * declares one would be lying about what governs (ADR-0070 §2).
    */
   constructor(config: Partial<SchedulerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+
+    // A caller that moves the ceiling and says nothing about the per-bucket cap
+    // has not asked for one: the default 4 is stated relative to the default
+    // ceiling of 10, and carrying it onto a caller-chosen ceiling of 1 would
+    // impose a cap nobody wrote. Follow the ceiling instead, which leaves the
+    // cap non-binding — the exact behaviour such a caller had before this field
+    // existed.
+    if (config.maxConcurrent !== undefined && config.maxConcurrentPerBucket === undefined) {
+      this.config.maxConcurrentPerBucket = this.config.maxConcurrent;
+    }
+
+    // Only an *explicit* cap is validated, for the same reason: the derived one
+    // is this constructor's own doing and is deliberately equal to the ceiling.
+    if (config.maxConcurrentPerBucket !== undefined) {
+      const { maxConcurrent, maxConcurrentPerBucket } = this.config;
+      if (maxConcurrentPerBucket <= 0 || maxConcurrentPerBucket >= maxConcurrent) {
+        throw new Error(
+          `maxConcurrentPerBucket must satisfy 0 < ${maxConcurrentPerBucket} < ${maxConcurrent}`,
+        );
+      }
+    }
     this.rateLimitDetector = new RateLimitDetector();
     this.plans = new PlanRegistry(bucketOf);
 
@@ -440,11 +515,29 @@ export class ApiScheduler {
   }
 
   /**
+   * How many in-flight requests belong to a bucket right now.
+   *
+   * The scan is over at most `maxConcurrent` entries, and `activeRequests`
+   * already carries each request's endpoint — this is the same filter
+   * {@link buildBucketStates} performs, so it is not new bookkeeping.
+   *
+   * @param bucket - A bucket key from `bucketOf`.
+   */
+  private activeInBucket(bucket: string): number {
+    let count = 0;
+    for (const active of this.activeRequests.values()) {
+      if (bucketOf(active.endpoint) === bucket) count++;
+    }
+    return count;
+  }
+
+  /**
    * May this request dispatch right now?
    *
    * An `interactive` request may jump the soft gate — but only while the budget
    * governing it has genuine hard headroom left, so it can never force a 429
-   * (see {@link RequestPriority}).
+   * (see {@link RequestPriority}). It does **not** jump the per-bucket
+   * concurrency cap, any more than it jumps `maxConcurrent`.
    *
    * @param request - A queued candidate.
    * @returns `'go'` to dispatch, `'gated'` to skip it and try the next queued
@@ -454,6 +547,22 @@ export class ApiScheduler {
   private gateFor(request: QueuedRequest): 'go' | 'gated' | 'cooldown' {
     const { key, observed } = this.gateKeyFor(request);
     const bucket = observed ? key : undefined;
+    const ownBucket = bucketOf(request.endpoint);
+    const inFlightHere = this.activeInBucket(ownBucket);
+
+    // The per-bucket seat cap, keyed on the endpoint's real bucket whether or
+    // not Okta has reported on it — deliberately unlike {@link gateKeyFor},
+    // which pools an unobserved family under the global gate. The gate asks
+    // whether there is budget, which an unobserved family cannot answer for
+    // itself; this asks how many seats one family may hold, which has nothing
+    // to do with observation. Pooling unobserved families under one cap would
+    // be worst at exactly the wrong moment: cold start, before any headers
+    // exist, when several families are fanning out at once. (ADR-0070 §3.)
+    //
+    // Checked ahead of the interactive bypass because it is a seat limit and
+    // not a soft rate-limit gate: a bucket's cap is the one guarantee that no
+    // Okta family is hit harder than before, and an exemption would hole it.
+    if (inFlightHere >= this.config.maxConcurrentPerBucket) return 'gated';
 
     if (request.priority === 'interactive' && !this.rateLimitDetector.isLimitExceeded(bucket)) {
       return 'go';
@@ -464,14 +573,20 @@ export class ApiScheduler {
     if (this.isGated(key)) return 'gated';
 
     // In-flight requests have spent budget no header has counted yet, so they
-    // are subtracted from `remaining` before the comparison. They are charged
-    // in full to whichever budget governs this request: we do not track which
-    // bucket each in-flight request belongs to, and over-charging errs toward
-    // backing off early, which is the safe direction.
+    // are subtracted from `remaining` before the comparison — charged to the
+    // budget that will actually pay them. An **observed** bucket is charged its
+    // own in-flight count, because we do now know which bucket each in-flight
+    // request belongs to; charging it the global total would subtract ten
+    // requests spread across three families from every family's remaining
+    // budget and cool buckets down for traffic they never carried. The
+    // **global backstop** keeps the full charge, because there the pessimism is
+    // honest: an unobserved family really might be the one paying. (ADR-0070 §4.)
+    const inFlightCharge = observed ? inFlightHere : this.activeRequests.size;
+
     if (
       this.rateLimitDetector.isApproachingLimit(
         this.config.minRemainingThreshold,
-        this.activeRequests.size,
+        inFlightCharge,
         bucket,
       )
     ) {
@@ -492,7 +607,9 @@ export class ApiScheduler {
    * order and the first dispatchable request wins, so a cooling-down
    * `/api/v1/apps` fan-out no longer holds up a `/api/v1/groups` lookup that has
    * its own untouched budget. Priority order is otherwise unchanged: a request
-   * is only skipped when its own bucket says no.
+   * is only skipped when its own bucket says no — which now includes its own
+   * bucket being at `maxConcurrentPerBucket`, so a saturated family yields its
+   * turn to another instead of ending the pass (ADR-0070 §3).
    */
   private drainQueue(): void {
     // Skip if paused
@@ -514,10 +631,19 @@ export class ApiScheduler {
         if (verdict === 'cooldown') this.enterCooldown(this.gateKeyFor(this.queue[i]).key);
       }
 
-      // Nothing in the queue may run yet. Everything left is waiting on a gate.
+      // Nothing in the queue may run yet. Before the per-bucket cap that could
+      // only mean a gate, and `cooldown` was the whole answer; a request may now
+      // also be waiting on a seat in its own bucket, which is ordinary progress
+      // and not a back-off. So `cooldown` is reported only when a gate is
+      // genuinely armed — which is every case that could reach here before —
+      // and a purely seat-limited pass falls through to the status block below,
+      // where a non-empty queue reads as `processing`.
       if (index === -1) {
-        this.updateStatus('cooldown');
-        return;
+        if (this.anyGateArmed()) {
+          this.updateStatus('cooldown');
+          return;
+        }
+        break;
       }
 
       const [request] = this.queue.splice(index, 1);
@@ -789,6 +915,11 @@ export class ApiScheduler {
       this.plans.attribute(request.planId, request.endpoint);
     }
 
+    // Remember the bucket here for the same reason the plan is charged here:
+    // this is the one place a request is known to be finally settled, so the
+    // memory is written once per request Okta actually saw (ADR-0070 §5).
+    this.rememberBucket(bucketOf(request.endpoint));
+
     recordRequest({
       reason: request.reason,
       method: request.method,
@@ -1042,23 +1173,99 @@ export class ApiScheduler {
   }
 
   /**
+   * Whether a bucket has nothing happening in it: no queued request, nothing in
+   * flight, no plan expecting to spend there, and no armed gate.
+   *
+   * This is the eviction guard for {@link rememberedBuckets}. Eviction may only
+   * ever remove a row that already reports nothing happening — a bucket with
+   * live work or an armed gate is kept whatever its age or the map's size,
+   * because dropping it would delete a row the live sources are about to
+   * rebuild anyway, and would hide an armed gate while it was still armed.
+   *
+   * @param bucket - A bucket key from `bucketOf`.
+   */
+  private isBucketQuiet(bucket: string): boolean {
+    if (this.queue.some((request) => bucketOf(request.endpoint) === bucket)) return false;
+    if (this.activeInBucket(bucket) > 0) return false;
+    if (this.plans.plannedForBucket(bucket) > 0) return false;
+    if (this.isGated(bucket)) return false;
+    return true;
+  }
+
+  /**
+   * Note that a request just settled in this bucket, and bring the memory back
+   * inside both of its bounds.
+   *
+   * @param bucket - A bucket key from `bucketOf`.
+   */
+  private rememberBucket(bucket: string): void {
+    // Delete-then-set so the Map's insertion order stays the recency order the
+    // count-based eviction reads.
+    this.rememberedBuckets.delete(bucket);
+    this.rememberedBuckets.set(bucket, { lastActiveAt: Date.now() });
+    this.pruneRememberedBuckets();
+  }
+
+  /**
+   * Drop remembered buckets that are past {@link BUCKET_MEMORY_MS}, then — if
+   * more than {@link MAX_REMEMBERED_BUCKETS} remain — the least recently active
+   * ones until the count fits.
+   *
+   * Neither bound can evict a bucket that is not {@link isBucketQuiet}. Run on
+   * every write *and* on every read, because age has to expire a row even when
+   * nothing new is settling to trigger a write.
+   */
+  private pruneRememberedBuckets(): void {
+    const now = Date.now();
+
+    for (const [bucket, { lastActiveAt }] of [...this.rememberedBuckets]) {
+      if (now - lastActiveAt >= BUCKET_MEMORY_MS && this.isBucketQuiet(bucket)) {
+        this.rememberedBuckets.delete(bucket);
+      }
+    }
+
+    if (this.rememberedBuckets.size <= MAX_REMEMBERED_BUCKETS) return;
+
+    // Insertion order is recency order (see `rememberBucket`), so the oldest
+    // evictable entries come first. Non-quiet buckets are skipped rather than
+    // counted out, so a map full of busy buckets simply grows past the cap for
+    // as long as they stay busy instead of dropping a live row.
+    for (const [bucket] of [...this.rememberedBuckets]) {
+      if (this.rememberedBuckets.size <= MAX_REMEMBERED_BUCKETS) break;
+      if (this.isBucketQuiet(bucket)) this.rememberedBuckets.delete(bucket);
+    }
+  }
+
+  /**
    * Every bucket currently worth showing, most-pressured first.
    *
-   * The union of four sources, because each one can know about a bucket the
+   * The union of five sources, because each one can know about a bucket the
    * others do not: Okta's own observations, requests waiting in the queue,
-   * requests in flight, and the legs active plans have declared. That last one
-   * is why a bucket can appear here with real `planned` work and no traffic yet.
+   * requests in flight, the legs active plans have declared, and buckets
+   * remembered from a recent settle. The plan source is why a bucket can appear
+   * here with real `planned` work and no traffic yet.
+   *
+   * The remembered source (ADR-0070 §5) contributes **only a bucket key**. Every
+   * number below is still read from the live sources, so a remembered-but-idle
+   * bucket reports true zeros and a `null` budget: it reads exactly like a
+   * bucket Okta has never spoken about, which `BucketState` already documents as
+   * "unknown budget, and the bar says so rather than drawing an empty gauge that
+   * reads as exhaustion". A memory must never be able to pass for a reading.
    *
    * Sorted by pressure — least headroom first, unobserved buckets last — so the
    * bar can render the top few rows and collapse the rest without having to
-   * decide which ones matter.
+   * decide which ones matter. Remembered-idle buckets have no fraction to rank
+   * and therefore fall where unobserved buckets already fall: last.
    */
   private buildBucketStates(): BucketState[] {
+    this.pruneRememberedBuckets();
+
     const buckets = new Set<string>();
     for (const { bucket } of this.rateLimitDetector.getState().bucketLimits) buckets.add(bucket);
     for (const request of this.queue) buckets.add(bucketOf(request.endpoint));
     for (const request of this.activeRequests.values()) buckets.add(bucketOf(request.endpoint));
     for (const bucket of this.plans.plannedBuckets()) buckets.add(bucket);
+    for (const bucket of this.rememberedBuckets.keys()) buckets.add(bucket);
 
     const globalGateEndsAt = this.isGated(GLOBAL_GATE)
       ? (this.cooldowns.get(GLOBAL_GATE) as number)
@@ -1091,6 +1298,7 @@ export class ApiScheduler {
         ).length,
         planned: this.plans.plannedForBucket(bucket),
         gatedUntil,
+        lastActiveAt: this.rememberedBuckets.get(bucket)?.lastActiveAt ?? null,
       };
     });
 

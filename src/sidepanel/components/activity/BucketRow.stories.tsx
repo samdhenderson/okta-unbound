@@ -49,6 +49,7 @@ function bucket(overrides: Partial<BucketState> & { bucket: string }): BucketSta
     active: 0,
     planned: 0,
     gatedUntil: null,
+    lastActiveAt: null,
     ...overrides,
   };
 }

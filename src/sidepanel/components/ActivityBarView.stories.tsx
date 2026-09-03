@@ -291,6 +291,7 @@ function bucket(
     active: 0,
     planned: 0,
     gatedUntil: null,
+    lastActiveAt: null,
     ...overrides,
   };
 }

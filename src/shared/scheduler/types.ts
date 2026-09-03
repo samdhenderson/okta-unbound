@@ -17,8 +17,11 @@ import type { PlanSummary } from './plan';
  * type-ahead search). Beyond sorting to the front of the queue, it is the only
  * tier that bypasses the **soft** rate-limit gates — it dispatches during a soft
  * cooldown and past the approaching-limit threshold — so a typed search never
- * stalls up to 30s. It still respects `maxConcurrent` and a genuine **hard**
- * rate-limit exhaustion (`remaining <= 0`), so it can never force a 429.
+ * stalls up to 30s. It still respects `maxConcurrent`, `maxConcurrentPerBucket`
+ * and a genuine **hard** rate-limit exhaustion (`remaining <= 0`), so it can
+ * never force a 429. The per-bucket cap is deliberately not exempted: that cap
+ * is the one guarantee that no Okta family is hit harder than it was before it
+ * existed, and a reserved seat would put a hole in it (ADR-0070, open question).
  */
 export type RequestPriority = 'interactive' | 'high' | 'normal' | 'low';
 /** Coarse lifecycle status of the scheduler, surfaced to the UI. */
@@ -79,6 +82,34 @@ export interface RateLimitInfo {
  */
 export interface SchedulerConfig {
   maxConcurrent: number; // Max parallel requests
+  /**
+   * Max parallel requests **within a single Okta rate-limit bucket**
+   * (`bucketOf`), on top of — never instead of —
+   * {@link SchedulerConfig.maxConcurrent}.
+   *
+   * A per-bucket cap exists because a bucket is the only thing Okta actually
+   * meters. Without one, a snapshot fan-out into a single family occupies every
+   * seat the extension has, and a request to a family with a full, freshly
+   * observed budget waits — not because Okta would refuse it, but because the
+   * scheduler ran out of seats (ADR-0070 §2). A bucket at its cap yields its
+   * turn: `drainQueue` skips it and dispatches another family instead of ending
+   * the pass.
+   *
+   * Unlike the rate-limit *gate*, this keys on the endpoint's real bucket even
+   * when Okta has said nothing about it. The gate asks *"is there budget?"*,
+   * which an unobserved family genuinely cannot answer for itself; the cap asks
+   * *"how many seats may this family hold?"*, which has nothing to do with
+   * observation (ADR-0070 §3).
+   *
+   * `interactive` does **not** exempt a request from this cap, exactly as it
+   * does not exempt one from {@link SchedulerConfig.maxConcurrent}
+   * (ADR-0070 §7).
+   *
+   * Must satisfy `0 < maxConcurrentPerBucket < maxConcurrent` when supplied
+   * explicitly: a cap at or above the global ceiling is a cap that does
+   * nothing, and the config would be lying about what governs.
+   */
+  maxConcurrentPerBucket: number;
   minRemainingThreshold: number; // Trigger cooldown when remaining < this (percentage)
   cooldownDuration: number; // How long to pause when threshold hit (ms)
   retryDelay: number; // Base retry delay for failed requests (ms)
@@ -91,10 +122,16 @@ export interface SchedulerConfig {
  * left, and how much of what remains is already spoken for.
  *
  * A bucket appears here once anything has touched it — an observation parsed
- * from Okta's headers, a queued or in-flight request, or an active plan's
- * declared leg. That last source is the point: a bucket can be listed with real
+ * from Okta's headers, a queued or in-flight request, an active plan's declared
+ * leg, or a request that settled here recently enough to still be remembered.
+ * The plan source is why a bucket can be listed with real
  * {@link BucketState.planned} work against it before a single request has been
  * sent, which is exactly what the scheduler could never say before.
+ *
+ * The remembered source (ADR-0070 §5) is why a row does not vanish the moment
+ * its work finishes. **What is retained is the row's existence, never a
+ * number**: a remembered-but-idle bucket reports true zero counts and a `null`
+ * budget, so a memory can never pass for a reading.
  */
 export interface BucketState {
   /** Bucket key from `bucketOf`, e.g. `/api/v1/users`. */
@@ -129,6 +166,23 @@ export interface BucketState {
    * own — the same rule `gateKeyFor` applies when deciding whether to dispatch.
    */
   gatedUntil: number | null;
+  /**
+   * When a request last **settled** in this bucket during this worker's
+   * lifetime, in milliseconds since the epoch, or `null` when none has.
+   *
+   * Exists so a reader can tell *at rest* from *never used* without inferring
+   * it, and can say "last active 2m ago" in words rather than in a dimmed
+   * colour nobody can read out (ADR-0070 §6).
+   *
+   * It is **not** a budget reading and must never be presented as one: a
+   * remembered bucket whose window has reset reports `limit`/`remaining`/
+   * `resetAt` as `null`, exactly like a bucket Okta has never spoken about.
+   *
+   * `null` after a service-worker restart is correct rather than lossy — the
+   * activity it would describe did not survive the suspension either, so
+   * nothing is persisted to make it look as though it had.
+   */
+  lastActiveAt: number | null;
 }
 
 /**

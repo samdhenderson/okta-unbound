@@ -162,12 +162,18 @@ export interface CollectionSpec<T = unknown> {
 /**
  * How many shards are walked at once.
  *
- * Matched to the scheduler's own `maxConcurrent` so the fan-out keeps its slots
- * busy without queueing a hundred `low`-priority requests behind a user who is
- * about to click something. Progress is recorded per completed batch, so an
- * interruption costs at most this many shards.
+ * Matched to the scheduler's `maxConcurrentPerBucket` — **not** its global
+ * `maxConcurrent` — because every shard of a fan-out walks the same Okta
+ * rate-limit bucket (the one sharded spec is `/api/v1/apps/{appId}/groups`, so
+ * all of them bucket to `/api/v1/apps`), and that bucket is the only thing the
+ * scheduler will actually seat in parallel. A sixth shard could not be
+ * dispatched out of turn by anything in its own batch; it would just queue.
+ * This keeps the fan-out's slots busy without queueing a hundred
+ * `low`-priority requests behind a user who is about to click something.
+ * Progress is recorded per completed batch, so an interruption costs at most
+ * this many shards. (ADR-0070 §2.)
  */
-const SHARD_CONCURRENCY = 5;
+const SHARD_CONCURRENCY = 4;
 
 /** Outcome of one collection walk. */
 export interface WalkOutcome {
