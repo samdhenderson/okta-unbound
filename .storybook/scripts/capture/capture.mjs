@@ -28,6 +28,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { connect, shutdownFor, REPO } from '../lib/storybook-server.mjs';
+import { appScopeFor } from './appscope.mjs';
 import { findChapters } from './chapters.mjs';
 import { createDriver, registerEngines, hold } from './drive.mjs';
 import { instrumentInit, SHIFT_EPS_PX } from './instrument.mjs';
@@ -81,13 +82,14 @@ const OUT = path.resolve(REPO, 'captures');
 const SCHEMA = 4;
 
 /**
- * Files whose contents decide whether a chapter's clip is stale.
+ * Rig files whose contents decide whether a chapter's clip is stale.
  *
- * A chapter re-films when its walk, the driver, the stage, or the demo org
- * changes — and not otherwise. Getting this list wrong in the safe direction
- * costs a re-shoot; getting it wrong in the unsafe direction ships a clip of
- * the old app under new captions, which is exactly the failure mode that is
- * invisible until someone watches the whole reel.
+ * **This list is half of the answer.** It covers the rig and the fixtures; the
+ * product on camera is covered by `appScopeFor` (see below). Getting either
+ * half wrong in the safe direction costs a re-shoot; getting it wrong in the
+ * unsafe direction ships a clip of the old app under new captions, which is
+ * exactly the failure mode that is invisible until someone watches the whole
+ * reel.
  */
 const SHARED_INPUTS = [
   'src/sidepanel/demo',
@@ -96,6 +98,57 @@ const SHARED_INPUTS = [
   '.storybook/scripts/capture/selectors.mjs',
   '.storybook/scripts/capture/instrument.mjs',
 ];
+
+/**
+ * ## The other half: the app the chapter films
+ *
+ * For a long time `SHARED_INPUTS` was the whole fingerprint, and it reads as if
+ * it were complete. It is not: it hashes the rig and the demo org and **not one
+ * line of the panel**. So a change to the product a chapter is *about* left
+ * every clip reading `unchanged`, and the reel went on showing behaviour the
+ * extension no longer had — silently, because "unchanged" is what a correct
+ * cache reports. Measured, not theorised: `D-064` changed the Groups pane's
+ * behaviour after a profile write and `npm run capture -- users-fix` answered
+ * `unchanged` over footage of the old behaviour. The reel is only right because
+ * someone deleted the manifest by hand.
+ *
+ * The obvious repair — add `src/sidepanel` — makes every product commit re-film
+ * all nine chapters, about four minutes, including commits to tabs the reel does
+ * not film at all. So the fingerprint hashes a **slice** instead, computed in
+ * `appscope.mjs` from the panel's own import graph:
+ *
+ * - the **shell** every chapter mounts (`demo/scenes.stories.tsx` → `App`, plus
+ *   `.storybook/preview.tsx` and `tailwind.css`), stopping at the tab roots; and
+ * - the **tab islands** the chapter declares in `films`, transitively.
+ *
+ * A change to `components/shared/` or a hook or the stylesheet is in the shell
+ * and re-films all nine, which is right — those files are on screen in all
+ * nine. A change under `components/groups/` re-films the four chapters that
+ * open a group and leaves the other five alone. A change under Policies,
+ * Export, Explorer or History re-films nothing, because no chapter can reach
+ * them. `appscope.mjs` throws rather than skipping whenever it loses track of a
+ * file — an unresolvable import, a renamed tab root, a walk that switches to an
+ * undeclared tab.
+ *
+ * ### Known blind spots — what still will NOT invalidate a clip
+ *
+ * 1. **Dependencies.** Bare specifiers are not followed, and neither
+ *    `package.json` nor the lockfile is hashed. A React or Playwright bump that
+ *    changes what renders leaves every clip current. Deliberate: `--all` is the
+ *    tool for that, and a dependency change already needs an ADR here.
+ * 2. **Build and Storybook config.** `vite.config.ts`, `.storybook/main.ts`,
+ *    the Tailwind plugin's own output. Only the CSS *entry* is hashed, not what
+ *    Tailwind generates from scanning the tree.
+ * 3. **Non-static reach.** A component pulled in by a specifier this regex
+ *    cannot see (a computed `import()`), or a tab a walk reaches by something
+ *    other than a literal `railTab(page, 'Label')` — the ⌘K palette, an
+ *    `EntityLink`, a product change that navigates on its own. The walk-source
+ *    check catches the mechanism every walk uses today and no other.
+ * 4. **This file.** `SCHEMA` above is how `capture.mjs` invalidates its own
+ *    output, and it is a hand bump.
+ * 5. **The composition.** Nothing in `reel/` is hashed, by design (ADR-0045):
+ *    changing a caption must stay free of a re-shoot.
+ */
 
 /** Hash a file or a directory tree, so a changed fixture invalidates a clip. */
 async function hashPath(target, hash) {
@@ -115,9 +168,21 @@ async function hashPath(target, hash) {
 async function fingerprint(chapter) {
   const hash = createHash('sha256');
   hash.update(`v${SCHEMA}|scale=${RENDER_SCALE}|retime=${RETIME}|fps=${FPS}`);
-  hash.update(JSON.stringify({ id: chapter.id, story: chapter.story, ready: chapter.ready ?? '' }));
+  hash.update(
+    JSON.stringify({
+      id: chapter.id,
+      story: chapter.story,
+      ready: chapter.ready ?? '',
+      films: chapter.films,
+    }),
+  );
   for (const input of [...SHARED_INPUTS, `.storybook/scripts/capture/walks/${chapter.id}.mjs`]) {
     await hashPath(path.resolve(REPO, input), hash);
+  }
+  // The app slice, hashed by absolute path so a file moving between the shell
+  // and a tab island shows up as a change even when its contents do not.
+  for (const file of await appScopeFor(chapter)) {
+    await hashPath(file, hash);
   }
   return hash.digest('hex').slice(0, 16);
 }

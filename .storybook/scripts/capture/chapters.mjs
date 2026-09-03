@@ -28,10 +28,28 @@
  */
 export const DEFERRED = ['policies', 'export', 'explorer', 'history'];
 
+/**
+ * `films` is the fingerprint's business, not the composition's.
+ *
+ * Every scene mounts the whole panel, so "what this chapter shows" cannot be
+ * derived from the story it opens: all nine stories render `<App />`. It is
+ * derived from the *tabs* a chapter puts on camera, and that is what `films`
+ * declares — the tab the story stages, plus any tab the walk switches to.
+ * `appscope.mjs` hashes the shell plus those tabs' islands, so a change under a
+ * tab no chapter films costs no re-shoot and a change under one that is filmed
+ * invalidates exactly the chapters that show it.
+ *
+ * Two things are checked rather than trusted, because forgetting an entry here
+ * is silent — it makes a clip immortal, not broken: the staged tab of the
+ * chapter's story must appear in `films`, and so must every tab its walk clicks
+ * in the rail. Both fail the capture run.
+ */
+
 /** Chapters in reel order. The composition may sequence a subset; it may not reorder. */
 export const CHAPTERS = [
   {
     id: 'home',
+    films: ['home'],
     title: 'Home',
     tab: 'home',
     kind: 'tour',
@@ -43,6 +61,7 @@ export const CHAPTERS = [
   // and a beat that misses ends its act rather than the whole argument.
   {
     id: 'users-gap',
+    films: ['users'],
     title: 'Users',
     tab: 'users',
     kind: 'deep',
@@ -51,6 +70,7 @@ export const CHAPTERS = [
   },
   {
     id: 'users-cause',
+    films: ['users'],
     title: 'Users',
     tab: 'users',
     kind: 'deep',
@@ -59,6 +79,7 @@ export const CHAPTERS = [
   },
   {
     id: 'users-fix',
+    films: ['users'],
     title: 'Users',
     tab: 'users',
     kind: 'deep',
@@ -67,6 +88,7 @@ export const CHAPTERS = [
   },
   {
     id: 'groups',
+    films: ['groups'],
     title: 'Groups',
     tab: 'groups',
     kind: 'tour',
@@ -75,6 +97,7 @@ export const CHAPTERS = [
   },
   {
     id: 'apps',
+    films: ['groups', 'apps'],
     title: 'Apps',
     tab: 'apps',
     kind: 'tour',
@@ -83,6 +106,7 @@ export const CHAPTERS = [
   },
   {
     id: 'rules',
+    films: ['rules'],
     title: 'Rules',
     tab: 'rules',
     kind: 'tour',
@@ -96,6 +120,7 @@ export const CHAPTERS = [
   },
   {
     id: 'attributes',
+    films: ['groups'],
     title: 'Attributes',
     tab: 'groups',
     kind: 'deep',
@@ -104,6 +129,7 @@ export const CHAPTERS = [
   },
   {
     id: 'reporting',
+    films: ['groups'],
     title: 'Reporting',
     tab: 'groups',
     kind: 'deep',
