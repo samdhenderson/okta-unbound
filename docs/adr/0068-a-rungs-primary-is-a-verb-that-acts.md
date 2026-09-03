@@ -308,11 +308,16 @@ deprovisioned` is that case.
 - **Two rungs still differ in what wears the fill,** and that remains the intended
   outcome. What changed is the reason: it is no longer "does this rung have a page-level
   verb" but "does this rung have a verb that **acts** on the whole page, and if not, does
-  it have an export" — which the Group detail rung answers with `Add`, the Groups list
-  rung with `Export list`, and the Rules rung, having surrendered its only candidate to
-  ADR-0069, with neither.
-- **The Rules rung ends with no `primary`, and this ADR can now say so.** Once `load`
-  leaves the strip its remaining descriptors are three read-only panel toggles — no acting
-  verb under §1, and no export descriptor for rule 2 to fall back to, so rule 3 is the
-  answer rather than a deferral. If that rung later gains an export it becomes a rule 2
-  rung, and the enumeration is written then.
+  it have an export" — which the Group detail rung answers with `Add`, and the Groups list
+  and Rules rungs with their whole-rung export.
+- **The Rules rung is a rule 2 rung, not a rule 3 one.** This bullet said the opposite
+  when it was written, on the belief that once `load` left the strip nothing would remain
+  but three read-only panel toggles. That was simply wrong about the code:
+  `RulesListActionBar` has shipped `export-rules` since it landed, wired unconditionally
+  from `App.tsx`, and the Group Rules descriptor fetches its own rows rather than reading
+  the loaded list — so it is neither selection-scoped nor gated on a load, which is
+  exactly the whole-rung export rule 2 exists for. The emptying change enumerated the
+  rung and `Export rules` took the fill. Recording the error rather than overwriting it,
+  because the lesson generalises: **rule 2's fallback is decided by enumerating the
+  descriptor array, never by recalling what a rung offers.** A reviewer who trusts memory
+  here writes a rule 3 conclusion for a rung that has an export sitting in it.
