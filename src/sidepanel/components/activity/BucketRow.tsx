@@ -90,10 +90,16 @@ function countdown(ms: number): string {
  * How long ago something happened, coarsely.
  *
  * @param ms - Elapsed milliseconds. Negative input — clock skew across the
- * worker boundary — reads as `just now` rather than as a negative age.
+ * worker boundary — reads as `just now` rather than as a negative age, and a
+ * non-finite input reads as `recently` rather than as `NaN`.
  * @returns A label such as `2m ago`.
  */
 export function sinceLabel(ms: number): string {
+  // `Math.max(0, NaN)` is NaN, so the clamp below does not catch a non-finite
+  // input on its own — every comparison after it is false and the function
+  // falls through to the hours branch, printing `NaNh ago`. Belt and braces
+  // with {@link activeAt}: that guards the timestamp, this guards the clock.
+  if (!Number.isFinite(ms)) return 'recently';
   const seconds = Math.max(0, Math.floor(ms / 1000));
   if (seconds < 10) return 'just now';
   if (seconds < 60) return `${seconds}s ago`;
@@ -128,6 +134,29 @@ export function isStrained(bucket: BucketState, lowThresholdPercent: number): bo
 }
 
 /**
+ * Whether this bucket carries an activity timestamp we can actually subtract.
+ *
+ * `BucketState.lastActiveAt` is typed `number | null`, so in this repo the only
+ * two cases are a number and `null`. The value crosses the service-worker
+ * boundary to get here, though, and a `!== null` test treats a **missing** field
+ * as a present one: `undefined !== null` is `true`, `now - undefined` is `NaN`,
+ * and the lane renders `last active NaNh ago`. That is what a panel running
+ * ahead of a not-yet-restarted worker produces, and it is the shape any future
+ * rename of the field would produce too.
+ *
+ * So the check is "is this a finite number", not "is this not null". A bucket
+ * whose timestamp cannot be read says `at rest` and stops — the same answer as
+ * one that never had a timestamp, and the same principle as the rest of this
+ * lane: **a memory must never be able to pass for a reading**, and neither may
+ * a broken one.
+ */
+function activeAt(bucket: BucketState): number | null {
+  return typeof bucket.lastActiveAt === 'number' && Number.isFinite(bucket.lastActiveAt)
+    ? bucket.lastActiveAt
+    : null;
+}
+
+/**
  * Whether a bucket earns a lane in the rack.
  *
  * Strain earns one, and so does **recent use**: ADR-0070 keeps a bucket's row
@@ -143,7 +172,7 @@ export function isStrained(bucket: BucketState, lowThresholdPercent: number): bo
  * of.
  */
 export function deservesTrack(bucket: BucketState, lowThresholdPercent: number): boolean {
-  return isStrained(bucket, lowThresholdPercent) || bucket.lastActiveAt !== null;
+  return isStrained(bucket, lowThresholdPercent) || activeAt(bucket) !== null;
 }
 
 /**
@@ -171,8 +200,8 @@ const BucketRow: React.FC<BucketRowProps> = ({ bucket, lowThresholdPercent, now 
         'not reported'
       : `${bucket.remaining}/${bucket.limit}`;
 
-  const lastActive =
-    atRest && bucket.lastActiveAt !== null ? sinceLabel(now - bucket.lastActiveAt) : null;
+  const activeSince = activeAt(bucket);
+  const lastActive = atRest && activeSince !== null ? sinceLabel(now - activeSince) : null;
 
   return (
     <div

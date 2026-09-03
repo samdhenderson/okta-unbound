@@ -307,6 +307,48 @@ describe('BucketRow', () => {
       expect(row).not.toHaveAttribute('data-gated');
     });
 
+    it('never prints NaN when the timestamp is missing rather than null', () => {
+      // The bug this pins: `lastActiveAt` is typed `number | null`, so the guard
+      // was written `!== null` — but the value crosses the service-worker
+      // boundary, and `undefined !== null` is `true`. That put `now - undefined`
+      // into the age, and the lane read `last active NaNh ago`. A panel running
+      // ahead of a worker that has not restarted yet produces exactly this, and
+      // so would any future rename of the field.
+      //
+      // The cast is the point of the test: it reproduces a message this repo's
+      // types say cannot arrive, because the boundary does not enforce them.
+      const missing = { ...remembered } as Record<string, unknown>;
+      delete missing.lastActiveAt;
+
+      render(
+        <BucketRow bucket={missing as unknown as BucketState} lowThresholdPercent={10} now={NOW} />,
+      );
+
+      const row = screen.getByTestId('activity-bucket-/api/v1/users');
+      expect(row).toHaveTextContent('at rest');
+      expect(row.textContent).not.toMatch(/NaN/);
+      expect(row).not.toHaveTextContent('last active');
+    });
+
+    it('never prints NaN when the clock itself is unreadable', () => {
+      // The other half. `Math.max(0, NaN)` is NaN, so `sinceLabel`'s clamp does
+      // not stop a bad `now` on its own — every comparison after it is false and
+      // it falls through to the hours branch.
+      render(<BucketRow bucket={remembered} lowThresholdPercent={10} now={Number.NaN} />);
+
+      expect(screen.getByTestId('activity-bucket-/api/v1/users').textContent).not.toMatch(/NaN/);
+    });
+
+    it('does not grant a lane on a missing timestamp', () => {
+      // `deservesTrack` read the same field the same way, so a bucket with no
+      // timestamp at all was earning a lane it had not earned — the rack would
+      // list every family the scheduler is merely aware of.
+      const missing = { ...bucket({ bucket: '/api/v1/users' }) } as Record<string, unknown>;
+      delete missing.lastActiveAt;
+
+      expect(deservesTrack(missing as unknown as BucketState, 10)).toBe(false);
+    });
+
     it('says only "at rest" when the worker was evicted and lastActiveAt is null', () => {
       // No timestamp is fabricated and none is persisted to survive eviction:
       // the activity a timestamp would describe did not survive it either.
