@@ -174,6 +174,59 @@ describe('GroupRulesSection', () => {
     expect(screen.getAllByRole('button', { name: /Open rule/ }).length).toBe(2);
   });
 
+  /*
+    RESTORED (I-031). The suite gave this assertion up when the card's disclosure went, and
+    the loss was the point of the item: the one question this section exists to answer —
+    what does that rule actually say? — could only be answered by leaving the tab.
+
+    It is back as a read-only `When` line under the row, so the assertion is stronger than
+    the one it replaces: no disclosure to open, no navigation, and the *expression* (not the
+    row's human-readable summary) is on screen. The two strings differ deliberately —
+    `user.department == "Engineering"` is the expression, `department == "Engineering"` the
+    summary — so this cannot pass on the row's own text.
+  */
+  it('states the condition expression in place, with no press and no tab change', () => {
+    const onNavigateToRule = vi.fn();
+    render(<GroupRulesSection {...base} onNavigateToRule={onNavigateToRule} />);
+
+    expect(listUnder(ASSIGNS).getByText('user.department == "Engineering"')).toBeInTheDocument();
+    expect(listUnder(REFERENCES).getByText('user.department == "Engineering"')).toBeInTheDocument();
+    expect(onNavigateToRule).not.toHaveBeenCalled();
+  });
+
+  /*
+    The line reuses the shared `RuleExpressionText` rather than printing raw text, which is
+    what makes a group id inside a condition readable as the group. Asserted on the *named*
+    output so a regression to plain text — or to a local clone that never learned the
+    resolver — fails here.
+  */
+  it('resolves a group id inside the condition to its name', () => {
+    render(
+      <GroupRulesSection
+        {...base}
+        referencingRules={[
+          rule({
+            id: 'r9',
+            name: 'Contractors gate',
+            conditionExpression: 'isMemberOfAnyGroup("00gFAKE1")',
+            allGroupNamesMap: { '00gFAKE1': 'Engineering — Platform' },
+          }),
+        ]}
+      />,
+    );
+
+    const references = listUnder(REFERENCES);
+    expect(references.getByText('Engineering — Platform')).toBeInTheDocument();
+    expect(references.queryByText(/00gFAKE1/)).not.toBeInTheDocument();
+  });
+
+  /* The inline answer must not grow a control the section cannot back (ADR-0039). */
+  it('adds no control alongside the inline condition', () => {
+    render(<GroupRulesSection {...base} />);
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
   it("shows each rule's Okta status verbatim", () => {
     render(<GroupRulesSection {...base} />);
     expect(screen.getByText('ACTIVE')).toBeInTheDocument();
