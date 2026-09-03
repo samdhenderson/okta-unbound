@@ -6,6 +6,15 @@
   "the two bars must not converge" rule is scoped to what each band **describes**, and a
   control docked in the chrome band may name the browsed entity in its tooltip and
   accessible name, but nowhere visible (§3)
+- Amends: [ADR-0061](./0061-a-list-rungs-primary-is-its-page-verb.md) §3 and its
+  Consequences — not its rule, which ADR-0068 already amended, but its **worked example**.
+  Every claim ADR-0061 makes about the shipped `RulesListActionBar` — that the strip's
+  leading position is the load verb in every state, that it "ships to this rule and is the
+  reference shape for it", and that the Rules rung's `PageHeader` gave up its `actions`
+  slot _to the strip_ — is falsified by §4 and §6 below deleting the control those
+  sentences describe. The replacement reference is already installed by
+  [ADR-0068](./0068-a-rungs-primary-is-a-verb-that-acts.md) §3 (`GroupActionBar`'s **Add**);
+  this ADR records that the passage is superseded rather than inventing one
 - Relates to: [ADR-0068](./0068-a-rungs-primary-is-a-verb-that-acts.md) (which excludes a
   refresh from `primary` because this ADR removes it from the strip),
   [ADR-0030](./0030-detail-page-layout-contract.md) §2 (`PageHeader.actions` is the slot
@@ -258,9 +267,29 @@ analysis. A detail-rung refresh is that shape, over the rung's full key set.
 - **Two hooks gain a re-run function and it is the only thing they gain.**
   `useGroupAccessGrants` and `useGroupRuleReferences`. Their existing return shapes are
   additive-only changes, so no consumer breaks.
-- **`RulesListActionBar` is left with three read-only panel toggles and, under ADR-0068 §1,
-  probably no `primary` at all.** That judgement belongs to the change that empties the
-  strip.
+- **`RulesListActionBar` is left with three read-only panel toggles plus its export, and
+  under ADR-0068 §2's rule 2 the export takes `primary`.** This bullet deferred the
+  judgement to the change that empties the strip; that change has now made it, by writing
+  the §2 enumeration above the descriptor array, and the answer is **not** the one
+  predicted here or in ADR-0068's own consequences.
+
+  ADR-0068's closing bullet states that once `load` leaves, the rung's "remaining
+  descriptors are three read-only panel toggles — no acting verb under §1, and **no export
+  descriptor** for rule 2 to fall back to, so rule 3 is the answer". The second half is
+  factually wrong about the code, and was when it was written: `RulesListActionBar` has
+  shipped an `export-rules` descriptor since it landed, wired unconditionally from
+  `App.tsx` (`onExportRules={handleExportRules}`), and it is the rung's one whole-rung
+  export — the Group Rules descriptor fetches its own rows from Okta rather than reading
+  this tab's loaded list, so it is neither selection-scoped nor gated on the fetch.
+
+  ADR-0068's **Decision** governs and is unchanged by this: §2 is an ordered rule, the
+  enumeration is the test, and it comes out with one candidate failing nothing. So the
+  Rules rung is a **rule 2** rung, exactly as ADR-0068 anticipates one paragraph later
+  ("if that rung later gains an export it becomes a rule 2 rung, and the enumeration is
+  written then") — the export was simply already there. Recorded here rather than fixed
+  in place because ADR-0068 is accepted and immutable, and a reader comparing it to the
+  code needs to know which half to trust.
+
 - **The `PageType`-hued dot becomes a `button` and needs a story.** Per ADR-0010/0014,
   `ContextBar`'s stories must cover the connected, connecting, error and pinned states of
   the new control and be axe-clean — the dot's current `role="img"` was axe-clean as
