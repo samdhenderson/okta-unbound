@@ -11,7 +11,9 @@
  * This component composes and does not fetch. It owns the wiring — which
  * searchers exist, where a result goes — and delegates behaviour to
  * {@link module:sidepanel/hooks/useJumpResolver} and the request cost to
- * {@link module:sidepanel/hooks/useOrgEntityIndex}.
+ * {@link module:sidepanel/hooks/useOrgEntityIndex}, which Home reads through the
+ * shell's {@link module:sidepanel/contexts/OrgEntityIndexContext} rather than
+ * mounting itself — the palette reads the same one (`I-033`).
  *
  * ## The fan-out is derived from reachability, not hardcoded
  *
@@ -64,7 +66,6 @@ import WorkingSet from './home/WorkingSet';
 import OrgSnapshotCard from './home/OrgSnapshotCard';
 import ReportsCard from './home/ReportsCard';
 import { useOktaApi } from '../hooks/useOktaApi';
-import { useOrgEntityIndex } from '../hooks/useOrgEntityIndex';
 import { useWorkingSet } from '../hooks/useWorkingSet';
 import { useOrgFigures } from '../hooks/useOrgFigures';
 import { useHomeReports } from '../hooks/useHomeReports';
@@ -72,6 +73,7 @@ import { useJumpResolver, type JumpResult } from '../hooks/useJumpResolver';
 import { useEntitySearchSources } from '../hooks/useEntitySearchSources';
 import { useStaggerReveal } from '../hooks/useStaggerReveal';
 import { useEntityNavigation } from '../contexts/NavigationContext';
+import { useOrgEntityIndex } from '../contexts/OrgEntityIndexContext';
 import { navigationTarget } from './home/jumpDestinations';
 import type { WorkingSetRef } from '../../shared/storage/workingSetStore';
 import type { ListViewRequest, ListViewTab } from '../listViewRequest';
@@ -134,7 +136,10 @@ const HomeTab: React.FC<HomeTabProps> = ({
   const api = useOktaApi({ targetTabId, oktaOrigin });
   const nav = useEntityNavigation();
 
-  const index = useOrgEntityIndex({ oktaOrigin, targetTabId, enabled: isActive });
+  // The shell's one mount, read here rather than opened here (`I-033`): the
+  // provider gates the sync on Home being on screen, so `isActive` still
+  // decides whether this tab drives org traffic (ADR-0018).
+  const index = useOrgEntityIndex();
   const workingSet = useWorkingSet(oktaOrigin);
   const orgFigures = useOrgFigures({
     index,

@@ -6,8 +6,20 @@
 - **Custom hook** (`src/sidepanel/hooks/`) — reusable logic, data fetching, or any
   cluster of related state + effects. This is the default home for logic.
 - **Context** (`src/sidepanel/contexts/`) — genuinely global, cross-tree state.
-  There are exactly two: `SchedulerContext`, `ProgressContext`. Add a third only
-  when state is needed by distant, unrelated parts of the tree.
+  There are exactly four: `SchedulerContext`, `ProgressContext`,
+  `NavigationContext` (ADR-0030's cross-entity jumps) and `OrgEntityIndexContext`
+  (the panel's single mount of the org snapshot index). Add a fifth only when
+  state is needed by distant, unrelated parts of the tree — or, as with the
+  index, when a _cost_ must be paid once for parts of the tree that cannot share
+  a parent below the shell. Home and the ⌘K palette are siblings, and each
+  mounting its own copy of `useOrgEntityIndex` meant eight IndexedDB reads and
+  eight broadcast listeners for one org's four collections (`I-033`).
+
+  A context that owns a cost, rather than only a value, still answers to
+  ADR-0018: `OrgEntityIndexProvider` takes an `enabled` that `App` sets to the
+  union of its readers (Home on screen, or the palette open), so a provider
+  mounted for the whole session drives no traffic for a surface nobody is
+  looking at.
 
 If a component has more than ~8 `useState`s, that's a smell — extract a hook.
 

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import HomeTab from './HomeTab';
 import { NavigationProvider } from '../contexts/NavigationContext';
+import { OrgEntityIndexProvider } from '../contexts/OrgEntityIndexContext';
 import { useOktaApi, makeUseOktaApiValue } from '../../../.storybook/mocks/useOktaApi.mock';
 import {
   resetSyncSnapshotResponder,
@@ -173,9 +174,20 @@ const meta = {
   decorators: [
     // Home builds its searchers from `canNavigateTo`, so with no provider it can
     // reach nothing and searches nothing. The real app registers group and user.
-    (Story) => (
+    //
+    // `OrgEntityIndexProvider` stands in for the shell: the snapshot index is
+    // mounted once there and read by both Home and the ⌘K palette (`I-033`), so
+    // a story renders it with the same arguments `App` passes — including
+    // `enabled`, which is what decides whether this tab spends a sync.
+    (Story, { args }) => (
       <NavigationProvider handlers={{ group: fn(), user: fn() }}>
-        <Story />
+        <OrgEntityIndexProvider
+          oktaOrigin={args.oktaOrigin ?? null}
+          targetTabId={args.targetTabId}
+          enabled={args.isActive}
+        >
+          <Story />
+        </OrgEntityIndexProvider>
       </NavigationProvider>
     ),
   ],

@@ -9,7 +9,8 @@
  * (app wordmark + entity identity + connection), {@link TabNavigation}, the per-tab
  * content, the fixed {@link ActivityBar} (the unified scheduler + progress bar), the
  * ⌘K {@link CommandPalette}, and the modal layer every `Modal` overlay portals into
- * ({@link MODAL_LAYER_ID}), all inside the SchedulerProvider. Between the masthead
+ * ({@link MODAL_LAYER_ID}), inside the SchedulerProvider and the panel's one
+ * {@link OrgEntityIndexProvider} (`I-033`). Between the masthead
  * and the rail it also mounts the single session-expiry banner (ADR-0054): a 401
  * is a property of the connection, so it is stated once here rather than as a
  * failed-request error state on each of nine surfaces.
@@ -95,6 +96,7 @@ import { useOktaPageContext } from './hooks/useOktaPageContext';
 import { useSessionExpiry } from './hooks/useSessionExpiry';
 import { SchedulerProvider } from './contexts/SchedulerContext';
 import { NavigationProvider } from './contexts/NavigationContext';
+import { OrgEntityIndexProvider } from './contexts/OrgEntityIndexContext';
 import {
   deriveTabContext,
   revalidatePinnedContext,
@@ -496,46 +498,53 @@ const App: React.FC = () => {
       {/* Publishes the cross-entity jumps above to the whole tree, so an
           `EntityLink` at any depth can navigate without a prop chain (ADR-0030). */}
       <NavigationProvider handlers={navigationHandlers}>
-        {/* The shell does not scroll. It is a full-height flex column holding the
+        {/* The panel's one mount of the org snapshot index — Home and the ⌘K
+          palette are siblings, so only the shell can serve both (`I-033`). */}
+        <OrgEntityIndexProvider
+          oktaOrigin={tabContext.oktaOrigin ?? null}
+          targetTabId={tabContext.targetTabId ?? null}
+          enabled={activeTab === 'home' || jumpPalette.isOpen}
+        >
+          {/* The shell does not scroll. It is a full-height flex column holding the
           top chrome and, below it, the one scroller (ADR-0032 §"the chrome is not
           in the scroller"). The scrollbar therefore starts where the content does
           instead of running the full panel height beside `ContextBar` and the tab
           rail — the classic-scrollbar channel a Chrome side panel gets is ~15px,
           and reserving it across bands that never scroll took that width off every
           band for nothing. */}
-        <div className="flex flex-col h-screen overflow-hidden bg-canvas">
-          <ContextBar
-            pageType={effective.pageType}
-            entityName={entityName}
-            connectionStatus={connectionStatus}
-            isLoading={isLoading}
-            error={error}
-            isPinned={isPinned}
-            canPin={isLivePinnable}
-            liveContextChanged={liveContextChanged}
-            liveEntityName={liveIdentity?.name}
-            onTogglePin={handleTogglePin}
-            onRefresh={handleRefreshAll}
-            onReconnect={handleReconnect}
-          />
+          <div className="flex flex-col h-screen overflow-hidden bg-canvas">
+            <ContextBar
+              pageType={effective.pageType}
+              entityName={entityName}
+              connectionStatus={connectionStatus}
+              isLoading={isLoading}
+              error={error}
+              isPinned={isPinned}
+              canPin={isLivePinnable}
+              liveContextChanged={liveContextChanged}
+              liveEntityName={liveIdentity?.name}
+              onTogglePin={handleTogglePin}
+              onRefresh={handleRefreshAll}
+              onReconnect={handleReconnect}
+            />
 
-          {/* One statement, once, for a fact that belongs to the connection
+            {/* One statement, once, for a fact that belongs to the connection
               rather than to any one surface (ADR-0054 §3). It sits beside
               `ContextBar` because that is where the connection is already
               described — a per-surface error state would multiply one expired
               session into nine, which is the defect `D-007b` names. */}
-          <SessionExpiryNotice targetTabId={tabContext.targetTabId ?? null} />
+            <SessionExpiryNotice targetTabId={tabContext.targetTabId ?? null} />
 
-          {/* The rail's trailing ⌘K button is the only visible route to the two
+            {/* The rail's trailing ⌘K button is the only visible route to the two
               rail-hidden sections (ADR-0063), so it opens the same palette state
               the chord toggles — `open`, not a second `useCommandPalette()`. */}
-          <TabNavigation
-            activeTab={activeTab}
-            onTabChange={handleTabChange}
-            onOpenCommandPalette={jumpPalette.open}
-          />
+            <TabNavigation
+              activeTab={activeTab}
+              onTabChange={handleTabChange}
+              onOpenCommandPalette={jumpPalette.open}
+            />
 
-          {/* `flex-1 min-h-0` + `overflow-y-auto` make *this* div the scroller, not
+            {/* `flex-1 min-h-0` + `overflow-y-auto` make *this* div the scroller, not
             the document and not the shell — every root-scrolling tab shares it,
             which is why each `TabPanel` needs the ref to preserve its own offset
             across a tab switch. `min-h-0` because a flex item's default
@@ -551,141 +560,142 @@ const App: React.FC = () => {
             to absorb *unintended* reflow above the fold; every height change in this
             scroller is intentional and driven by scroll position, so there is nothing here
             for it to usefully protect. */}
-          <div
-            ref={scrollRootRef}
-            data-testid="app-scroll-root"
-            className="flex flex-col flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] pb-14"
-          >
-            {/* Each tab mounts on first activation and is hidden — never unmounted —
+            <div
+              ref={scrollRootRef}
+              data-testid="app-scroll-root"
+              className="flex flex-col flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] pb-14"
+            >
+              {/* Each tab mounts on first activation and is hidden — never unmounted —
               thereafter, so its local state survives leaving the tab. */}
-            {renderTabPanel('home', (isActive) => (
-              <HomeTab
-                isActive={isActive}
-                targetTabId={tabContext.targetTabId ?? null}
-                oktaOrigin={tabContext.oktaOrigin ?? undefined}
-                onOpenListView={handleOpenListView}
-                onOpenTab={handleOpenTab}
-                onScanGroupMfa={(id) => handleNavigateToGroup(id, 'insights')}
-              />
-            ))}
-            {renderTabPanel('rules', (isActive) => (
-              <RulesTab
-                isActive={isActive}
-                targetTabId={tabContext.targetTabId ?? undefined}
-                currentGroupId={tabContext.currentGroupId}
-                oktaOrigin={tabContext.oktaOrigin ?? undefined}
-                selectedRuleId={selectedRuleId}
-                onRuleSelected={() => setSelectedRuleId(null)}
-                onNavigateToGroup={handleNavigateToGroup}
-                onExportRules={handleExportRules}
-                scrollRootRef={scrollRootRef}
-                listView={viewFor(listViewRequest, 'rules')}
-                onListViewConsumed={clearListViewRequest}
-              />
-            ))}
-            {renderTabPanel('users', (isActive) => (
-              <UsersTab
-                isActive={isActive}
-                targetTabId={tabContext.targetTabId ?? undefined}
-                currentGroupId={tabContext.currentGroupId}
-                selectedUserId={selectedUserId}
-                onUserSelected={() => setSelectedUserId(null)}
-              />
-            ))}
-            {renderTabPanel('groups', (isActive) => (
-              <GroupsTab
-                isActive={isActive}
-                // The rung's list scrolls this, not a box of its own, so the
-                // offset that has to survive a push into a group's detail view
-                // lives here (ADR-0051 §5).
-                scrollRootRef={scrollRootRef}
-                targetTabId={tabContext.targetTabId ?? null}
-                oktaOrigin={tabContext.oktaOrigin ?? undefined}
-                onNavigateToRule={handleNavigateToRule}
-                selectedGroupId={groupNav?.id ?? null}
-                selectedGroupPane={groupNav?.pane}
-                onGroupSelected={() => setGroupNav(null)}
-                // The descriptor-driven Export Engine route (ADR-0030). Without
-                // it the drilled-in group's "Export members" greys itself out.
-                onExportGroup={handleExportGroup}
-                listView={viewFor(listViewRequest, 'groups')}
-                onListViewConsumed={clearListViewRequest}
-              />
-            ))}
-            {renderTabPanel('apps', (isActive) => (
-              <AppsTab
-                isActive={isActive}
-                targetTabId={tabContext.targetTabId ?? null}
-                oktaOrigin={tabContext.oktaOrigin ?? undefined}
-                listView={viewFor(listViewRequest, 'apps')}
-                onListViewConsumed={clearListViewRequest}
-                selectedAppId={selectedAppId}
-                onAppSelected={() => setSelectedAppId(null)}
-              />
-            ))}
-            {renderTabPanel('policies', (isActive) => (
-              <AuthPoliciesTab
-                isActive={isActive}
-                targetTabId={tabContext.targetTabId ?? undefined}
-                oktaOrigin={tabContext.oktaOrigin ?? undefined}
-                selectedPolicyId={selectedPolicyId}
-                onPolicySelected={() => setSelectedPolicyId(null)}
-              />
-            ))}
-            {renderTabPanel('export', (isActive) => (
-              <ExportTab
-                isActive={isActive}
-                targetTabId={tabContext.targetTabId ?? undefined}
-                oktaOrigin={tabContext.oktaOrigin ?? undefined}
-                exportRequest={exportRequest}
-                onExportRequestConsumed={() => setExportRequest(null)}
-              />
-            ))}
-            {renderTabPanel('explorer', () => (
-              <ApiExplorerTab
-                targetTabId={tabContext.targetTabId ?? null}
-                oktaOrigin={tabContext.oktaOrigin ?? undefined}
-              />
-            ))}
-            {renderTabPanel('history', (isActive) => (
-              <div
-                className="tab-content active"
-                style={{ fontFamily: 'var(--font-primary)', padding: 0 }}
-              >
-                <PageHeader title="Audit Log" subtitle="View history of actions performed" />
-                <div className="max-w-7xl mx-auto px-6 py-6">
-                  <AuditLogViewer
-                    isActive={isActive}
-                    targetTabId={tabContext.targetTabId ?? null}
-                  />
+              {renderTabPanel('home', (isActive) => (
+                <HomeTab
+                  isActive={isActive}
+                  targetTabId={tabContext.targetTabId ?? null}
+                  oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                  onOpenListView={handleOpenListView}
+                  onOpenTab={handleOpenTab}
+                  onScanGroupMfa={(id) => handleNavigateToGroup(id, 'insights')}
+                />
+              ))}
+              {renderTabPanel('rules', (isActive) => (
+                <RulesTab
+                  isActive={isActive}
+                  targetTabId={tabContext.targetTabId ?? undefined}
+                  currentGroupId={tabContext.currentGroupId}
+                  oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                  selectedRuleId={selectedRuleId}
+                  onRuleSelected={() => setSelectedRuleId(null)}
+                  onNavigateToGroup={handleNavigateToGroup}
+                  onExportRules={handleExportRules}
+                  scrollRootRef={scrollRootRef}
+                  listView={viewFor(listViewRequest, 'rules')}
+                  onListViewConsumed={clearListViewRequest}
+                />
+              ))}
+              {renderTabPanel('users', (isActive) => (
+                <UsersTab
+                  isActive={isActive}
+                  targetTabId={tabContext.targetTabId ?? undefined}
+                  currentGroupId={tabContext.currentGroupId}
+                  selectedUserId={selectedUserId}
+                  onUserSelected={() => setSelectedUserId(null)}
+                />
+              ))}
+              {renderTabPanel('groups', (isActive) => (
+                <GroupsTab
+                  isActive={isActive}
+                  // The rung's list scrolls this, not a box of its own, so the
+                  // offset that has to survive a push into a group's detail view
+                  // lives here (ADR-0051 §5).
+                  scrollRootRef={scrollRootRef}
+                  targetTabId={tabContext.targetTabId ?? null}
+                  oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                  onNavigateToRule={handleNavigateToRule}
+                  selectedGroupId={groupNav?.id ?? null}
+                  selectedGroupPane={groupNav?.pane}
+                  onGroupSelected={() => setGroupNav(null)}
+                  // The descriptor-driven Export Engine route (ADR-0030). Without
+                  // it the drilled-in group's "Export members" greys itself out.
+                  onExportGroup={handleExportGroup}
+                  listView={viewFor(listViewRequest, 'groups')}
+                  onListViewConsumed={clearListViewRequest}
+                />
+              ))}
+              {renderTabPanel('apps', (isActive) => (
+                <AppsTab
+                  isActive={isActive}
+                  targetTabId={tabContext.targetTabId ?? null}
+                  oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                  listView={viewFor(listViewRequest, 'apps')}
+                  onListViewConsumed={clearListViewRequest}
+                  selectedAppId={selectedAppId}
+                  onAppSelected={() => setSelectedAppId(null)}
+                />
+              ))}
+              {renderTabPanel('policies', (isActive) => (
+                <AuthPoliciesTab
+                  isActive={isActive}
+                  targetTabId={tabContext.targetTabId ?? undefined}
+                  oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                  selectedPolicyId={selectedPolicyId}
+                  onPolicySelected={() => setSelectedPolicyId(null)}
+                />
+              ))}
+              {renderTabPanel('export', (isActive) => (
+                <ExportTab
+                  isActive={isActive}
+                  targetTabId={tabContext.targetTabId ?? undefined}
+                  oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                  exportRequest={exportRequest}
+                  onExportRequestConsumed={() => setExportRequest(null)}
+                />
+              ))}
+              {renderTabPanel('explorer', () => (
+                <ApiExplorerTab
+                  targetTabId={tabContext.targetTabId ?? null}
+                  oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                />
+              ))}
+              {renderTabPanel('history', (isActive) => (
+                <div
+                  className="tab-content active"
+                  style={{ fontFamily: 'var(--font-primary)', padding: 0 }}
+                >
+                  <PageHeader title="Audit Log" subtitle="View history of actions performed" />
+                  <div className="max-w-7xl mx-auto px-6 py-6">
+                    <AuditLogViewer
+                      isActive={isActive}
+                      targetTabId={tabContext.targetTabId ?? null}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
 
-            <ActivityBar />
+              <ActivityBar />
+            </div>
           </div>
-        </div>
 
-        {/* Rendered outside the scroll root: it is a viewport-fixed overlay, not
+          {/* Rendered outside the scroll root: it is a viewport-fixed overlay, not
           part of any tab's scrollable content. Selecting a result goes through
           the same `handleTabChange` the icon rail calls. */}
-        <CommandPalette
-          isOpen={jumpPalette.isOpen}
-          onClose={jumpPalette.close}
-          activeTab={activeTab}
-          onSelect={handleTabChange}
-          targetTabId={tabContext.targetTabId ?? null}
-          oktaOrigin={tabContext.oktaOrigin}
-        />
+          <CommandPalette
+            isOpen={jumpPalette.isOpen}
+            onClose={jumpPalette.close}
+            activeTab={activeTab}
+            onSelect={handleTabChange}
+            targetTabId={tabContext.targetTabId ?? null}
+            oktaOrigin={tabContext.oktaOrigin}
+          />
 
-        {/* The modal layer: every `Modal` overlay in the panel portals in here.
+          {/* The modal layer: every `Modal` overlay in the panel portals in here.
           It is deliberately the **last** node in the shell, after the scroll root
           — the `ActivityBar` is a `fixed bottom-0 z-50` band inside that root and
           shares the top of the z-index ladder with `Modal`, so at equal z-index
           the later node wins and the bar can no longer paint over an open modal's
           footer actions (D-009). The node itself has no box: the overlay it hosts
           is `fixed`. See `components/shared/Modal.tsx` for the full ladder. */}
-        <div id={MODAL_LAYER_ID} />
+          <div id={MODAL_LAYER_ID} />
+        </OrgEntityIndexProvider>
       </NavigationProvider>
     </SchedulerProvider>
   );

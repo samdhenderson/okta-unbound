@@ -1,5 +1,9 @@
 /**
- * Tests for useOrgEntityIndex — Home's one read of the org snapshot.
+ * Tests for useOrgEntityIndexSource — the panel's one read of the org snapshot.
+ *
+ * The hook is the mount; `OrgEntityIndexProvider` is its only caller and every
+ * surface reads the published value (`I-033`). What it answers is unchanged, so
+ * the cases below are the same cases under the mounting hook's name.
  *
  * The subject is the **negative** answer. A hit needs no defending: a row that
  * is present was returned by Okta. A miss is the dangerous one, because an
@@ -23,7 +27,7 @@ vi.mock('../cache/useOrgSnapshot', () => ({
   useOrgSnapshot: (...args: unknown[]) => useOrgSnapshot(...args),
 }));
 
-const { useOrgEntityIndex } = await import('./useOrgEntityIndex');
+const { useOrgEntityIndexSource } = await import('./useOrgEntityIndex');
 
 const GROUP_ID = '00gFAKE0000000000001';
 const RULE_ID = '0prFAKE0000000000001';
@@ -76,11 +80,12 @@ function stage({
     apps: snapshot([{ id: APP_ID, name: 'datadog', label: 'Datadog' }], appsComplete),
   };
   useOrgSnapshot.mockImplementation((collection: string) => byCollection[collection]);
-  return renderHook(() => useOrgEntityIndex({ oktaOrigin: ORIGIN, targetTabId: 1, enabled: true }))
-    .result;
+  return renderHook(() =>
+    useOrgEntityIndexSource({ oktaOrigin: ORIGIN, targetTabId: 1, enabled: true }),
+  ).result;
 }
 
-describe('useOrgEntityIndex', () => {
+describe('useOrgEntityIndexSource', () => {
   beforeEach(() => useOrgSnapshot.mockReset());
 
   describe('hits', () => {
