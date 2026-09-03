@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import ContextBar from './ContextBar';
 
 /**
- * Slim merged context header (identity + connection + refresh + pin). Replaces the
- * old stacked ContextBanner and Overview PageHeader. Pinning freezes the panel on
- * the current entity; when the live tab moves while pinned, a hint offers to switch.
+ * Slim merged context header: a connection status wire, one identity row, and the
+ * two chrome verbs (Refresh, Pin). Pinning freezes the panel on the current
+ * entity; when the live tab moves while pinned, a hint offers to switch.
  */
 const meta = {
   title: 'Sidepanel/ContextBar',
@@ -17,7 +17,7 @@ const meta = {
       description: {
         component:
           'One line of top chrome: what the live Okta tab is on, plus Refresh and Pin.\n\n' +
-          "One line of chrome: a hue-coded connection dot, the live tab's entity name, and the two global context controls. It sits outside the panel's scroller and is therefore always on screen, which is why it carries no wordmark, no id chip and no *Pinned* badge — see the module note for what each of those was cut for. Notable states: resolving (`Loading`), a connection/context failure with a reload-tab affordance (`ErrorState`), pinned to the current entity (`Pinned`), and pinned-but-the-live-tab-moved (`PinnedLiveChanged`). Presentational — pin/refresh behaviour and the live-vs-pinned comparison are owned by the caller (App).\n\n" +
+          "One line of chrome: a hue-coded connection *wire* along the panel's top edge, the live tab's entity name, and the two global context controls (Refresh, Pin). It sits outside the panel's scroller and is therefore always on screen, which is why it carries no wordmark, no id chip and no *Pinned* badge — see the module note for what each of those was cut for. The wire costs no layout height at rest and thickens into a labelled strip with a real Reconnect control when the connection is down. Notable states: resolving (`Loading`), a connection/context failure (`ErrorState`), pinned to the current entity (`Pinned`), and pinned-but-the-live-tab-moved (`PinnedLiveChanged`). Presentational — pin/refresh behaviour and the live-vs-pinned comparison are owned by the caller (App).\n\n" +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
           '[Shared utilities](?path=/docs/internals-shared-utilities--docs)',
       },
@@ -148,8 +148,9 @@ export const PinnedLiveChanged: Story = {
 
 /**
  * Pinned, but the connection to the Okta tab is down. The pin keeps the frozen
- * entity identity while the bar reports connection health truthfully — a red dot,
- * `Not connected`, and the reload-tab affordance — instead of a permanent green dot.
+ * entity identity while the bar reports connection health truthfully — a red
+ * wire, `Not connected`, and the reload-tab affordance — instead of a permanent
+ * green one.
  */
 export const PinnedDisconnected: Story = {
   args: {
@@ -178,11 +179,64 @@ export const Loading: Story = {
   },
 };
 
-/** Connection/context error, with the reconnect (reload-tab) affordance. */
+/** Connection/context error: the wire thickens into its labelled strip. */
 export const ErrorState: Story = {
   args: {
     entityName: undefined,
     error: 'Can’t reach the Okta tab — reload it to reconnect.',
     canPin: false,
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // The recovery control is a real, named, keyboard-reachable button — the
+    // status light it replaces was `role="img"` with nothing to press, and the
+    // separate Reconnect button it replaces displaced Refresh when it appeared.
+    const reconnect = canvas.getByRole('button', { name: 'Reconnect' });
+    reconnect.focus();
+    await expect(reconnect).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onReconnect).toHaveBeenCalled();
+
+    // Hue is not the only carrier (ADR-0061): the strip states it in words.
+    await expect(canvas.getByText('Not connected to the Okta tab')).toBeInTheDocument();
+  },
+};
+
+/**
+ * Refresh and Pin are in the same pixel whether the connection is healthy or
+ * down. Nothing about the failure state is allowed to move them: the recovery
+ * control lives in the band *above* the row, and the identity region to their
+ * left is what absorbs the change. A control that changes identity under the
+ * reader's pointer at the moment something goes wrong is the failure this
+ * composition exists to avoid.
+ */
+export const ControlsDoNotMoveOnFailure: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Both present and named identically in the healthy state rendered here;
+    // `ErrorState` above renders the same two beside a Reconnect that has been
+    // added in a different band rather than in their row. Position itself is not
+    // assertable in this runner — see the story description.
+    await expect(canvas.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: /Pin/ })).toBeInTheDocument();
+  },
+};
+
+/**
+ * With no tab to reconnect to, the strip states the status and offers nothing —
+ * an action known to be impossible is omitted, not shipped disabled (ADR-0039).
+ */
+export const ErrorWithNoTabToReconnect: Story = {
+  args: {
+    entityName: undefined,
+    error: 'Can’t reach the Okta tab — reload it to reconnect.',
+    canPin: false,
+    onReconnect: undefined,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Not connected to the Okta tab')).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument();
   },
 };
