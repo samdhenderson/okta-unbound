@@ -1,29 +1,49 @@
 /**
  * @module sidepanel/components/members/MemberExplorer
- * @description Orchestrator for in-group member search, faceting, composition, MFA, and listing.
+ * @description Orchestrator for in-group member search, faceting, MFA, and listing.
  *
  * Owns the explorer's client-side state — debounced search, sort
  * field/direction, and the paged visible window — and derives the
  * filtered/sorted list via the pure helpers in `memberAnalytics`. The facet
  * filter set is the exception: it lives in
  * {@link module:sidepanel/hooks/useMemberFilters}, because it is the one piece
- * of this state a neighbouring surface has a reason to reach. Composes the search bar, filter panel, MFA scan panel,
- * composition reports, member list, and the details/copy modals. MFA scan results
- * are owned by the parent overview and passed in.
+ * of this state a neighbouring surface has a reason to reach. MFA scan results
+ * are owned by the caller and passed in.
  *
- * ## Two surfaces, one explorer
+ * ## One control line, one drawer
  *
- * `overview/GroupOverview` and the Group Detail Members tab both mount this. Every
- * prop the detail surface needs beyond the overview's set is **optional, and its
- * absence is the overview's correct behaviour** — not a degraded one:
+ * The tab this mounts on used to stack seven surfaces above its first member
+ * row: the load ladder, the membership-source strip, that strip's notes, search
+ * plus a Filters toggle, the panel that toggle opened, the composition reports,
+ * and the list header. Somebody who opened it to see members saw controls.
  *
- * - No `memberSource` ⇒ no meter, no source pills. The overview never loads
- *   feeding rules, and labelling an unclassified roster "Manual" would manufacture
- *   a fact (`users/GroupMembershipsList` states the same rule for the sibling case).
+ * What is left above the roster is **one band**: search and the drawer trigger,
+ * the active filters as chips, and how much of the roster survived them beside
+ * the one verb that acts on that surviving set. Every remaining control is in
+ * {@link module:sidepanel/components/members/MemberFilterDrawer}. The chips are
+ * on the line rather than inside the drawer on purpose — a filter you cannot see
+ * is worse than a control you cannot reach.
+ *
+ * The composition reports are not here at all any more; they are a distribution
+ * of the roster rather than a control over it, and they live on the Insights tab
+ * ({@link module:sidepanel/components/groups/detail/GroupInsightsPane}), with a
+ * pointer from inside the drawer.
+ *
+ * ## Optional props are absences, not degradations
+ *
+ * Every prop beyond the minimum is **optional, and its absence is a correct
+ * rendering** rather than a fallback, so a surface that cannot supply one never
+ * costs the reader a dead control:
+ *
+ * - No `memberSource` ⇒ no meter, no source pills. A caller that never loads
+ *   feeding rules has nothing to classify by, and labelling an unclassified
+ *   roster "Manual" would manufacture a fact
+ *   (`users/GroupMembershipsList` states the same rule for the sibling case).
  * - No `onRemoveMember` ⇒ rows render no remove control. Never a disabled one
  *   (ADR-0039).
- *
- * So adding a surface never costs the other one a dead control.
+ * - No `onOpenInsights` ⇒ no pointer to Insights.
+ * - No `pendingFilter` ⇒ the explorer is fully uncontrolled, which is what every
+ *   surface but the Insights jump wants.
  */
 import React, { useCallback, useId, useMemo, useState } from 'react';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../shared/types';
@@ -78,8 +98,8 @@ interface MemberExplorerProps {
   /** Okta org origin for member Admin Console links (null when unknown). */
   oktaOrigin?: string | null;
   /**
-   * Per-member membership source. Absent ⇒ no meter and no source pills — see the
-   * module doc for why that is the overview's correct rendering, not a fallback.
+   * Per-member membership source. Absent ⇒ no meter and no source pills — see
+   * the module doc for why that is a correct rendering, not a fallback.
    */
   memberSource?: MemberSourceContext;
   /**
@@ -238,8 +258,8 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
     setVisibleCount((c) => Math.min(c + PAGE, sorted.length));
   }, [sorted.length]);
 
-  // A single scan entry point (used by the filter panel and the Composition MFA
-  // tab): large groups route through the confirmation gate, small ones scan now.
+  // A single scan entry point: large groups route through the confirmation
+  // gate, small ones scan now.
   const handleScanClick = useCallback(() => {
     if (mfaScanNeedsConfirm(members.length)) onRequestConfirm();
     else onRunScan();
@@ -358,7 +378,9 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         proofs={proofs}
       />
 
-      {/* Full attribute distribution modal */}
+      {/* The value reveal, opened from the drawer's attribute rows. Mounted out
+          here for the same reason the scan gate is: a modal must not live inside
+          the region that can collapse under it. */}
       <BreakdownDetailsModal
         isOpen={detailKey !== null}
         onClose={() => setDetailKey(null)}
@@ -371,8 +393,9 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
       {/* Copy members (name / email / username) modal */}
       <CopyMembersModal isOpen={copyOpen} onClose={() => setCopyOpen(false)} members={sorted} />
 
-      {/* MFA scan confirmation gate for large groups (triggered from the filter panel
-          or the Composition MFA tab; kept here so it renders regardless of either). */}
+      {/* MFA scan confirmation gate for large groups. Triggered from inside the
+          drawer, but mounted out here so it is not clipped by the collapsing
+          region — and so closing the drawer cannot strand an open dialog. */}
       <Modal
         isOpen={scanStatus === 'confirming'}
         onClose={onCancelConfirm}

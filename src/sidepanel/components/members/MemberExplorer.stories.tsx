@@ -27,14 +27,17 @@ const meta = {
     docs: {
       description: {
         component:
-          'Orchestrator for in-group member search, faceting, composition, MFA, and listing.\n\n' +
-          "Owns the explorer's client-side state — debounced search, the active filter set, " +
-          'sort field/direction, and the paged visible window — and derives the ' +
-          'filtered/sorted list via the pure `memberAnalytics` helpers. Composes the search ' +
-          'bar, filter panel, MFA scan panel, composition reports, member list, and the ' +
-          'details/copy modals. MFA scan results are owned by the parent overview and passed ' +
-          'in, so the scan lifecycle (idle → confirming → scanning → complete) is driven by ' +
-          'props.\n\n' +
+          'Orchestrator for in-group member search, faceting, MFA, and listing.\n\n' +
+          '**One control line, one drawer.** The tab used to stack seven surfaces above its ' +
+          'first member row; now a single band carries search, the drawer trigger, the active ' +
+          'filters as chips, and how much of the roster survived them, and every remaining ' +
+          'control is in `MemberFilterDrawer`.\n\n' +
+          "Owns the explorer's client-side state — debounced search, sort field/direction, and " +
+          'the paged visible window — and derives the filtered/sorted list via the pure ' +
+          '`memberAnalytics` helpers. The facet filter set itself lives in `useMemberFilters`, ' +
+          'which also takes the one-shot `pendingFilter` request the Insights tab uses to hand ' +
+          'a value over. MFA scan results are owned by the caller, so the scan lifecycle ' +
+          '(idle → confirming → scanning → complete) is driven by props.\n\n' +
           '**Related internals:** [Types](?path=/docs/internals-types--docs)',
       },
     },
@@ -82,7 +85,7 @@ export const Scanning: Story = {
   args: { scanStatus: 'scanning' },
 };
 
-/** MFA scan complete: factor breakdowns and per-member factor tags render. */
+/** MFA scan complete: the drawer's factor filters and per-member factor tags are live. */
 export const ScanComplete: Story = {
   args: { mfaResults, scanStatus: 'complete' },
 };
