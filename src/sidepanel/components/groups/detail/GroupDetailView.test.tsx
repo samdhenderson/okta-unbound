@@ -305,6 +305,28 @@ describe('GroupDetailView', () => {
     expect(onExportGroup).toHaveBeenCalledWith(group.id, group.name);
   });
 
+  /*
+    ADR-0068 §2: an export descriptor never sits in the row, on any rung. It does
+    not produce a file in place — it forwards to the Export tab with its column
+    picker and presets — so it is navigation wearing a verb's clothes. Asserted
+    through the region the **More** control names, the same way *Create feeding
+    rule* is above: jsdom honours neither `inert` nor CSS, so "is it visible"
+    would pass either way.
+  */
+  it('keeps Export members in the disclosure tier, not the action row', () => {
+    render(<GroupDetailView group={makeGroup()} targetTabId={1} onExportGroup={vi.fn()} />);
+
+    const more = screen.getByRole('button', { name: /More/ });
+    const tierId = more.getAttribute('aria-controls');
+    const tier = tierId ? document.getElementById(tierId) : null;
+    if (!tier) throw new Error('the More control names no region');
+
+    expect(within(tier).getByRole('button', { name: /export members/i })).toBeInTheDocument();
+    // And `Add`, the verb that acts, is in the row rather than the tier.
+    expect(within(tier).queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
+  });
+
   it("wires the action bar's Add button to the Add-member modal", async () => {
     const user = userEvent.setup();
     render(<GroupDetailView group={makeGroup()} targetTabId={1} />);

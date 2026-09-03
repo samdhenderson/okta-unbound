@@ -448,13 +448,20 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
         identityKey={identity?.key}
         identity={identity ? <EntityIdentity rows={identity.rows} /> : undefined}
         badge={
+          /*
+            The selection is NOT here. `PageHeader` describes what you are
+            browsing (ADR-0032), and a badge that flipped from `214 Cached` to
+            `3 Selected` overwrote a durable property of the rung with a
+            transient property of the pointer — so the one statement of what the
+            rung holds disappeared the moment you ticked anything. The count is
+            now stated once, in prose, on `GroupsListPanel`'s own line beneath
+            the list: `Showing 128 of 214 · 3 selected`.
+          */
           identity
             ? identity.badge
-            : selectedGroupIds.size > 0
-              ? { text: `${selectedGroupIds.size} Selected`, variant: 'primary' }
-              : searchMode === 'cached'
-                ? { text: `${groups.length} Cached`, variant: 'success' }
-                : { text: 'Live', variant: 'primary' }
+            : searchMode === 'cached'
+              ? { text: `${groups.length} Cached`, variant: 'success' }
+              : { text: 'Live', variant: 'primary' }
         }
         actions={
           identity ? (
@@ -653,6 +660,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             activeFilterCount={activeFilterCount}
             filteredGroups={filteredGroups}
             selectedGroupIds={selectedGroupIds}
+            selectedCount={selectedGroupIds.size}
             onToggleSelect={selection.toggleSelect}
             oktaOrigin={oktaOrigin}
             onLoadAllGroups={() => void loadAllGroups()}

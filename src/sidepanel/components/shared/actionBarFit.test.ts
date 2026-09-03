@@ -306,4 +306,52 @@ describe('degenerate input', () => {
       }),
     ).toEqual({ inBar: 3, compact: false });
   });
+
+  /**
+   * The selection register is a second row in the same band, fitted by a second
+   * call to this function against its own width. These pin what "independently"
+   * has to mean, because the two rows sit in one band at one panel width and it
+   * would be easy to assume one answer serves both.
+   */
+  describe('the selection register is a second, independent row', () => {
+    /** Two wide selection verbs — the register's row. */
+    const REGISTER = { widths: [160, 160], compactWidths: [140, 140] };
+    /** Three narrow page verbs — the action row's, at the same panel width. */
+    const ROW = { widths: [80, 80, 80], compactWidths: [64, 64, 64] };
+
+    it('lets one row overflow while the other seats everything', () => {
+      // The register owns no More control of its own — both rows spill into the
+      // action row's one tier — so its cluster width is 0.
+      expect(fit({ ...REGISTER, available: 260, overflowWidth: 0, pinned: 1 })).toEqual({
+        inBar: 1,
+        compact: true,
+      });
+      // Same 260px, same band: the action row is untouched by that — 3 x 80 plus
+      // two 8px gaps is 256, and it keeps its glyphs.
+      expect(fit({ ...ROW, available: 260 })).toEqual({ inBar: 3, compact: false });
+    });
+
+    it('lets one row go compact while the other keeps its glyphs', () => {
+      // 2 × 160 + 8 = 328 does not fit; 2 × 140 + 8 = 288 does. Compact, both in.
+      expect(fit({ ...REGISTER, available: 300, overflowWidth: 0, pinned: 0 })).toEqual({
+        inBar: 2,
+        compact: true,
+      });
+      // `compact` is a property of the call, not of the band, so the row above
+      // keeps its icons at the very same width.
+      expect(fit({ ...ROW, available: 300 })).toEqual({ inBar: 3, compact: false });
+    });
+
+    it('never lets a register verb push a page verb out, or the reverse', () => {
+      // Widen the register's verbs until they overflow. The action row's split at
+      // the same width is byte-identical to the one it gets with no register at
+      // all — the only channel between the two rows is the More control's width,
+      // which `tierAlwaysPresent` charges, and that is charged once.
+      const rowAlone = fit({ ...ROW, available: 320, tierAlwaysPresent: true });
+      expect(
+        fit({ widths: [900, 900], compactWidths: [900, 900], available: 320, pinned: 1 }),
+      ).toEqual({ inBar: 1, compact: true });
+      expect(fit({ ...ROW, available: 320, tierAlwaysPresent: true })).toEqual(rowAlone);
+    });
+  });
 });
