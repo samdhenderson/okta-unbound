@@ -3,12 +3,12 @@ import BucketRow from './BucketRow';
 import type { BucketState } from '@/shared/scheduler/types';
 
 /**
- * One Okta rate-limit bucket, as the expanded activity bar shows it.
+ * One lane of the activity bar's bucket **rack**.
  *
  * Okta enforces quotas per endpoint family, so `/api/v1/apps` can be exhausted
- * while `/api/v1/groups` sits untouched (ADR-0059). This row is where that
- * distinction reaches the screen: headroom, the work already spoken for, and the
- * countdown to a gate lifting.
+ * while `/api/v1/groups` sits untouched (ADR-0059). Every family gets the same
+ * lane geometry, and its state is folded *onto* the lane rather than sitting
+ * beside it, so the rack stays scannable down its columns.
  */
 const meta = {
   title: 'Sidepanel/Activity/BucketRow',
@@ -19,8 +19,10 @@ const meta = {
     docs: {
       description: {
         component:
-          'One rate-limit bucket in the expanded activity bar.\n\n' +
-          'Headroom is rendered as `remaining/limit`, or **not reported** when Okta has said nothing about the bucket — unknown is deliberately not shown as exhausted. The meter beneath splits the bucket’s work into in-flight, queued, and planned, so declared-but-unspent requests are visible before they are made (ADR-0060). A gated bucket carries a countdown to the moment it lifts.',
+          'One lane of the bucket rack.\n\n' +
+          'Headroom is rendered as `remaining/limit`, or **not reported** when Okta has said nothing about the bucket — unknown is deliberately not shown as exhausted. The lane fill splits the bucket’s work into in-flight, queued, and planned, so declared-but-unspent requests are visible before they are made (ADR-0060).\n\n' +
+          'A gated lane is **hatched** and carries its own countdown; a low lane carries a literal `low` chip. Neither depends on hue, and the hatch is static — there is no motion to suppress under `prefers-reduced-motion`.\n\n' +
+          'A bucket the scheduler is *remembering* (ADR-0070) draws an empty lane, says **at rest**, and prints no budget figure at all. What is retained after a bucket’s work drains is the lane’s existence, never a number — so a memory can never pass for a reading. With `lastActiveAt` at `null`, the worker was evicted and the lane says "at rest" and nothing more rather than inventing a timestamp.',
       },
     },
   },
@@ -106,6 +108,42 @@ export const Cooling: Story = {
       queued: 40,
       planned: 500,
       gatedUntil: NOW + 24_000,
+    }),
+    lowThresholdPercent: 10,
+    now: NOW,
+  },
+};
+
+/**
+ * Remembered after its work drained: an empty lane, the words **at rest**, an
+ * age in words, and no budget figure.
+ */
+export const AtRest: Story = {
+  args: {
+    bucket: bucket({
+      bucket: '/api/v1/users',
+      limit: null,
+      remaining: null,
+      resetAt: null,
+      lastActiveAt: NOW - 125_000,
+    }),
+    lowThresholdPercent: 10,
+    now: NOW,
+  },
+};
+
+/**
+ * The same lane after a service-worker eviction. `lastActiveAt` is `null`, so
+ * there is no timestamp to show and none is fabricated — the activity a
+ * timestamp would describe did not survive the suspension either.
+ */
+export const AtRestWorkerEvicted: Story = {
+  args: {
+    bucket: bucket({
+      bucket: '/api/v1/users',
+      limit: null,
+      remaining: null,
+      resetAt: null,
     }),
     lowThresholdPercent: 10,
     now: NOW,

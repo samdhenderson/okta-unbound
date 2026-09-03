@@ -4,16 +4,19 @@
  * for the unified {@link ActivityBarView}, and owns the single Cancel path.
  *
  * The side panel previously showed two independent fixed bars (scheduler status and
- * operation progress) that overlapped and reflowed. This hook is the join point:
- * it reads {@link useScheduler} + {@link useProgress}, derives every field the bar
- * renders (including live elapsed/ETA and cooldown countdowns via internal timers),
- * and exposes a `cancel` that stops the whole operation AND drains the queue.
+ * operation progress) that overlapped and reflowed. This hook is the join point: it
+ * reads {@link useScheduler} + {@link useProgress}, derives every field the bar renders
+ * (the elapsed clock, cooldown countdowns, and the ETA range — whose arithmetic lives
+ * in `./activityEta`), and exposes a `cancel` that stops the operation AND the queue.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useScheduler } from '../contexts/SchedulerContext';
 import { useProgress } from '../contexts/ProgressContext';
 import type { SchedulerStatus, BucketState } from '../../shared/scheduler/types';
 import type { PlanSummary } from '../../shared/scheduler/plan';
+import { clock, cooldownClock, estimateEta, longestArmedGateMs } from './activityEta';
+import type { EtaEstimate } from './activityEta';
+import { STATUS_COLOR, STATUS_LABEL } from './activityStatus';
 
 /** Display-ready, already-merged activity state consumed by `ActivityBarView`. */
 export interface ActivityView {
@@ -37,8 +40,15 @@ export interface ActivityView {
   percentage: number;
   /** Elapsed wall-clock label, e.g. `0:12`. */
   elapsedLabel?: string;
-  /** Estimated-remaining label, e.g. `~0:48 left`. */
-  etaLabel?: string;
+  /**
+   * Time remaining as a **range**, or `null` when no operation is running.
+   *
+   * Never a bare point estimate: the old single number ignored every gate the
+   * scheduler had already armed, so an operation about to sit out a cooldown was
+   * told it had seconds left. See {@link estimateEta}, including the `unknown`
+   * form — words, never an optimistic number.
+   */
+  eta: EtaEstimate | null;
   /** API calls made during the current operation. */
   apiCalls?: number;
   /** Items settled successfully in the current batch operation. */
@@ -114,38 +124,6 @@ const EMPTY_BUCKETS: BucketState[] = [];
 /** Stable empty array for the no-state case, for the same reason. */
 const EMPTY_PLANS: PlanSummary[] = [];
 
-const STATUS_COLOR: Record<SchedulerStatus, string> = {
-  idle: 'var(--color-success)',
-  processing: 'var(--color-info)',
-  throttled: 'var(--color-warning)',
-  cooldown: 'var(--color-danger)',
-  paused: 'var(--color-neutral-500)',
-};
-
-const STATUS_LABEL: Record<SchedulerStatus, string> = {
-  idle: 'Ready',
-  processing: 'Processing',
-  throttled: 'Throttled',
-  cooldown: 'Cooldown',
-  paused: 'Paused',
-};
-
-/** Format seconds as `m:ss`. */
-function clock(totalSeconds: number): string {
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-/** Format milliseconds as a coarse `Xm Ys` / `Xs` cooldown label. */
-function cooldownClock(ms: number): string {
-  const seconds = Math.ceil(ms / 1000);
-  if (seconds >= 60) {
-    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  }
-  return `${seconds}s`;
-}
-
 /**
  * Merge scheduler + progress state into the {@link ActivityView} and expose the
  * unified cancel.
@@ -157,9 +135,8 @@ export function useActivityBar(): UseActivityBar {
   const { state, metrics, clearQueue, cancelPlan } = useScheduler();
   const { progress, cancel: cancelOperation } = useProgress();
 
-  // A single ticking clock. Elapsed and cooldown are derived purely from `now`
-  // in the memo below, so the effect never calls setState directly (which the
-  // React Compiler would otherwise refuse to memoize around).
+  // A single ticking clock. Everything time-dependent below is derived purely
+  // from `now`, so the effect only ever advances the clock.
   const [now, setNow] = useState(() => Date.now());
   const cooldownEndsAt = state?.cooldownEndsAt ?? null;
   const buckets = state?.buckets ?? EMPTY_BUCKETS;
@@ -210,10 +187,18 @@ export function useActivityBar(): UseActivityBar {
 
   const percentage = progress.total > 0 ? Math.min((done / progress.total) * 100, 100) : 0;
 
-  const estimatedTotal = done > 0 ? Math.round((elapsed / done) * progress.total) : 0;
-  const remaining = Math.max(0, estimatedTotal - elapsed);
-  const etaLabel =
-    operationActive && remaining > 0 && done > 2 ? `~${clock(remaining)} left` : undefined;
+  const eta = operationActive
+    ? estimateEta({
+        done,
+        total: progress.total,
+        elapsedMs: elapsed * 1000,
+        longestGateMs: longestArmedGateMs(
+          buckets.map((bucket) => bucket.gatedUntil),
+          cooldownRemaining,
+          now,
+        ),
+      })
+    : null;
 
   // "Low" is the line the *scheduler* backs off at, not a number of the bar's
   // own. The org's warning threshold is learned in the background and published
@@ -243,7 +228,7 @@ export function useActivityBar(): UseActivityBar {
     total: progress.total,
     percentage,
     elapsedLabel: operationActive ? clock(elapsed) : undefined,
-    etaLabel,
+    eta,
     apiCalls: progress.apiCalls,
     opCompleted: progress.completed ?? 0,
     opActive: progress.active ?? 0,

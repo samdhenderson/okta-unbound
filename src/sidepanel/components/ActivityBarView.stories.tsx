@@ -6,8 +6,8 @@ import { inSidePanelFrame } from '../../../.storybook/decorators';
 
 /**
  * Pure presentation of the unified activity bar — a fixed bottom bar with a
- * stable layout (status, four metric slots, action area) driven entirely by
- * an already-merged `ActivityView`.
+ * stable layout (status, a one-line summary, action area) driven entirely by
+ * an already-merged `ActivityView`, with the bucket rack beneath it.
  */
 const meta = {
   title: 'Sidepanel/ActivityBarView',
@@ -22,14 +22,15 @@ const meta = {
       description: {
         component:
           'Pure presentation of the unified activity bar — a fixed bottom bar with a deliberately stable layout.\n\n' +
-          'The status region, the four metric slots (queue / active / rate-limit / eta) and the action area stay mounted, so values coming and going swap text in place instead of reflowing the row. On a narrow panel the bar can collapse to a condensed line — status + rate + a processed/progress tally — behind a chevron toggle. All state arrives as an already-merged `ActivityView`; timers and context wiring live in `useActivityBar`.',
+          'The status region, the one-line summary (queue · rate · ETA) and the action area stay mounted, so values coming and going swap text in place instead of reflowing the row. Four boxed metric tiles used to sit where the summary line is; **Active** is gone from them entirely, because the in-flight count changes several times a second and the bucket rack below already draws it.\n\n' +
+          'Beneath the row sits the rack: one lane per rate-limit family that has been exercised, with badges and cooldown hatching folded onto the lane. On a narrow panel the bar collapses to a condensed line — status + rate + a processed/progress tally, and **no bars at all** — behind a chevron toggle. All state arrives as an already-merged `ActivityView`; timers and context wiring live in `useActivityBar`.',
       },
     },
   },
   argTypes: {
     view: {
       description:
-        'Merged, display-ready activity state (status, metric slots, progress, cancel flags).',
+        'Merged, display-ready activity state (status, summary figures, the ETA range, buckets, progress, cancel flags).',
     },
     onCancel: { description: 'Invoked when the user confirms cancellation of the current work.' },
     onCancelOperation: {
@@ -75,6 +76,7 @@ const idleView: ActivityView = {
   queueLength: 0,
   activeRequests: 0,
   rateLimit: null,
+  eta: null,
   processed: 0,
   failed: 0,
   isCancelling: false,
@@ -104,7 +106,7 @@ export const OperationInProgress: Story = {
       total: 120,
       percentage: 35,
       elapsedLabel: '0:18',
-      etaLabel: '~0:34 left',
+      eta: { kind: 'point', lowerMs: 34_000, label: '~0:34 left' },
       opCompleted: 40,
       opActive: 2,
       opFailed: 0,
@@ -129,7 +131,7 @@ export const OperationWithFailures: Story = {
       total: 100,
       percentage: 88,
       elapsedLabel: '1:02',
-      etaLabel: '~0:08 left',
+      eta: { kind: 'point', lowerMs: 8_000, label: '~0:08 left' },
       opCompleted: 82,
       opActive: 1,
       opFailed: 5,
@@ -241,7 +243,7 @@ export const NarrowExpanded: Story = {
       total: 120,
       percentage: 35,
       elapsedLabel: '0:18',
-      etaLabel: '~0:34 left',
+      eta: { kind: 'point', lowerMs: 34_000, label: '~0:34 left' },
       opCompleted: 40,
       opActive: 2,
       opFailed: 0,
@@ -374,6 +376,131 @@ export const BucketCoolingDown: Story = {
         bucket({ bucket: '/api/v1/apps', limit: 300, remaining: 81, queued: 3, planned: 402 }),
         bucket({ bucket: '/api/v1/groups' }),
         bucket({ bucket: '/api/v1/policies' }),
+      ],
+    },
+  },
+};
+
+/**
+ * The rack a minute after a walk finished. `/api/v1/users` and `/api/v1/groups`
+ * kept their lanes because the scheduler remembers a bucket for ten minutes
+ * after its work drains (ADR-0070) — and they say **at rest** with an empty
+ * lane and no budget figure, because what is retained is the lane's existence,
+ * never a number.
+ *
+ * `/api/v1/apps` also has a lane and no timestamp: the service worker was
+ * evicted, so `lastActiveAt` is `null`. It says "at rest" and nothing more
+ * rather than inventing a time. `/api/v1/policies` never settled anything and
+ * collapses to the summary line.
+ */
+export const RackAtRest: Story = {
+  args: {
+    view: {
+      ...idleView,
+      processed: 1_284,
+      buckets: [
+        bucket({
+          bucket: '/api/v1/users',
+          limit: null,
+          remaining: null,
+          resetAt: null,
+          lastActiveAt: FIXED_NOW - 95_000,
+        }),
+        bucket({
+          bucket: '/api/v1/groups',
+          limit: null,
+          remaining: null,
+          resetAt: null,
+          lastActiveAt: FIXED_NOW - 6_000,
+        }),
+        bucket({ bucket: '/api/v1/apps', limit: null, remaining: null, resetAt: null }),
+        bucket({ bucket: '/api/v1/policies' }),
+      ],
+    },
+  },
+};
+
+/**
+ * A run with no throughput sample yet: three items settled is the floor, and
+ * below it the ETA slot says **estimating…** rather than a number. "Does not
+ * know" has to look different from "fast" — an optimistic figure here is the
+ * lie the range exists to remove.
+ */
+export const EtaNotKnownYet: Story = {
+  args: {
+    view: {
+      ...idleView,
+      statusLabel: 'Processing',
+      statusColorVar: 'var(--color-info)',
+      busy: true,
+      operationActive: true,
+      operationName: 'Export all users',
+      current: 1,
+      total: 812,
+      percentage: 0,
+      opCompleted: 1,
+      opActive: 4,
+      queueLength: 30,
+      activeRequests: 4,
+      rateLimit: { remaining: 594, limit: 600, low: false },
+      eta: { kind: 'unknown', label: 'estimating…' },
+      canCancel: true,
+      buckets: [
+        bucket({
+          bucket: '/api/v1/users',
+          remaining: 594,
+          active: 4,
+          queued: 30,
+          planned: 778,
+          lastActiveAt: FIXED_NOW - 1_000,
+        }),
+      ],
+    },
+  },
+};
+
+/**
+ * The same run once throughput is measurable *and* a gate is armed. The floor is
+ * what throughput alone predicts; the ceiling adds the longest armed gate, so
+ * the cooldown the user is about to sit out is inside the number rather than
+ * contradicting it thirty seconds later.
+ */
+export const EtaRangeWidenedByCooldown: Story = {
+  args: {
+    view: {
+      ...idleView,
+      statusLabel: 'Cooldown',
+      statusColorVar: 'var(--color-danger)',
+      busy: true,
+      operationActive: true,
+      operationName: 'Export all users',
+      current: 406,
+      total: 812,
+      percentage: 50,
+      opCompleted: 402,
+      opActive: 4,
+      opFailed: 4,
+      queueLength: 40,
+      activeRequests: 4,
+      rateLimit: { remaining: 18, limit: 600, low: true },
+      eta: { kind: 'range', lowerMs: 80_000, upperMs: 170_000, label: '1:20–2:50 left' },
+      canCancel: true,
+      buckets: [
+        bucket({
+          bucket: '/api/v1/users',
+          remaining: 18,
+          queued: 40,
+          planned: 366,
+          gatedUntil: FIXED_NOW + 90_000,
+          lastActiveAt: FIXED_NOW - 2_000,
+        }),
+        bucket({
+          bucket: '/api/v1/groups',
+          limit: 600,
+          remaining: 540,
+          active: 4,
+          lastActiveAt: FIXED_NOW - 500,
+        }),
       ],
     },
   },
