@@ -5,7 +5,16 @@
  * Renders the tab strip only — callers own the panels and toggle them on the
  * active key. Implements the ARIA tablist pattern (`role="tablist"`/`role="tab"`,
  * `aria-selected`, roving `tabindex`) with Left/Right/Home/End keyboard
- * navigation and automatic activation. Prefer this over hand-rolling tab bars.
+ * navigation and automatic activation. Prefer this over hand-rolling tab bars: a
+ * hand-rolled `role="tablist"` reliably ships the ARIA attributes and skips the
+ * keyboard handling, which is a keyboard user reaching a strip they cannot move
+ * inside.
+ *
+ * A tab may carry an `icon` (rendered before its label in every variant) and a
+ * `count` badge, whose zero can be suppressed for a count that reports a
+ * *finding* rather than a size (`countDisplay`). A `segmented` strip that cannot
+ * fit one line in a 360px panel takes a second row with `wrap` instead of
+ * truncating a label or dropping its glyphs.
  *
  * The `rail` variant is the side panel's top-level navigation: inactive tabs are
  * icon-only and the active tab's label unfurls (`grid-template-columns: 0fr → 1fr`),
@@ -22,6 +31,7 @@
  */
 import React, { useRef } from 'react';
 import Icon, { type IconType } from '../shared/Icon';
+import StableWidth from './StableWidth';
 import Tooltip, { type TooltipTriggerProps } from './Tooltip';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useTabRail } from '../../hooks/useTabRail';
@@ -44,13 +54,32 @@ export interface TabItem {
   /** Optional count rendered as a small badge after the label. */
   count?: number;
   /**
-   * Glyph for the `rail` variant, from the shared {@link IconType} registry.
-   * Ignored by `underline` and `segmented`. A rail tab without an icon falls
-   * back to a permanently visible label rather than rendering as an empty
-   * target.
+   * How a `count` of `0` is presented. `always` (the default) badges it, which
+   * is right for a count that states a size — "0 groups" is an answer. `nonzero`
+   * suppresses the badge instead, for a count that states a **finding** —
+   * "0 differences" is nothing to report, not a fact worth a pill.
+   *
+   * Under `nonzero` the badge's slot is also held open at two digits from first
+   * render ({@link StableWidth}), because such a count typically arrives with a
+   * fetch: without the reservation the badge landing on three tabs at once
+   * shoves each label sideways (ADR-0044, `D-053e`).
+   */
+  countDisplay?: TabCountDisplay;
+  /**
+   * Glyph from the shared {@link IconType} registry, rendered before the label
+   * in every variant. Only `rail` treats it specially: there the icon is the
+   * whole target until the tab is selected and its label unfurls, so a rail tab
+   * without an icon falls back to a permanently visible label rather than
+   * rendering as an empty target.
    */
   icon?: IconType;
 }
+
+/**
+ * Whether a tab's `count` badge appears when the count is `0`. See
+ * {@link TabItem.countDisplay}.
+ */
+export type TabCountDisplay = 'always' | 'nonzero';
 
 /** Visual treatment for the tab strip. */
 export type TabsVariant = 'underline' | 'segmented' | 'rail';
@@ -69,6 +98,16 @@ interface TabsProps {
    * panel.
    */
   variant?: TabsVariant;
+  /**
+   * Let a `segmented` strip take a **second row** on a narrow panel: two equal
+   * columns below `sm`, one equal-width row above it. Ignored by `underline` and
+   * `rail`, which answer the same problem by scrolling.
+   *
+   * For a strip whose tabs cannot all fit one line in a 360px side panel. The
+   * alternatives there are truncating a label (which hides the word the tab is
+   * named for) or dropping the glyphs; a second row costs only height.
+   */
+  wrap?: boolean;
   /** Accessible label for the tablist (e.g. "User profile sections"). */
   ariaLabel?: string;
   /** Extra classes merged onto the tablist container. */
@@ -88,8 +127,21 @@ const HEADING_FONT = { fontFamily: 'var(--font-heading)' };
  * of the top-chrome slab now and `TabNavigation`'s `<nav>` carries the slab's single
  * closing rule; `underline` keeps its border, which is the indicator's own track.
  */
+const SEGMENTED_CHROME =
+  'items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 p-1';
+
+/**
+ * `segmented` under `wrap`: two equal columns below `sm`, then back to one row of
+ * equal-width columns. `grid-flow-col` + `auto-cols-fr` reproduces `flex` +
+ * `flex-1` without naming a column count, so the strip does not need a new class
+ * when it grows a tab (a `sm:grid-cols-${n}` would not survive Tailwind's static
+ * scan anyway).
+ */
+const SEGMENTED_WRAPPED_LAYOUT =
+  'grid grid-cols-2 sm:grid-cols-none sm:auto-cols-fr sm:grid-flow-col';
+
 const listClassesByVariant: Record<TabsVariant, string> = {
-  segmented: 'flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 p-1',
+  segmented: `flex ${SEGMENTED_CHROME}`,
   underline:
     'flex items-center gap-1 border-b border-neutral-200 overflow-x-auto overflow-y-hidden',
   rail:
@@ -112,6 +164,13 @@ const TAB_BASE = 'relative flex items-center text-xs focus-visible:outline-none'
 /** Focus treatment for the two non-rail variants: the panel's standard outset ring. */
 const RING_FOCUS = 'focus-visible:ring-2 focus-visible:ring-primary';
 
+/** The count pill, shared by every variant; only its colours vary. */
+const BADGE_BASE =
+  'inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold leading-none';
+
+/** The two-digit floor a `nonzero` count's slot is held open at. */
+const BADGE_RESERVE = 'inline-flex min-w-[18px] px-1.5 text-[10px] leading-none';
+
 /**
  * Accessible tab bar. Selection is controlled by the caller via
  * `activeKey`/`onChange`; only the tab strip is rendered here.
@@ -131,6 +190,7 @@ const Tabs: React.FC<TabsProps> = ({
   activeKey,
   onChange,
   variant = 'underline',
+  wrap = false,
   ariaLabel,
   className = '',
 }) => {
@@ -205,7 +265,11 @@ const Tabs: React.FC<TabsProps> = ({
       aria-label={ariaLabel}
       ref={isRail ? listRef : undefined}
       data-overflow={isRail ? edge : undefined}
-      className={`${listClassesByVariant[variant]} ${className}`}
+      className={`${
+        isSegmented && wrap
+          ? `${SEGMENTED_WRAPPED_LAYOUT} ${SEGMENTED_CHROME}`
+          : listClassesByVariant[variant]
+      } ${className}`}
     >
       {tabs.map((tab, index) => {
         const active = tab.key === activeKey;
@@ -243,6 +307,25 @@ const Tabs: React.FC<TabsProps> = ({
           : active
             ? 'bg-primary-light text-primary-text'
             : 'bg-neutral-100 text-neutral-600';
+
+        // A `nonzero` count with nothing to report renders no pill — but the slot
+        // stays, because such a count lands with a fetch and three badges arriving
+        // at once would otherwise shove three labels sideways in one frame
+        // (ADR-0044, `D-053e`). Two digits are reserved rather than the current
+        // value, so a badge that lands as `12` does not widen a slot measured at `0`.
+        const pillClasses = `${BADGE_BASE} ${badgeClasses}`;
+        const badge =
+          tab.count === undefined ? null : tab.countDisplay === 'nonzero' ? (
+            <StableWidth
+              reserve={<span className={BADGE_RESERVE}>00</span>}
+              align="center"
+              className="ml-0.5 shrink-0"
+            >
+              {tab.count > 0 && <span className={pillClasses}>{tab.count}</span>}
+            </StableWidth>
+          ) : (
+            <span className={`ml-0.5 ${pillClasses}`}>{tab.count}</span>
+          );
 
         const renderTab = (trigger?: TooltipTriggerProps) => (
           <button
@@ -288,15 +371,18 @@ const Tabs: React.FC<TabsProps> = ({
                 </span>
               </>
             ) : (
-              <span>{tab.label}</span>
+              <>
+                {/* Decorative in every variant but `rail`: the label is right beside
+                    it, so announcing the glyph would only repeat the tab's name. */}
+                {tab.icon && (
+                  <span aria-hidden="true" className="flex shrink-0 items-center">
+                    <Icon type={tab.icon} size="sm" />
+                  </span>
+                )}
+                <span>{tab.label}</span>
+              </>
             )}
-            {tab.count !== undefined && (
-              <span
-                className={`ml-0.5 inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold leading-none ${badgeClasses}`}
-              >
-                {tab.count}
-              </span>
-            )}
+            {badge}
           </button>
         );
 

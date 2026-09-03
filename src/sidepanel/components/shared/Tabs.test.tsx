@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Tabs, { type TabItem } from './Tabs';
 
@@ -64,6 +64,55 @@ describe('Tabs', () => {
     account.focus();
     await userEvent.keyboard('{ArrowLeft}');
     expect(onChange).toHaveBeenLastCalledWith('custom');
+  });
+
+  it('hides a nonzero-display count of 0 and shows it once there is something to report', () => {
+    // A count that reports a *finding* rather than a size: "0 differences" is
+    // nothing to report, so no pill. The same tab badges the moment it has one.
+    const { rerender } = render(
+      <Tabs
+        tabs={[{ key: 'diff', label: 'Groups', count: 0, countDisplay: 'nonzero' }]}
+        activeKey="diff"
+        onChange={vi.fn()}
+      />,
+    );
+    // The reserved slot is there (aria-hidden), but no pill: nothing is rendered
+    // that reads as a count of differences.
+    expect(within(screen.getByRole('tab', { name: 'Groups' })).queryByText('0')).toBeNull();
+
+    rerender(
+      <Tabs
+        tabs={[{ key: 'diff', label: 'Groups', count: 3, countDisplay: 'nonzero' }]}
+        activeKey="diff"
+        onChange={vi.fn()}
+      />,
+    );
+    expect(within(screen.getByRole('tab', { name: /Groups/ })).getByText('3')).toBeInTheDocument();
+  });
+
+  it('still badges a zero count by default, where zero is an answer', () => {
+    render(
+      <Tabs
+        tabs={[{ key: 'size', label: 'Groups', count: 0 }]}
+        activeKey="size"
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('tab', { name: /Groups/ })).toHaveTextContent('0');
+  });
+
+  it('leaves a non-rail tab named by its label alone when it carries an icon', () => {
+    // The glyph sits beside a visible label in every variant but `rail`, so it is
+    // decorative — announcing it would only repeat the tab's name.
+    render(
+      <Tabs
+        tabs={[{ key: 'groups', label: 'Groups', icon: 'users' }]}
+        activeKey="groups"
+        onChange={vi.fn()}
+        variant="segmented"
+      />,
+    );
+    expect(screen.getByRole('tab', { name: 'Groups' })).toBeInTheDocument();
   });
 
   it('supports the segmented variant', () => {
