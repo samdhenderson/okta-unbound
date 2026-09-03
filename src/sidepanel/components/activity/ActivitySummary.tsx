@@ -23,7 +23,14 @@ export interface ActivitySummaryProps {
   view: ActivityView;
 }
 
-/** One labelled figure on the summary line. Always mounted; empty prints a dash. */
+/**
+ * One labelled figure on the summary line. Always mounted; empty prints a dash.
+ *
+ * A `low` figure gets the word **low** beside it, not only the danger colour.
+ * The rack's lanes carry the same chip for the same reason: a red number is
+ * indistinguishable from a black one to a share of readers, and headroom running
+ * out is the one thing on this line worth acting on.
+ */
 const Slot: React.FC<{
   /** Stable hook for tests and stories. */
   testId: string;
@@ -51,6 +58,11 @@ const Slot: React.FC<{
     >
       {children ?? '—'}
     </span>
+    {emphasis === 'low' && children !== null && (
+      <span className="rounded-md bg-danger-light px-2 py-0.5 text-xs font-medium text-danger-text">
+        low
+      </span>
+    )}
   </span>
 );
 

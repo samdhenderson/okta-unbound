@@ -187,7 +187,7 @@ const BucketRow: React.FC<BucketRowProps> = ({ bucket, lowThresholdPercent, now 
       </span>
 
       <div
-        className={`relative h-5 min-w-0 flex-1 overflow-hidden rounded-md ${
+        className={`relative h-6 min-w-0 flex-1 overflow-hidden rounded-md ${
           atRest ? 'bg-neutral-50' : 'bg-white ring-1 ring-neutral-200 ring-inset'
         }`}
       >
@@ -220,7 +220,7 @@ const BucketRow: React.FC<BucketRowProps> = ({ bucket, lowThresholdPercent, now 
           {gated ? (
             <span
               data-testid={`activity-bucket-cooldown-${bucket.bucket}`}
-              className="shrink-0 rounded-sm bg-white px-1 font-medium text-danger-text"
+              className="shrink-0 rounded-md bg-white px-2 py-0.5 text-xs font-medium text-danger-text"
             >
               {countdown(gatedFor)}
             </span>
@@ -242,7 +242,7 @@ const BucketRow: React.FC<BucketRowProps> = ({ bucket, lowThresholdPercent, now 
             {budget}
           </span>
           {low && (
-            <span className="shrink-0 rounded-sm bg-danger-light px-1 font-medium text-danger-text">
+            <span className="shrink-0 rounded-md bg-danger-light px-2 py-0.5 text-xs font-medium text-danger-text">
               low
             </span>
           )}

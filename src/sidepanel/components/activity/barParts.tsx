@@ -12,6 +12,7 @@
  * top edge.
  */
 import React from 'react';
+import Icon from '../shared/Icon';
 
 /**
  * The bar's live-state dot.
@@ -60,20 +61,23 @@ export const ProgressTrack: React.FC<{
   </div>
 );
 
-/** Chevron glyph that points right when collapsed and down when expanded. */
+/**
+ * Chevron glyph that points right when collapsed and down when expanded.
+ *
+ * One glyph rotated rather than two swapped, so the transition is a rotation the
+ * eye can follow instead of a substitution it cannot. The glyph itself comes
+ * from the `Icon` registry; it is decorative here because the `IconButton` that
+ * wraps it carries the accessible name.
+ */
 export const CollapseChevron: React.FC<{
   /** Whether the bar is currently condensed. */
   collapsed: boolean;
 }> = ({ collapsed }) => (
-  <svg
-    aria-hidden="true"
-    className={`h-4 w-4 transition-transform duration-(--dur-quick) ease-standard ${
+  <Icon
+    type="chevron-right"
+    size="sm"
+    className={`transition-transform duration-(--dur-quick) ease-standard ${
       collapsed ? '' : 'rotate-90'
     }`}
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-  </svg>
+  />
 );

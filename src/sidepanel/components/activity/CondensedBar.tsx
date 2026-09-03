@@ -53,6 +53,10 @@ const CondensedBar: React.FC<CondensedBarProps> = ({ view, actions }) => (
         <span className="font-bold">
           {view.rateLimit.remaining}/{view.rateLimit.limit}
         </span>
+        {/* The word, not only the colour — a red figure and a black one are the
+            same figure to a share of readers, and this is the one thing on the
+            condensed line worth acting on. */}
+        {view.rateLimit.low && <span className="ml-1 font-semibold">low</span>}
       </span>
     )}
 
