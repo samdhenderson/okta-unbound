@@ -211,6 +211,27 @@ export const WithIconAndTrailing: Story = {
   },
 };
 
+/**
+ * `type="search"` with a custom trailing clear button. The field suppresses
+ * the browser's own WebKit cancel-button (`::-webkit-search-cancel-button`)
+ * so only this one clear affordance renders — without the suppression,
+ * Chrome would paint its native × next to this one.
+ */
+export const SearchWithClear: Story = {
+  args: {
+    type: 'search',
+    label: 'Search groups',
+    value: 'engineering',
+    icon: <Icon type="search" size="sm" />,
+    trailingInteractive: true,
+    trailing: (
+      <IconButton label="Clear search" variant="ghost" size="sm" onClick={fn()}>
+        <Icon type="close" size="sm" />
+      </IconButton>
+    ),
+  },
+};
+
 /** Search in flight: a decorative trailing spinner, left inert so clicks reach the field. */
 export const Searching: Story = {
   args: {
