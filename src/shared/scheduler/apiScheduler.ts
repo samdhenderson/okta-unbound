@@ -38,6 +38,21 @@ import type {
 
 const log = createLogger('ApiScheduler');
 
+/**
+ * The global ceiling this scheduler enforced before {@link
+ * SchedulerConfig.maxConcurrentPerBucket} existed, and therefore the most
+ * concurrent requests one Okta bucket has ever seen from this extension.
+ *
+ * It exists only as the clamp for a caller who raises `maxConcurrent` without
+ * saying anything about the per-bucket cap. Such a caller has not asked for a
+ * cap, so imposing the default 4 would apply a number they never wrote — but
+ * letting the cap follow an arbitrary ceiling upward would let a one-line config
+ * edit quietly exceed every build that has ever run. Clamping here does neither.
+ *
+ * Not a tuning knob: raising it re-opens exactly the hazard it closes.
+ */
+const PRE_BUCKET_CAP_CEILING = 5;
+
 const DEFAULT_CONFIG: SchedulerConfig = {
   // Ten total, four per bucket (ADR-0070 §2). The per-bucket number is below
   // the five that shipped before it, so no single Okta bucket — the only thing
@@ -235,15 +250,27 @@ export class ApiScheduler {
     // A caller that moves the ceiling and says nothing about the per-bucket cap
     // has not asked for one: the default 4 is stated relative to the default
     // ceiling of 10, and carrying it onto a caller-chosen ceiling of 1 would
-    // impose a cap nobody wrote. Follow the ceiling instead, which leaves the
-    // cap non-binding — the exact behaviour such a caller had before this field
-    // existed.
+    // impose a cap nobody wrote.
+    //
+    // Clamp rather than follow, and clamp to what has actually shipped. Letting
+    // the cap track the ceiling reproduces such a caller's pre-field behaviour
+    // only while the ceiling stays at or below PRE_BUCKET_CAP_CEILING; above it,
+    // following would seat *more* requests against one Okta bucket than any
+    // build ever has — `{ maxConcurrent: 20 }` would silently allow twenty, and
+    // take ADR-0070's safety claim with it. Clamping to the old ceiling keeps
+    // every existing caller (all of which pass 1 or 5) exactly non-binding while
+    // making a raised ceiling widen parallelism *across* buckets only, which is
+    // the entire point of the field.
     if (config.maxConcurrent !== undefined && config.maxConcurrentPerBucket === undefined) {
-      this.config.maxConcurrentPerBucket = this.config.maxConcurrent;
+      this.config.maxConcurrentPerBucket = Math.min(
+        PRE_BUCKET_CAP_CEILING,
+        this.config.maxConcurrent,
+      );
     }
 
-    // Only an *explicit* cap is validated, for the same reason: the derived one
-    // is this constructor's own doing and is deliberately equal to the ceiling.
+    // Only an *explicit* cap is validated: the derived one is this constructor's
+    // own doing and is clamped by construction, so it can never exceed either
+    // bound the check below exists to defend.
     if (config.maxConcurrentPerBucket !== undefined) {
       const { maxConcurrent, maxConcurrentPerBucket } = this.config;
       if (maxConcurrentPerBucket <= 0 || maxConcurrentPerBucket >= maxConcurrent) {

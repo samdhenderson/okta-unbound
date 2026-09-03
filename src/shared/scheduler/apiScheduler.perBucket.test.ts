@@ -204,6 +204,28 @@ describe('ApiScheduler config validation', () => {
 
     expect(activeIn('/api/v1/users')).toBe(5);
   });
+
+  it('never lets a raised ceiling widen one bucket past what has ever shipped', async () => {
+    // The companion to the case above, and the reason it is a clamp rather than
+    // a follow. Tracking the ceiling upward would mean a one-line config edit —
+    // raising maxConcurrent while re-tuning, which ADR-0070 explicitly invites —
+    // silently seating twenty concurrent requests against a single Okta bucket:
+    // four times the ADR's number and four times anything this extension has
+    // ever run, with no throw and no log. The clamp holds it at the pre-field
+    // ceiling of 5, so a raised ceiling buys parallelism across buckets only.
+    sendMessage.mockImplementation(() => new Promise(() => {}));
+    scheduler = new ApiScheduler({ maxConcurrent: 20 });
+
+    for (let i = 0; i < 20; i++) {
+      void scheduler
+        .scheduleRequest(`/api/v1/users/00uFAKE${i}`, 'GET', undefined, 1)
+        .catch(() => {});
+    }
+    await Promise.resolve();
+
+    expect(activeIn('/api/v1/users')).toBe(5);
+    expect(activeIn('/api/v1/users')).toBeLessThan(20);
+  });
 });
 
 describe('ApiScheduler in-flight charging', () => {
