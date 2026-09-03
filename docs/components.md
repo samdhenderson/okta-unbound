@@ -48,7 +48,7 @@ info`) — never `error`.
 `Tooltip`,
 `CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`,
 `Eyebrow`, `StableWidth`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`,
-`SearchDropdown`, `SelectionChips`.
+`SearchDropdown`, `SelectionChips`, `RuleExpressionText`.
 
 There are **three** copy primitives and they are not interchangeable. `CopyButton` is a
 labelled `Button` for copying a _body_ of text (a list of emails, a CSV). `CopyableId` is
@@ -92,6 +92,33 @@ the glyph. Whether it links is not a prop and should not become one: it follows 
 navigability, so a chevron appears only where it can be honoured. Sizing is likewise fixed
 at `text-xs` on purpose — a resolved and an unresolved reference share one slot in a list,
 and letting a caller size one of them was the type-size mismatch I-003 had to fix.
+
+`RuleExpressionText` is the **one** way to print a rule's condition text. It renders the
+expression in mono and swaps each quoted literal the caller can name for an `EntityLink`
+group chip, so `isMemberOfAnyGroup("00gFAKE1")` reads as the group instead of as an opaque
+id. It **resolves nothing it was not already given** — the caller passes a
+`resolveGroupName` (the same `GroupNameResolver` shape `ClauseGroupList` takes), there is
+no fetch, and an id with no known name keeps its raw quoted form rather than becoming a
+half-labelled badge. It never guesses which literal is a group id: it offers every literal
+to the resolver and badges only what comes back named, which is why
+`user.department == "Engineering"` prints as itself. It lived under `groups/detail/` until
+three features were consuming it across feature boundaries (I-016).
+
+| Prop               | Default      | What it does                                                                                                                      |
+| ------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `text`             | — (required) | the condition text; **untrusted**, rendered escaped and never logged                                                              |
+| `resolveGroupName` | `undefined`  | names group ids in the text; omitted, the whole expression prints verbatim                                                        |
+| `tone`             | `'default'`  | `'default'` (`neutral-900`) for the condition in question, `'subdued'` (`neutral-700`) for one printed under another it qualifies |
+| `className`        | `''`         | **layout and spacing only** — `min-w-0`, `flex-1`, a margin                                                                       |
+
+The type treatment — `block font-mono text-xs break-words whitespace-pre-wrap` — is
+**fixed and not a prop**. All three call sites used to restate that exact recipe through
+`className`, which is the drift `Eyebrow` was extracted to stop, and a size prop would
+reintroduce the resolved-vs-unresolved type-size mismatch `I-003` had to fix on
+`EntityLink`. Colour is the one axis that genuinely varied — a clause versus the
+alternatives nested under it — so it is a two-value `tone` and not a colour. The badge's
+`copyIdLabel` names the _id_, not the group, because two groups in one condition can share
+a display name (I-009); that is decided here rather than per caller.
 
 `ListRow` is the **row chrome** primitive (ADR-0029): border, radius, hover,
 `density` (`compact` | `comfortable`), `state` (`default` | `selected` |

@@ -1,15 +1,16 @@
 /**
- * @module sidepanel/components/groups/detail/RuleExpressionText
+ * @module sidepanel/components/shared/RuleExpressionText
  * @description Rule-condition text with its **group-id literals resolved to named
  * badges** — `isMemberOfAnyGroup("00gFAKE1")` reads as the group, not as an opaque id.
  *
- * Extracted rather than inlined into {@link ClauseChecklist} because both surfaces
- * that print reconstructed condition text need it —
- * {@link module:sidepanel/components/groups/detail/ClauseChecklist} and
- * {@link module:sidepanel/components/users/comparison/CauseWorklistRow} — and
- * either copy of the tokeniser would be free to drift from the other. It follows
- * the extraction precedent of `ClauseGroupList`, which came out of the same row
- * for the same reason. Pure: no I/O, no logging.
+ * It began as a sibling of {@link module:sidepanel/components/groups/detail/ClauseChecklist}
+ * because both surfaces that print reconstructed condition text needed it and either
+ * copy of the tokeniser would have been free to drift. It now lives in `shared/`
+ * because three features print condition text —
+ * {@link module:sidepanel/components/groups/detail/ClauseChecklist},
+ * {@link module:sidepanel/components/users/comparison/CauseWorklistRow}, and the rule
+ * views beside them — and a component consumed across features is a shared component
+ * that happens to live in one of them (`I-016`). Pure: no I/O, no logging.
  *
  * ## It resolves nothing it was not already given
  *
@@ -28,6 +29,16 @@
  * nothing. A literal containing an escaped quote is left as text for the same
  * reason: the value recovered would be wrong, so it resolves to nothing.
  *
+ * ## The type treatment is the component's, not the caller's
+ *
+ * Every call site used to restate the same `font-mono text-xs break-words
+ * whitespace-pre-wrap` recipe through `className`, which is a recipe free to drift
+ * — the defect `Eyebrow` was extracted to stop. It is fixed here. What genuinely
+ * varies is only which of two roles the text is in, and that is `tone`; `className`
+ * takes layout and spacing (`min-w-0`, `flex-1`) and nothing else. There is
+ * deliberately no size prop: rule text at two sizes on one screen is exactly the
+ * mismatch `I-003` had to fix on `EntityLink`.
+ *
  * ## Security
  *
  * Expression text and group names are untrusted, end-user-controllable tenant
@@ -37,7 +48,7 @@
  * here and must not be introduced. This module logs nothing.
  */
 import React, { useMemo } from 'react';
-import { EntityLink } from '../../shared';
+import EntityLink from './EntityLink';
 
 /**
  * Turns a group id embedded in rule text into its display name, or `undefined`
@@ -45,6 +56,19 @@ import { EntityLink } from '../../shared';
  * caller threads one resolver to both.
  */
 export type GroupNameResolver = (groupId: string) => string | undefined;
+
+/**
+ * Which of two reading roles the expression is in.
+ *
+ * - `default` — the condition the surface is actually about.
+ * - `subdued` — a condition printed _under_ another one it qualifies, so it must
+ *   not compete with its parent for the eye. `ClauseChecklist`'s "any one of these
+ *   satisfies it" alternatives are the case.
+ *
+ * Deliberately two values and not a colour: a caller that wants a third shade of
+ * rule text is the drift this replaced a free-form `className` to stop.
+ */
+export type RuleExpressionTone = 'default' | 'subdued';
 
 /** Props for {@link RuleExpressionText}. */
 export interface RuleExpressionTextProps {
@@ -59,7 +83,15 @@ export interface RuleExpressionTextProps {
    * has always had.
    */
   resolveGroupName?: GroupNameResolver;
-  /** Classes for the `<code>` element, so each host keeps its own type treatment. */
+  /**
+   * The reading role — see {@link RuleExpressionTone}. Defaults to `'default'`.
+   */
+  tone?: RuleExpressionTone;
+  /**
+   * **Layout and spacing only** — `min-w-0`, `flex-1`, a margin. Type size,
+   * family, wrapping and colour are the component's and are not overridable;
+   * pass {@link tone} instead of a `text-neutral-*` class.
+   */
   className?: string;
 }
 
@@ -67,6 +99,19 @@ export interface RuleExpressionTextProps {
 type ExpressionSegment =
   | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'group'; readonly id: string; readonly name: string };
+
+/**
+ * The fixed type treatment. `block` so the wrapping rules apply in every host —
+ * a `<code>` laid out as a grid or flex item is blockified anyway, so this is the
+ * computed display all three original call sites already had.
+ */
+const BASE_CLASSES = 'block font-mono text-xs break-words whitespace-pre-wrap';
+
+/** Colour per reading role — the only axis a host may pick. */
+const toneClasses: Record<RuleExpressionTone, string> = {
+  default: 'text-neutral-900',
+  subdued: 'text-neutral-700',
+};
 
 /**
  * A single-quoted or double-quoted string literal. Okta's own `raw` quoting is
@@ -118,7 +163,7 @@ function segmentExpression(
  * <RuleExpressionText
  *   text={clause.expressionText}
  *   resolveGroupName={resolveGroupName}
- *   className="font-mono text-xs text-neutral-900"
+ *   className="min-w-0"
  * />
  * ```
  *
@@ -127,6 +172,7 @@ function segmentExpression(
 const RuleExpressionText: React.FC<RuleExpressionTextProps> = ({
   text,
   resolveGroupName,
+  tone = 'default',
   className = '',
 }) => {
   const segments = useMemo(
@@ -135,7 +181,7 @@ const RuleExpressionText: React.FC<RuleExpressionTextProps> = ({
   );
 
   return (
-    <code className={className}>
+    <code className={`${BASE_CLASSES} ${toneClasses[tone]} ${className}`.trim()}>
       {segments.map((segment, index) =>
         segment.kind === 'text' ? (
           <React.Fragment key={`text-${index}`}>{segment.text}</React.Fragment>

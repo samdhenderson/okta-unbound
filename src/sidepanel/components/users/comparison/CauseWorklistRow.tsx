@@ -16,7 +16,7 @@
  *
  * A failing clause used to print `isMemberOfAnyGroup("00gFAKE1")` verbatim while
  * the group list directly above it named that very id. The evidence now goes
- * through {@link module:sidepanel/components/groups/detail/RuleExpressionText},
+ * through {@link module:sidepanel/components/shared/RuleExpressionText},
  * so both read the same way, off the same resolver. An id neither the host nor
  * the clause's own references can name keeps its raw form.
  *
@@ -27,9 +27,8 @@
  * never `dangerouslySetInnerHTML` — and **never logged**; this module logs nothing.
  */
 import React from 'react';
-import { Button } from '../../shared';
+import { Button, RuleExpressionText, type GroupNameResolver } from '../../shared';
 import ClauseGroupList from './ClauseGroupList';
-import RuleExpressionText, { type GroupNameResolver } from '../../groups/detail/RuleExpressionText';
 import type { AccessCause, UndeterminedReason } from './accessCause';
 import type {
   ClauseExplanation,
@@ -231,7 +230,6 @@ const FailingClauses: React.FC<{
             <RuleExpressionText
               text={clause.expressionText}
               resolveGroupName={clauseGroupNames(clause, resolveGroupName)}
-              className="block font-mono text-xs break-words whitespace-pre-wrap text-neutral-900"
             />
             {/* A group-membership call takes only string literals, and
                 `resolveClauseValue` skips literals by design — so "no value could
