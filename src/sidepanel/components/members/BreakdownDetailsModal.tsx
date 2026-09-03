@@ -13,6 +13,7 @@ import CopyButton from '../shared/CopyButton';
 import ScrollableList from '../shared/ScrollableList';
 import BreakdownReport from './BreakdownReport';
 import { type BreakdownRow, NONE_VALUE, OTHER_VALUE } from './memberAnalytics';
+import type { BreakdownRowIntent } from './BreakdownReport';
 
 /** Props for {@link BreakdownDetailsModal}. */
 interface BreakdownDetailsModalProps {
@@ -33,6 +34,13 @@ interface BreakdownDetailsModalProps {
    * offering an affordance that does nothing.
    */
   onRowClick?: (row: BreakdownRow) => void;
+  /**
+   * What a row's activation does — see
+   * {@link module:sidepanel/components/members/BreakdownReport}. `navigate`
+   * changes both the lead sentence and every row, so the reveal states that it
+   * is a way *out* of this surface before anyone takes it.
+   */
+  rowIntent?: BreakdownRowIntent;
 }
 
 /**
@@ -48,6 +56,7 @@ const BreakdownDetailsModal: React.FC<BreakdownDetailsModalProps> = ({
   rows,
   activeValues,
   onRowClick,
+  rowIntent = 'toggle',
 }) => {
   // The real distinct values (excluding the "(none)" and aggregated "Other" rows),
   // used for both the count and the copy-all payload.
@@ -71,7 +80,11 @@ const BreakdownDetailsModal: React.FC<BreakdownDetailsModalProps> = ({
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm text-neutral-600">
             All {realValues.length.toLocaleString()} values
-            {onRowClick ? '. Click any value to filter the member list by it.' : '.'}
+            {!onRowClick
+              ? '.'
+              : rowIntent === 'navigate'
+                ? '. Pick one to open the Members tab filtered by it.'
+                : '. Click any value to filter the member list by it.'}
           </p>
           <CopyButton
             getText={() => realValues.join('\n')}
@@ -82,7 +95,12 @@ const BreakdownDetailsModal: React.FC<BreakdownDetailsModalProps> = ({
           />
         </div>
         <ScrollableList maxHeight="50vh" fillAvailable={false}>
-          <BreakdownReport rows={rows} activeValues={activeValues} onRowClick={onRowClick} />
+          <BreakdownReport
+            rows={rows}
+            activeValues={activeValues}
+            onRowClick={onRowClick}
+            rowIntent={rowIntent}
+          />
         </ScrollableList>
       </div>
     </Modal>

@@ -58,6 +58,20 @@ interface StretchedButtonProps {
    * after the label so identically-named overlays stay distinguishable.
    */
   describedBy?: string;
+  /**
+   * For a card whose whole surface is the **disclosure trigger** — reflected as
+   * `aria-expanded`. Pair with {@link StretchedButtonProps.controls}.
+   *
+   * Same contract `IconButton` already carries, deliberately: the alternative
+   * for an expandable card is either a `<div onClick>` (which has to
+   * re-implement Enter/Space and announces nothing) or a chevron button beside a
+   * separately-clickable card, which offers assistive tech two controls for one
+   * action. Scope the overlay to the *header* region — a stretched trigger over
+   * the whole card would also fire on clicks inside what it just opened.
+   */
+  expanded?: boolean;
+  /** `id` of the region this button shows/hides — reflected as `aria-controls`. */
+  controls?: string;
   /** Tooltip text; defaults to `label`. */
   title?: string;
   disabled?: boolean;
@@ -74,6 +88,8 @@ const StretchedButton: React.FC<StretchedButtonProps> = ({
   label,
   onClick,
   describedBy,
+  expanded,
+  controls,
   title,
   disabled = false,
   className = '',
@@ -82,6 +98,8 @@ const StretchedButton: React.FC<StretchedButtonProps> = ({
     type="button"
     aria-label={label}
     aria-describedby={describedBy}
+    aria-expanded={expanded}
+    aria-controls={controls}
     title={title ?? label}
     onClick={onClick}
     disabled={disabled}

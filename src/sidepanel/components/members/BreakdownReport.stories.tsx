@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, within } from 'storybook/test';
 import BreakdownReport from './BreakdownReport';
 import { NONE_VALUE, OTHER_VALUE } from './memberAnalytics';
 import type { BreakdownRow } from './memberAnalytics';
@@ -40,6 +40,10 @@ const meta = {
     onShowOther: {
       description: 'Called when the aggregated "Other" row is clicked, to reveal its values.',
     },
+    rowIntent: {
+      description:
+        'What a value row does: `toggle` a facet on the list beside it, or `navigate` away to the Members tab.',
+    },
     emptyMessage: { description: 'Optional empty-state message when there are no rows.' },
   },
   args: {
@@ -73,4 +77,45 @@ export const WithActiveRow: Story = {
 /** The aggregated "Other" row becomes clickable and reveals a "View →" affordance. */
 export const WithExpandableOther: Story = {
   args: { onShowOther: fn() },
+};
+
+/**
+ * A row that **leaves** says so before it is clicked.
+ *
+ * On the Insights tab this report is not sitting above the list it filters:
+ * activating a row switches to Members and applies the filter there. A reader
+ * who expected the toggle behaviour would simply find themselves somewhere else,
+ * so in `navigate` intent every row carries its destination — "Filter Members →"
+ * visibly on the row, and the whole sentence, including the value and how many
+ * members it covers, in the accessible name.
+ *
+ * Deliberately not a confirm dialog: applying a filter is read-only and
+ * symmetrically undone, and a modal in front of every value would make the
+ * reveal unusable. `aria-pressed` is dropped too — the row is no longer a
+ * toggle, and announcing a pressed state for a navigation would be a lie.
+ */
+export const NavigatesToMembers: Story = {
+  args: { rowIntent: 'navigate' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // The destination is on the row, not discovered by taking it.
+    const row = canvas.getByRole('button', {
+      name: 'Filter Members by Engineering — 420 members. Opens the Members tab.',
+    });
+    await expect(row).toBeVisible();
+
+    // Not a toggle, so it must not claim a pressed state.
+    await expect(row).not.toHaveAttribute('aria-pressed');
+  },
+};
+
+/** The same rows in `toggle` intent still announce their pressed state, and promise no jump. */
+export const ToggleIntentKeepsPressedState: Story = {
+  args: { activeValues: new Set(['Engineering']) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByRole('button', { pressed: true })).toHaveLength(1);
+    await expect(canvas.queryByText(/Filter Members/)).toBeNull();
+  },
 };

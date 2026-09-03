@@ -12,6 +12,16 @@ import {
   memberMatchesMfaValue,
   outlierValues,
   sortMembers,
+  attributeDriftValues,
+  attributeSignals,
+  attributeTailCount,
+  nearDuplicateValues,
+  normalizeAttributeValue,
+  rankAttributes,
+  DRIFT_WEIGHT,
+  RULE_WEIGHT,
+  TAIL_SHARE_THRESHOLD,
+  TAIL_WEIGHT,
   NONE_VALUE,
   OTHER_VALUE,
   RESERVED_DIMENSIONS,
@@ -565,5 +575,352 @@ describe('outlierValues', () => {
 
   it('flags nothing when only one value exists', () => {
     expect(outlierValues(summaryOf([['Engineering', 100]], 100))).toEqual([]);
+  });
+});
+
+/*
+  The drift heuristic, tested from both ends.
+
+  A near-duplicate check is the kind of rule that goes wrong by being too
+  eager — every case below that must *not* collide is a case where a reader
+  would be told two legitimately different values are one mistake. Those are
+  the tests worth having; the happy path is one line.
+*/
+describe('normalizeAttributeValue', () => {
+  it('folds case, outer whitespace and internal whitespace runs — and nothing else', () => {
+    expect(normalizeAttributeValue('  Engineering  ')).toBe('engineering');
+    expect(normalizeAttributeValue('Platform   Engineering')).toBe('platform engineering');
+    expect(normalizeAttributeValue('Platform\tEngineering')).toBe('platform engineering');
+    // Punctuation, abbreviation and spelling survive untouched: only a human can
+    // say whether `Eng.` and `Engineering` are the same team.
+    expect(normalizeAttributeValue('Eng.')).toBe('eng.');
+    expect(normalizeAttributeValue('R&D')).toBe('r&d');
+  });
+});
+
+describe('nearDuplicateValues', () => {
+  it('collides values that differ only in case', () => {
+    expect(nearDuplicateValues(['Engineering', 'engineering', 'Sales'])).toEqual([
+      'Engineering',
+      'engineering',
+    ]);
+  });
+
+  it('collides values that differ only in whitespace', () => {
+    expect(nearDuplicateValues(['Engineering', 'Engineering ', 'Sales'])).toEqual([
+      'Engineering',
+      'Engineering ',
+    ]);
+    expect(nearDuplicateValues(['Platform Engineering', 'Platform  Engineering'])).toEqual([
+      'Platform Engineering',
+      'Platform  Engineering',
+    ]);
+  });
+
+  it('reports every member of a collision, not just the first pair', () => {
+    expect(nearDuplicateValues(['Engineering', 'engineering', 'ENGINEERING'])).toEqual([
+      'Engineering',
+      'engineering',
+      'ENGINEERING',
+    ]);
+  });
+
+  it('reports two separate collisions separately, grouped', () => {
+    expect(
+      nearDuplicateValues(['Engineering', 'Sales', 'engineering', 'sales', 'Support']),
+    ).toEqual(['Engineering', 'engineering', 'Sales', 'sales']);
+  });
+
+  // --- what it must NOT flag ------------------------------------------------
+
+  it('does not flag genuinely different values', () => {
+    expect(nearDuplicateValues(['Engineering', 'Sales', 'Support'])).toEqual([]);
+  });
+
+  it('does not flag an abbreviation of another value', () => {
+    // `Eng` may well *mean* `Engineering`, but nothing here can know that, and
+    // saying so would accuse a correct record of being wrong.
+    expect(nearDuplicateValues(['Eng', 'Engineering'])).toEqual([]);
+  });
+
+  it('does not flag values differing by punctuation', () => {
+    expect(nearDuplicateValues(['CC-1000', 'CC1000'])).toEqual([]);
+    expect(nearDuplicateValues(['R&D', 'R and D'])).toEqual([]);
+  });
+
+  it('does not flag values differing only in an accent', () => {
+    // Two spellings, but not the same string with the shift key held — a
+    // localization question, not a data-entry slip.
+    expect(nearDuplicateValues(['Zurich', 'Zürich'])).toEqual([]);
+  });
+
+  it('does not flag a single value against itself, however it is repeated', () => {
+    expect(nearDuplicateValues(['Engineering'])).toEqual([]);
+    expect(nearDuplicateValues(['Engineering', 'Engineering'])).toEqual([]);
+  });
+
+  it('never flags blanks — every empty value would otherwise collide with every other', () => {
+    expect(nearDuplicateValues(['', '   ', '\t', 'Engineering'])).toEqual([]);
+  });
+
+  it('flags nothing in an empty set', () => {
+    expect(nearDuplicateValues([])).toEqual([]);
+  });
+});
+
+/*
+  Drift found at *discovery* time, over the full value map — the case the visible
+  rows cannot see, and the whole reason `driftValues` is carried on the summary.
+*/
+describe('discoverAttributeBreakdowns drift detection', () => {
+  it('sees a mis-spelling that the summary folded into its Other row', () => {
+    const members: OktaUser[] = [
+      ...Array.from({ length: 30 }, (_, i) => user(`e${i}`, { department: 'Engineering' })),
+      ...Array.from({ length: 12 }, (_, i) => user(`d${i}`, { department: `Dept${i % 6}` })),
+      // One straggler, far down the tail and invisible to the top-6 rows.
+      user('drift', { department: 'engineering' }),
+    ];
+
+    const summary = discoverAttributeBreakdowns(members, { maxRows: 6 }).find(
+      (a) => a.key === 'department',
+    );
+
+    // The tail hides it: no visible row names `engineering`.
+    expect(summary?.rows.some((r) => r.label === 'engineering')).toBe(false);
+    // The summary caught it anyway.
+    expect(summary?.driftValues).toEqual(['Engineering', 'engineering']);
+
+    // And `outlierValues`, which only ever sees the named rows, cannot.
+    expect(outlierValues(summary as AttributeSummary)).not.toContain('engineering');
+  });
+
+  it('carries an empty drift list for a clean attribute', () => {
+    const members = Array.from({ length: 20 }, (_, i) =>
+      user(`u${i}`, { department: i % 2 === 0 ? 'Engineering' : 'Sales' }),
+    );
+    const summary = discoverAttributeBreakdowns(members).find((a) => a.key === 'department');
+    expect(summary?.driftValues).toEqual([]);
+  });
+});
+
+/*
+  The scoring. Each signal is exercised alone so a weight cannot be attributed to
+  the wrong test, then all three together, then at the split boundary.
+*/
+describe('attributeSignals', () => {
+  const summaryOf = (
+    rows: Array<[string, number]>,
+    total: number,
+    extra: Partial<AttributeSummary> = {},
+  ): AttributeSummary => {
+    const populated = rows.reduce((sum, [, c]) => sum + c, 0);
+    return {
+      key: 'department',
+      label: 'Department',
+      distinct: rows.length,
+      populated,
+      total,
+      fillRate: (populated / total) * 100,
+      rows: rows.map(([value, count]) => ({
+        value,
+        label: value === OTHER_VALUE ? 'Other (4 values)' : value,
+        count,
+        pct: (count / total) * 100,
+      })),
+      ...extra,
+    };
+  };
+
+  it('reports drift alone, at its weight', () => {
+    const signals = attributeSignals(
+      summaryOf(
+        [
+          ['Engineering', 60],
+          ['engineering', 40],
+        ],
+        100,
+      ),
+      0,
+    );
+    expect(signals.map((s) => s.kind)).toEqual(['drift']);
+    expect(signals[0]?.weight).toBe(DRIFT_WEIGHT);
+  });
+
+  it('reports the hidden tail alone, at its weight', () => {
+    const signals = attributeSignals(
+      summaryOf(
+        [
+          ['Engineering', 70],
+          [OTHER_VALUE, 30],
+        ],
+        100,
+      ),
+      0,
+    );
+    expect(signals.map((s) => s.kind)).toEqual(['tail']);
+    expect(signals[0]?.weight).toBe(TAIL_WEIGHT);
+  });
+
+  it('reports rule coupling alone, at its weight', () => {
+    const signals = attributeSignals(summaryOf([['Engineering', 100]], 100), 2);
+    expect(signals.map((s) => s.kind)).toEqual(['rule']);
+    expect(signals[0]?.weight).toBe(RULE_WEIGHT);
+  });
+
+  it('composes all three, in badge order', () => {
+    const signals = attributeSignals(
+      summaryOf(
+        [
+          ['Engineering', 50],
+          ['engineering', 20],
+          [OTHER_VALUE, 30],
+        ],
+        100,
+      ),
+      1,
+    );
+    expect(signals.map((s) => s.kind)).toEqual(['drift', 'tail', 'rule']);
+    expect(signals.reduce((sum, s) => sum + s.weight, 0)).toBe(
+      DRIFT_WEIGHT + TAIL_WEIGHT + RULE_WEIGHT,
+    );
+  });
+
+  it('reports nothing for a clean, uncoupled, fully-named attribute', () => {
+    expect(
+      attributeSignals(
+        summaryOf(
+          [
+            ['Engineering', 60],
+            ['Sales', 40],
+          ],
+          100,
+        ),
+        0,
+      ),
+    ).toEqual([]);
+  });
+
+  it('holds the tail signal exactly at the threshold, and drops it one member below', () => {
+    const at = summaryOf(
+      [
+        ['Engineering', 100 - TAIL_SHARE_THRESHOLD],
+        [OTHER_VALUE, TAIL_SHARE_THRESHOLD],
+      ],
+      100,
+    );
+    const below = summaryOf(
+      [
+        ['Engineering', 100 - TAIL_SHARE_THRESHOLD + 1],
+        [OTHER_VALUE, TAIL_SHARE_THRESHOLD - 1],
+      ],
+      100,
+    );
+    expect(attributeSignals(at, 0).map((s) => s.kind)).toEqual(['tail']);
+    expect(attributeSignals(below, 0)).toEqual([]);
+  });
+
+  it("prefers the summary's own drift list over what the visible rows show", () => {
+    // The rows are clean; the discovery pass saw the tail and says otherwise.
+    const summary = summaryOf([['Engineering', 100]], 100, {
+      driftValues: ['Engineering', 'engineering'],
+    });
+    expect(attributeDriftValues(summary)).toEqual(['Engineering', 'engineering']);
+    expect(attributeSignals(summary, 0).map((s) => s.kind)).toEqual(['drift']);
+  });
+
+  it('states each signal as a phrase, never a bare number', () => {
+    // A collapsed card shows only these strings; a "3" would explain nothing.
+    const signals = attributeSignals(
+      summaryOf(
+        [
+          ['Engineering', 50],
+          ['engineering', 20],
+          [OTHER_VALUE, 30],
+        ],
+        100,
+      ),
+      1,
+    );
+    for (const signal of signals) {
+      expect(signal.label).toMatch(/[a-z]{3}/i);
+      expect(signal.description.length).toBeGreaterThan(signal.label.length);
+    }
+  });
+
+  it('counts the tail off the summary, and zero when nothing was folded away', () => {
+    expect(attributeTailCount(summaryOf([['Engineering', 100]], 100))).toBe(0);
+    expect(
+      attributeTailCount(
+        summaryOf(
+          [
+            ['Engineering', 70],
+            [OTHER_VALUE, 30],
+          ],
+          100,
+        ),
+      ),
+    ).toBe(30);
+  });
+});
+
+describe('rankAttributes', () => {
+  const clean = (key: string): AttributeSummary => ({
+    key,
+    label: key,
+    distinct: 2,
+    populated: 100,
+    total: 100,
+    fillRate: 100,
+    rows: [
+      { value: 'A', label: 'A', count: 60, pct: 60 },
+      { value: 'B', label: 'B', count: 40, pct: 40 },
+    ],
+    driftValues: [],
+  });
+
+  const drifting = (key: string): AttributeSummary => ({
+    ...clean(key),
+    driftValues: ['Engineering', 'engineering'],
+  });
+
+  const tailed = (key: string): AttributeSummary => ({
+    ...clean(key),
+    rows: [
+      { value: 'A', label: 'A', count: 70, pct: 70 },
+      { value: OTHER_VALUE, label: 'Other (5 values)', count: 30, pct: 30 },
+    ],
+  });
+
+  it('sorts by score, descending', () => {
+    const ranked = rankAttributes([clean('quiet'), tailed('tail'), drifting('drift')], () => 0);
+    expect(ranked.map((r) => r.summary.key)).toEqual(['drift', 'tail', 'quiet']);
+    expect(ranked.map((r) => r.score)).toEqual([DRIFT_WEIGHT, TAIL_WEIGHT, 0]);
+  });
+
+  it('ranks drift above a rule dependency — the drift is what breaks the rule', () => {
+    const ranked = rankAttributes([clean('ruleFed'), drifting('drift')], (key) =>
+      key === 'ruleFed' ? 3 : 0,
+    );
+    expect(ranked.map((r) => r.summary.key)).toEqual(['drift', 'ruleFed']);
+  });
+
+  it('keeps discovery order inside a score — the sort is stable', () => {
+    const ranked = rankAttributes([clean('department'), clean('title'), clean('city')], () => 0);
+    expect(ranked.map((r) => r.summary.key)).toEqual(['department', 'title', 'city']);
+  });
+
+  it('splits flagged from quiet at a score of zero', () => {
+    const ranked = rankAttributes([clean('quiet'), drifting('drift'), clean('coupled')], (key) =>
+      key === 'coupled' ? 1 : 0,
+    );
+    const flagged = ranked.filter((r) => r.flagged).map((r) => r.summary.key);
+    const quiet = ranked.filter((r) => !r.flagged).map((r) => r.summary.key);
+    // One rule is enough to be flagged; nothing at all is not.
+    expect(flagged).toEqual(['drift', 'coupled']);
+    expect(quiet).toEqual(['quiet']);
+  });
+
+  it('ranks an empty set to an empty result', () => {
+    expect(rankAttributes([], () => 0)).toEqual([]);
   });
 });

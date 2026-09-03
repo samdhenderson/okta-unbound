@@ -15,18 +15,11 @@
  * stale. `AttributeHealthCard` keeps its own name: one card genuinely is about
  * one attribute's health.
  *
- * 1. **Attribute spread** — {@link discoverAttributeBreakdowns}'s per-attribute
- *    blank-rate/distribution report over the group's already-loaded roster, with
- *    {@link indexRulesByAttribute}'s reverse index over the feeding rules layered
- *    on as an **annotation**.
- *
- *    That layering used to be a *filter*: a card existed only for an attribute
- *    some feeding rule referenced. It hid exactly the drift worth catching —
- *    a `department` nobody's rule reads, spelled four different ways, is
- *    invisible until the day someone writes a rule against it and it silently
- *    grants the wrong people. So every discovered attribute gets a card, and the
- *    rule-referenced ones sort first because they are the ones that grant access
- *    today.
+ * 1. **Attribute spread** — {@link AttributeSpreadSection}: a ranked card per
+ *    discovered profile attribute over the group's already-loaded roster, with
+ *    the feeding rules layered on as an **annotation and a ranking input**, never
+ *    as the filter deciding which cards exist. The ordering rules and the
+ *    flagged/quiet split live in that component's own header.
  *
  *    Gated behind the same roster load the Members tab uses
  *    (`memberStatus`/`onAnalyzeMembers` are `useGroupSource`'s
@@ -35,12 +28,14 @@
  *    gate that calls the identical `analyzeMembers()`, which `getOrFetch` already
  *    coalesces against a concurrent call from the Members tab. Not a second fetch.
  *
- *    A card's aggregated `Other (N values)` row opens the same
+ *    A card discloses in three stages: collapsed (badges, spread bar, value
+ *    count), expanded (the value list, in place), then the same
  *    {@link BreakdownDetailsModal} the Members tab uses, over the full
  *    distribution {@link computeDimensionBreakdown} re-derives from the roster
- *    already in hand — no second fetch there either, and the long list is only
- *    paid for when somebody opens it. Read-only: this pane has no member list,
- *    so no `onRowClick` is wired and the rows stay inert.
+ *    already in hand — no second fetch, and the long list is only paid for when
+ *    somebody opens it. A row in that modal *leaves* for the Members tab, so it
+ *    runs in `navigate` intent and names its destination before it is clicked;
+ *    with no `onFilterMembers` wired the rows stay inert instead.
  * 2. **MFA coverage** — the group's opt-in, explicit MFA-enrollment scan
  *    ({@link module:sidepanel/hooks/useMemberMfaScan}, owned by the caller and
  *    passed through the same way `useGroupSource` is). Never auto-runs. Disabled
@@ -52,28 +47,17 @@
  *    card) because it answers the rarest questions of the five tabs.
  */
 import React, { useMemo, useState } from 'react';
-import {
-  AlertMessage,
-  Button,
-  CollapsibleSection,
-  DetailSection,
-  LoadingSpinner,
-} from '../../shared';
+import { Button, CollapsibleSection, DetailSection } from '../../shared';
 import GroupMetadataSection from './GroupMetadataSection';
-import AttributeHealthCard from './AttributeHealthCard';
+import AttributeSpreadSection from './AttributeSpreadSection';
 import GroupMfaCoverageSection from './GroupMfaCoverageSection';
 import BreakdownDetailsModal from '../../members/BreakdownDetailsModal';
 import {
   computeDimensionBreakdown,
   dimensionTitle,
-  discoverAttributeBreakdowns,
-  type AttributeSummary,
+  type MemberFilter,
 } from '../../members/memberAnalytics';
-import {
-  indexRulesByAttribute,
-  type AttributeReferencingRule,
-  type AttributeRuleRef,
-} from '../../../../shared/rules/groupAttributeIndex';
+import type { AttributeReferencingRule } from '../../../../shared/rules/groupAttributeIndex';
 import type { SourceStatus } from '../../../hooks/useGroupSource';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
 
@@ -101,6 +85,15 @@ interface GroupInsightsPaneProps {
   feedingRules: readonly AttributeReferencingRule[];
   /** Deep-links a dependent rule into the Rules tab. */
   onNavigateToRule?: (ruleId: string) => void;
+  /**
+   * Applies one value as a member filter and moves to the Members tab.
+   *
+   * **Omit and the reveal stays read-only** — this pane has no member list of its
+   * own, so without a caller able to honour it the rows would offer a filter that
+   * goes nowhere. When it *is* wired, every row says where it goes and what it
+   * will apply before it is clicked (see `BreakdownReport`'s `rowIntent`).
+   */
+  onFilterMembers?: (filter: MemberFilter) => void;
 
   /** Per-member MFA scan results, or `null` before a scan has run/restored. */
   mfaResults: Map<string, MemberMfaResult> | null;
@@ -140,6 +133,7 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
   canAnalyze = true,
   feedingRules,
   onNavigateToRule,
+  onFilterMembers,
   mfaResults,
   scanStatus,
   onRunScan,
@@ -165,84 +159,19 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
     [detailKey, members],
   );
 
-  const summaries = useMemo(() => (members ? discoverAttributeBreakdowns(members) : []), [members]);
-  const ruleIndex = useMemo(() => indexRulesByAttribute(feedingRules), [feedingRules]);
-
-  /*
-    Every discovered attribute gets a card; the rule index only decides the
-    *order*. Rule-referenced attributes come first because those are the ones
-    granting access today — but the ones no rule reads are where undetected drift
-    lives, so they are below the fold, not absent.
-
-    `discoverAttributeBreakdowns` already orders by "common organizational
-    attributes first, then fill rate", and that order is preserved inside each
-    half: a stable partition, not a re-sort.
-  */
-  const cards = useMemo(() => {
-    const withRules: Array<{ summary: AttributeSummary; rules: AttributeRuleRef[] }> = [];
-    const withoutRules: Array<{ summary: AttributeSummary; rules: AttributeRuleRef[] }> = [];
-    for (const summary of summaries) {
-      const rules = ruleIndex.get(summary.key) ?? [];
-      (rules.length > 0 ? withRules : withoutRules).push({ summary, rules });
-    }
-    return [...withRules, ...withoutRules];
-  }, [summaries, ruleIndex]);
-
   return (
     <div className="space-y-(--sp-rung)">
-      <DetailSection
-        title="Attribute spread"
-        description="Blank rate and value spread for every profile attribute across this group's members. The ones a feeding rule depends on come first."
-        actions={
-          memberStatus === 'idle' && memberCount > 0 ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon="chart"
-              onClick={onAnalyzeMembers}
-              disabled={!canAnalyze}
-            >
-              Analyze
-            </Button>
-          ) : undefined
-        }
-      >
-        {memberCount === 0 ? (
-          <p className="text-sm text-neutral-500">
-            This group has no members, so there is nothing to profile.
-          </p>
-        ) : memberStatus === 'idle' ? (
-          <p className="text-sm text-neutral-500">
-            Not analyzed yet. Reads all {memberCount.toLocaleString()} member
-            {memberCount === 1 ? '' : 's'} once to compute every profile attribute&apos;s blank rate
-            and value spread.
-          </p>
-        ) : memberStatus === 'loading' ? (
-          <LoadingSpinner size="sm" message="Analyzing members…" centered />
-        ) : memberStatus === 'error' ? (
-          <AlertMessage
-            message={{ text: error || 'Failed to analyze members.', type: 'danger' }}
-            action={{ label: 'Retry', onClick: onAnalyzeMembers }}
-          />
-        ) : cards.length === 0 ? (
-          <p className="text-sm text-neutral-500">
-            No profile attribute in this group has a meaningful spread — every one is either blank
-            or unique per member.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 gap-(--sp-rung) sm:grid-cols-2">
-            {cards.map(({ summary, rules }) => (
-              <AttributeHealthCard
-                key={summary.key}
-                summary={summary}
-                rules={rules}
-                onNavigateToRule={onNavigateToRule}
-                onShowOther={() => setDetailKey(summary.key)}
-              />
-            ))}
-          </div>
-        )}
-      </DetailSection>
+      <AttributeSpreadSection
+        memberCount={memberCount}
+        members={members}
+        memberStatus={memberStatus}
+        error={error}
+        onAnalyzeMembers={onAnalyzeMembers}
+        canAnalyze={canAnalyze}
+        feedingRules={feedingRules}
+        onNavigateToRule={onNavigateToRule}
+        onShowAll={setDetailKey}
+      />
 
       <DetailSection
         title="MFA coverage"
@@ -275,14 +204,30 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
         )}
       </DetailSection>
 
-      {/* The values a card's "Other (N values)" row folded away. Read-only: no
-        member list lives on this tab, so no row-click filter is wired. */}
+      {/* Stage three: every value, including the ones a card's tail folded away.
+        A row here *leaves* — it filters the Members tab — so it runs in
+        `navigate` intent, where each row names its destination and its filter
+        before it is taken. Without `onFilterMembers` the pane has nothing that
+        could honour a click, and the rows stay inert rather than promising it. */}
       <BreakdownDetailsModal
         isOpen={detailKey !== null}
         onClose={() => setDetailKey(null)}
         title={detailKey ? dimensionTitle(detailKey) : ''}
         rows={detailRows}
         activeValues={EMPTY_ACTIVE_VALUES}
+        rowIntent="navigate"
+        onRowClick={
+          onFilterMembers && detailKey
+            ? (row) => {
+                onFilterMembers({
+                  dimension: detailKey,
+                  value: row.value,
+                  label: `${dimensionTitle(detailKey)}: ${row.label}`,
+                });
+                setDetailKey(null);
+              }
+            : undefined
+        }
       />
 
       <CollapsibleSection title="About this group" defaultOpen={false}>
