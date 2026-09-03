@@ -430,11 +430,12 @@ export const OrgFiguresAreFree: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     // The findings and the totals caption both come out of rows already on
-    // disk, so a warm org paints the whole card without issuing a request.
+    // disk, so a warm org paints the whole card without issuing a request. The
+    // row is the control now — `ListRow as="button"` — and it names its own
+    // count, so this pins the figure as well as the row's existence.
     await expect(
       await canvas.findByRole('button', {
-        name: 'Open the filtered list',
-        description: /Groups with no members/,
+        name: 'Groups with no members that no rule fills — 2',
       }),
     ).toBeInTheDocument();
     await expect(await canvas.findByRole('button', { name: '2 groups' })).toBeInTheDocument();

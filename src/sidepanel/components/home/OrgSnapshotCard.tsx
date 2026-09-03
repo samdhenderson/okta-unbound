@@ -2,27 +2,60 @@
  * @module sidepanel/components/home/OrgSnapshotCard
  * @description The Home tab's third region: what is worth fixing in this org.
  *
- * A findings list. Each row is one actionable count — *31 groups with no
- * members* — and pressing it opens that tab with the matching filter already
- * applied. The collection totals are a caption underneath, because `214 groups`
- * is trivia and the slice of it that needs work is not.
+ * A findings list, two rows long. Each row is one actionable count — *4 group
+ * rules paused* — and pressing it opens that tab with the matching filter
+ * already applied. The collection totals are a caption underneath, because `214
+ * groups` is trivia and the slice of it that needs work is not.
  *
  * All of it is read from the background-owned org snapshot (ADR-0040), so a warm
- * org renders the whole card at **zero requests**.
+ * org renders the whole card at **zero requests**. Which two rows, and the four
+ * tests a third would have to pass, live in
+ * {@link module:sidepanel/hooks/useOrgFigures} — the budget belongs next to the
+ * code that would spend it.
+ *
+ * ## The row reads left to right, and the number is not the subject
+ *
+ * A 20px glyph leads, then the finding as a sentence, then the count at the
+ * trailing edge, then the chevron. The count used to be a `text-3xl` tabular
+ * number occupying the left third of the row, which made the card a wall of
+ * digits you had to read twice: once to see the number, once to find out what it
+ * counted.
+ *
+ * Inverted, the sentence is what you scan and the number is what you land on.
+ * It keeps the darkest ink and the heaviest weight on the card (`text-base
+ * font-semibold` against a `text-sm font-medium` label) and sits in a fixed
+ * `3ch` right-aligned slot, so the digits still stack into a column of their
+ * own — it is simply no longer the biggest thing anywhere.
+ *
+ * The glyph lead is `Icon size="md"` + `gap-3` + `items-center`, deliberately
+ * identical to
+ * {@link module:sidepanel/components/home/WorkingSetRow}'s, so the entity rows
+ * above and the findings below read as one column of rows. Their text axes
+ * differ only by the `compact` → `comfortable` padding step; that is the
+ * density system working, not a defect to correct with an override.
  *
  * ## A number is a place, not a fact
  *
  * `31` that leaves you to rebuild its filter by hand is a worse version of a
- * link, so every finding with a number is a control. A finding whose collections
- * cannot support a number is a row with an em dash and a sentence saying which
- * read is missing — still present, still legible, but not a control: a link into
- * a list that would disagree with the figure is the dead control ADR-0039 bans,
- * wearing a different hat.
+ * link, so every finding with something to open is a control — a real
+ * `ListRow`, with its own hover border and `.press` (ADR-0046), no
+ * `StretchedButton` overlay needed now that the row is a card again rather than
+ * a flush `<li>` in a shared-border list.
  *
- * Keeping the row rather than dropping it is the whole reason this reads as a
- * findings list *plus placeholders* rather than a pure one. A collection that
- * was never read has no findings, and "nothing to fix" and "nothing known" must
- * not look the same.
+ * Three rows are **not** controls, and each says why on its own face:
+ *
+ * - a collection still being read (a skeleton, and the number slot holds its
+ *   width so nothing widens when the figure lands);
+ * - a collection that cannot support a number (an em dash, a sentence naming
+ *   the missing read, and a recessed label) — a link into a list that would
+ *   disagree with the figure is the dead control ADR-0039 bans, wearing a
+ *   different hat;
+ * - a genuine, walked **zero** (the glyph turns `text-success-text`, and there
+ *   is nothing to open because there is nothing there).
+ *
+ * Keeping the unavailable row rather than dropping it is the whole reason this
+ * reads as a findings list *plus placeholders*. "Nothing to fix" and "nothing
+ * known" must not look the same.
  *
  * ## Every figure states its own age
  *
@@ -40,9 +73,8 @@ import React from 'react';
 import Eyebrow from '../shared/Eyebrow';
 import Icon from '../shared/Icon';
 import IconButton from '../shared/IconButton';
+import ListRow from '../shared/ListRow';
 import Skeleton from '../shared/Skeleton';
-import StretchedButton from '../shared/StretchedButton';
-import FigureNumber from './FigureNumber';
 import { getRelativeTime } from '../../../shared/utils/dateFormat';
 import type { ListViewRequest, ListViewTab } from '../../listViewRequest';
 import type { OrgBox, OrgSubCount } from './orgFigures';
@@ -65,87 +97,138 @@ export interface OrgSnapshotCardProps {
   onOpenListView: (request: ListViewRequest) => void;
 }
 
-/** The two lines beside the number: the finding, and what it is out of. */
-const FindingLines: React.FC<{ subCount: OrgSubCount; id: string }> = ({ subCount, id }) => (
-  <span className="flex min-w-0 flex-1 flex-col gap-px">
-    <span
-      id={id}
-      className={`text-sm ${
-        subCount.value === null ? 'font-medium text-neutral-600' : 'font-semibold text-neutral-900'
-      }`}
-    >
-      {subCount.label}
-    </span>
-    {subCount.note && (
-      <span
-        className={`text-xs ${
-          subCount.status === 'partial' ? 'text-warning-text' : 'text-neutral-600'
-        }`}
-      >
-        {subCount.note}
-      </span>
-    )}
-  </span>
-);
+/**
+ * The number slot. Fixed `3ch` and right-aligned so the digits of every row
+ * stack into one column, and so the loading placeholder holds exactly the width
+ * the figure will take — nothing moves horizontally when a read lands.
+ */
+const NUMBER_SLOT = 'shrink-0 min-w-[3ch] text-right text-base font-semibold tabular-nums';
+
+/** Which colour the leading glyph takes, which is the row's whole state in one mark. */
+function glyphTone(subCount: OrgSubCount): string {
+  if (subCount.status === 'reading') return 'text-neutral-300';
+  // A walked zero is an answer, and the only place on this card anything reads
+  // as good news.
+  if (subCount.value === 0) return 'text-success-text';
+  return 'text-neutral-400';
+}
 
 /**
- * One finding row.
+ * The row interior, identical in every state.
  *
- * A flush `<li>` with no border of its own — the separators belong to the
- * parent's `divide-y divide-neutral-100`, which is ADR-0029's second sanctioned
- * pattern for a dense list that reads as one table-like surface rather than a
- * stack of cards. A per-row `ListRow` would draw a card border inside a card
- * border; a per-row `border-t` + `first:border-t-0` is the same idea spelled the
- * way that ADR bans.
- *
- * Activation is a {@link StretchedButton} covering the row rather than a
- * `<button>` wrapping its content, so the row keeps flush padding and no button
- * chrome. `describedBy` points at this row's own finding text, so every overlay
- * announcing "Open the filtered list" is still distinguishable.
+ * `items-center`, never `items-start`: the glyph, the number and the chevron
+ * all sit on the row midline, so a two-line label grows the row symmetrically
+ * and nothing shifts horizontally.
  */
+const FindingBody: React.FC<{
+  subCount: OrgSubCount;
+  noteId: string;
+  isControl: boolean;
+}> = ({ subCount, noteId, isControl }) => {
+  const recessed = subCount.value === null;
+
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <Icon type={subCount.icon} size="md" className={`shrink-0 ${glyphTone(subCount)}`} />
+
+      <div className="min-w-0 flex-1">
+        {subCount.status === 'reading' ? (
+          <div className="space-y-1">
+            <Skeleton
+              variant="text"
+              size="sm"
+              width="w-3/4"
+              label={`Reading ${subCount.label}`}
+              className="text-left"
+            />
+            {/* The note's placeholder. `label=""` because the line above already
+                carries this row's one announcement; a second `role="status"`
+                would say the same thing twice. */}
+            <Skeleton variant="text" size="sm" width="w-1/2" label="" />
+          </div>
+        ) : (
+          <>
+            <p
+              className={`text-pretty text-sm font-medium ${
+                recessed ? 'text-neutral-600' : 'text-neutral-900'
+              }`}
+            >
+              {subCount.label}
+            </p>
+            {subCount.note && (
+              <p
+                id={noteId}
+                className={`text-xs ${
+                  subCount.status === 'partial' ? 'text-warning-text' : 'text-neutral-600'
+                }`}
+              >
+                {subCount.note}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      <span
+        className={`${NUMBER_SLOT} ${recessed ? 'text-neutral-400' : 'text-neutral-900'}`}
+        // The em dash and the loading placeholder are shape, not content — the
+        // note beside them is the sentence that carries the meaning.
+        aria-hidden={subCount.value === null ? 'true' : undefined}
+      >
+        {subCount.status === 'reading' ? '·' : (subCount.value?.toLocaleString() ?? '—')}
+      </span>
+
+      {isControl ? (
+        <Icon type="chevron-right" size="xs" className="shrink-0 text-neutral-400" />
+      ) : (
+        // Holds the chevron's 12px so the number column stays aligned between a
+        // row you can open and one you cannot. Drawing a chevron on a row that
+        // opens nothing would be the lie; leaving a ragged column is a
+        // different, smaller one.
+        <span aria-hidden="true" className="w-3 shrink-0" />
+      )}
+    </div>
+  );
+};
+
+/** One finding row: a `ListRow` card, a control only when there is something to open. */
 const Finding: React.FC<{
   subCount: OrgSubCount;
   onOpen: (request: ListViewRequest) => void;
 }> = ({ subCount, onOpen }) => {
-  const labelId = `org-finding-${subCount.key}`;
+  const noteId = `org-finding-note-${subCount.key}`;
+  // A zero is a real answer with nothing behind it, and a `null` has nothing to
+  // stand behind at all. Neither may be a control.
+  const isControl = subCount.value !== null && subCount.value > 0;
 
-  if (subCount.status === 'reading') {
+  if (!isControl) {
     return (
-      <li className="px-(--sp-row-x) py-(--sp-row-y)">
-        <Skeleton variant="text" size="sm" width="w-3/4" label={`Reading ${subCount.label}`} />
-      </li>
-    );
-  }
-
-  if (subCount.value === null) {
-    // Recessed rather than removed. A collection that was never read has no
-    // findings, so dropping the row would make "nothing to fix" and "nothing
-    // known" look identical — and it is not a control, because a link into a
-    // list that would disagree with the figure is the dead control ADR-0039
-    // bans, wearing a different hat.
-    return (
-      <li className="flex items-stretch gap-3 bg-neutral-50 px-(--sp-row-x) py-(--sp-row-y)">
-        <FigureNumber value={null} />
-        <FindingLines subCount={subCount} id={labelId} />
-      </li>
+      <ListRow as="li" density="comfortable">
+        <FindingBody subCount={subCount} noteId={noteId} isControl={false} />
+      </ListRow>
     );
   }
 
   return (
-    // No `.press` on the row: `StretchedButton` itself carries the response
-    // layer's press feedback (ADR-0046) — a state-layer wash on its own
-    // `:active` — since the overlay has no visible box of its own for a scale
-    // to read on, the same reasoning `ListRow` now documents for any row
-    // activated this way.
-    <li className="relative flex items-stretch gap-3 px-(--sp-row-x) py-(--sp-row-y) transition-colors duration-(--dur-instant) hover:bg-neutral-50">
-      <StretchedButton
-        label="Open the filtered list"
-        describedBy={labelId}
+    <li>
+      {/*
+        `as="button"` rather than a `<li>` with an `onClick`: the row is the
+        click target, and a click target has to be reachable from the keyboard
+        and announce itself as a control. `ListRow` supplies the focus ring and
+        `.press` for it. The accessible name carries the number as well as the
+        sentence — the count is the fact, and a name of "Group rules paused"
+        alone would drop it — and `describedBy` adds the note, which is where a
+        partial walk says so.
+      */}
+      <ListRow
+        as="button"
+        density="comfortable"
         onClick={() => onOpen(subCount.request)}
-      />
-      <FigureNumber value={subCount.value} />
-      <FindingLines subCount={subCount} id={labelId} />
-      <Icon type="chevron-right" size="xs" className="shrink-0 self-center text-neutral-400" />
+        ariaLabel={`${subCount.label} — ${subCount.value?.toLocaleString()}`}
+        describedBy={subCount.note ? noteId : undefined}
+      >
+        <FindingBody subCount={subCount} noteId={noteId} isControl />
+      </ListRow>
     </li>
   );
 };
@@ -190,7 +273,13 @@ const OrgSnapshotCard: React.FC<OrgSnapshotCardProps> = ({
         </IconButton>
       </div>
 
-      <ul className="divide-y divide-neutral-100 overflow-hidden rounded-md border border-neutral-200 bg-white">
+      {/*
+        Cards with a gap, not one bordered container with `divide-y`. Two rows
+        do not make a table-like surface, and as cards they carry `ListRow`'s
+        own hover border and press response instead of a hand-rolled row
+        treatment (ADR-0029).
+      */}
+      <ul className="space-y-1">
         {findings.map((subCount) => (
           <Finding key={subCount.key} subCount={subCount} onOpen={onOpenListView} />
         ))}
@@ -208,7 +297,7 @@ const OrgSnapshotCard: React.FC<OrgSnapshotCardProps> = ({
               {/*
                 §3 exception: chromeless text-link, the same one `GroupFilterPanel`'s
                 "Clear all" takes — there is no shared text-link primitive, and a
-                `Button` here would put three chunky pills under a dense list and
+                `Button` here would put chunky pills under a dense list and
                 out-weigh the findings the card exists to lead with. `.press` (not
                 `-subtle`) because the target is small — a word, not a row —
                 and `active:brightness-90` for the same darker press step
