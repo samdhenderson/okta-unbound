@@ -53,6 +53,8 @@ import { countCurrentGroupRuleRelations } from '../../shared/rules/currentGroupR
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useRuleImpact } from '../hooks/useRuleImpact';
+import { useOwedLoad } from '../hooks/useOwedLoad';
+import { useRefreshSubject } from '../hooks/useRefreshSubject';
 import { useRulesData } from '../hooks/useRulesData';
 import { useRuleLifecycle } from '../hooks/useRuleLifecycle';
 import { useRuleConsolidation } from '../hooks/useRuleConsolidation';
@@ -310,46 +312,15 @@ const RulesTab: React.FC<RulesTabProps> = ({
     onListViewConsumed?.();
   }, [listView, restoreAttempted, onListViewConsumed]);
 
-  // Rules load manually, not on mount, so a view request can arrive against an
-  // empty list. Same load-on-demand the rule deep-link below does.
-  const listViewLoadRef = useRef<RulesListView | null>(null);
-  useEffect(() => {
-    if (!listView) {
-      listViewLoadRef.current = null;
-      return;
-    }
-    if (
-      restoreAttempted &&
-      rules.length === 0 &&
-      !data.isLoading &&
-      targetTabId != null &&
-      listViewLoadRef.current !== listView
-    ) {
-      listViewLoadRef.current = listView;
-      void loadRules(false);
-    }
-  }, [listView, restoreAttempted, rules.length, data.isLoading, targetTabId, loadRules]);
-
-  // A cross-tab deep-link can arrive before rules have ever been loaded this
-  // session (rules load manually, not on mount). Kick a cache-first load once so
-  // the target can actually render — mirroring the Users tab's load-on-demand.
-  const deepLinkLoadRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!activeRuleId) {
-      deepLinkLoadRef.current = null;
-      return;
-    }
-    if (
-      restoreAttempted &&
-      rules.length === 0 &&
-      !data.isLoading &&
-      targetTabId != null &&
-      deepLinkLoadRef.current !== activeRuleId
-    ) {
-      deepLinkLoadRef.current = activeRuleId;
-      void loadRules(false);
-    }
-  }, [activeRuleId, restoreAttempted, rules.length, data.isLoading, targetTabId, loadRules]);
+  /*
+    Both the Home card's pre-filtered view request and a cross-tab deep-link used
+    to carry a load-on-demand effect of their own, because rules loaded manually
+    and either could arrive against an empty list. The rung now fetches when it
+    is opened (below), under the identical readiness condition, so those two
+    effects would only ever fire a second, concurrent copy of the same request —
+    which is what they did the moment the on-open load landed. They are gone; the
+    single owed load serves all three arrivals.
+  */
 
   // Persist rules + UI state whenever they change.
   useEffect(() => {
@@ -540,6 +511,46 @@ const RulesTab: React.FC<RulesTabProps> = ({
   const handleLoadFromEmptyState = useCallback(() => {
     loadRules(false);
   }, [loadRules]);
+
+  /*
+    The rung fetches when it is opened rather than waiting for a press (ADR-0069
+    §6). One org-level call populates the tab and `RulesCache` already serves
+    repeat opens, so the premise of the manual gate — that the fetch is expensive
+    enough to be worth a deliberate press — was never true of this endpoint, and
+    it cost the tab its meaning until pressed.
+
+    ADR-0018 is the trap. Tabs stay mounted, so a plain mount effect would fire
+    for this tab while the reader is on Groups and then fire *nothing* on the
+    actual switch. `useOwedLoad` is the latch that gets this right: the load is
+    owed against `(tab, target)`, deferred while hidden, and paid once on the
+    first render where the tab is on screen. Cache-first, so a warm `RulesCache`
+    makes the arrival free.
+
+    The empty state below keeps its own load prompt, so a tab whose fetch failed
+    — or which was never eligible to run — is not a dead end.
+
+    Readiness carries three conditions beyond `isActive`, matching the two
+    load-on-demand effects above: the persisted-state restore must have been
+    attempted (a session that persisted its rules already has them, and fetching
+    over the top of that is a request spent on data the tab is holding), the list
+    must actually be empty, and no load may already be in flight. The latch means
+    a fetch that legitimately returns nothing does not retry in a loop.
+  */
+  useOwedLoad(
+    targetTabId == null ? null : `rules:${targetTabId}`,
+    isActive && restoreAttempted && rules.length === 0 && !data.isLoading,
+    () => {
+      void loadRules(false);
+    },
+  );
+
+  // The rung's answer to the app-level refresh control (ADR-0069 §2). Forced, so
+  // the chrome control means "again" rather than "serve me the cache I already
+  // have". Gated on `isActive` — a hidden tab must not own the refresh.
+  const reloadRules = useCallback(() => {
+    void loadRules(true);
+  }, [loadRules]);
+  useRefreshSubject('the rules list', reloadRules, isActive);
 
   /*
     A requested rule — a cross-tab deep-link, or a "View" press inside one of the analysis

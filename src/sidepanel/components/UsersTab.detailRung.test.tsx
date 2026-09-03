@@ -197,11 +197,15 @@ const classified = (group: OktaGroup, over: Partial<GroupMembership> = {}): Grou
 const detail = () => within(screen.getByTestId('user-detail-view'));
 
 /**
- * Load the detected user through the banner (the tab never auto-fetches) and
- * settle on their detail rung.
+ * Settle on Ada's detail rung.
+ *
+ * RETARGET (ADR-0022): this used to press the tab's detected-user banner's Load
+ * button. That banner is deleted, generalised into the masthead's handoff offer,
+ * whose accept sets `selectedUserId` — the identical `loadUserById` path. The
+ * tab still never auto-fetches; it is asked, through the control that now asks.
+ * A locator, not an assertion.
  */
-async function loadDetectedUser(uev: ReturnType<typeof userEvent.setup>) {
-  await uev.click(screen.getByRole('button', { name: 'Load' }));
+async function loadDetectedUser(): Promise<void> {
   await screen.findByRole('heading', { level: 1, name: 'Ada Lovelace' });
 }
 
@@ -278,14 +282,13 @@ beforeEach(() => {
 // ===========================================================================
 describe('detail rung: memberships render with their source line', () => {
   it('words a rule-attributed, a direct and an app-mastered membership as `membershipSourceLine` does', async () => {
-    const uev = userEvent.setup();
     route(new RegExp(`^/api/v1/users/${ADA_ID}/groups`), () => ({
       success: true,
       data: [gRuleFed, gDirect, gAppMastered],
     }));
 
-    render(<UsersTab targetTabId={1} />);
-    await loadDetectedUser(uev);
+    render(<UsersTab targetTabId={1} selectedUserId={ADA_ID} />);
+    await loadDetectedUser();
     await detail().findByRole('heading', { level: 4, name: 'Engineering Staff' });
 
     // The classifier's own answers, as the pipeline produces them: a rule whose
@@ -310,7 +313,6 @@ describe('detail rung: memberships render with their source line', () => {
   });
 
   it('says an UNKNOWN membership was never classified rather than showing nothing', async () => {
-    const uev = userEvent.setup();
     // The only way to reach UNKNOWN from this surface: the rule inventory could
     // not be obtained, so nothing may be concluded about any group (ADR-0020).
     route(/^\/api\/v1\/groups\/rules/, () => ({ success: false, error: 'rules unavailable' }));
@@ -319,8 +321,8 @@ describe('detail rung: memberships render with their source line', () => {
       data: [gRuleFed],
     }));
 
-    render(<UsersTab targetTabId={1} />);
-    await loadDetectedUser(uev);
+    render(<UsersTab targetTabId={1} selectedUserId={ADA_ID} />);
+    await loadDetectedUser();
     await detail().findByRole('heading', { level: 4, name: 'Engineering Staff' });
 
     const unknown = membershipSourceLine(
@@ -382,8 +384,8 @@ describe('detail rung: lifecycle verbs are gated by status', () => {
       success: true,
       data: ada({ status }),
     }));
-    render(<UsersTab targetTabId={1} />);
-    await loadDetectedUser(uev);
+    render(<UsersTab targetTabId={1} selectedUserId={ADA_ID} />);
+    await loadDetectedUser();
     await openManageBand(uev);
   }
 
@@ -501,20 +503,20 @@ describe('detail rung: proving one membership costs exactly one request', () => 
   const proofAction = (groupName: string) =>
     within(rowFor(groupName)).getByRole('button', { name: 'Ask Okta' });
 
-  async function renderWithTwoGroups(uev: ReturnType<typeof userEvent.setup>) {
+  async function renderWithTwoGroups() {
     route(new RegExp(`^/api/v1/users/${ADA_ID}/groups`), () => ({
       success: true,
       data: [gRuleFed, gDirect],
     }));
-    render(<UsersTab targetTabId={1} />);
-    await loadDetectedUser(uev);
+    render(<UsersTab targetTabId={1} selectedUserId={ADA_ID} />);
+    await loadDetectedUser();
     await detail().findByRole('heading', { level: 4, name: 'Engineering Staff' });
   }
 
   it('asks nothing on mount, then exactly once for the row that was pressed', async () => {
     const uev = userEvent.setup();
     route(/\/group-rules$/, () => ({ success: true, data: [] }));
-    await renderWithTwoGroups(uev);
+    await renderWithTwoGroups();
 
     // Two rows, two offers, and nothing spent until one is taken. The endpoint
     // count is asserted first, so an auto-proving regression fails as "it asked"
@@ -546,7 +548,7 @@ describe('detail rung: proving one membership costs exactly one request', () => 
       success: true,
       data: [{ id: RULE.id, name: RULE.name }],
     }));
-    await renderWithTwoGroups(uev);
+    await renderWithTwoGroups();
 
     const deduced = membershipSourceLine(
       classified(gRuleFed, { membershipType: 'RULE_BASED', rules: [RULE] }),
@@ -578,7 +580,7 @@ describe('detail rung: proving one membership costs exactly one request', () => 
   it('reports a failed proof as no answer rather than as an answer', async () => {
     const uev = userEvent.setup();
     route(/\/group-rules$/, () => ({ success: false, error: 'nope' }));
-    await renderWithTwoGroups(uev);
+    await renderWithTwoGroups();
 
     await openRow(uev, 'Engineering Staff');
     await uev.click(proofAction('Engineering Staff'));
@@ -615,18 +617,18 @@ describe('detail rung: profile attributes are reachable and filterable', () => {
     return detail().getByLabelText('Filter attributes');
   }
 
-  async function renderWithProfile(uev: ReturnType<typeof userEvent.setup>) {
+  async function renderWithProfile() {
     route(new RegExp(`^/api/v1/users/${ADA_ID}$`), () => ({
       success: true,
       data: ada({ profile: { title: 'Countess of Lovelace' } }),
     }));
-    render(<UsersTab targetTabId={1} />);
-    await loadDetectedUser(uev);
+    render(<UsersTab targetTabId={1} selectedUserId={ADA_ID} />);
+    await loadDetectedUser();
   }
 
   it('exposes a named attribute and its value', async () => {
     const uev = userEvent.setup();
-    await renderWithProfile(uev);
+    await renderWithProfile();
     await openAttributeSurface(uev);
 
     expect(detail().getByText('Title')).toBeInTheDocument();
@@ -636,7 +638,7 @@ describe('detail rung: profile attributes are reachable and filterable', () => {
 
   it('narrows the attribute list to a subset when filtered', async () => {
     const uev = userEvent.setup();
-    await renderWithProfile(uev);
+    await renderWithProfile();
     const filter = await openAttributeSurface(uev);
 
     await uev.type(filter, 'countess');

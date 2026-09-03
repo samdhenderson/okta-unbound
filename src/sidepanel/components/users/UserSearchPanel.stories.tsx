@@ -34,10 +34,6 @@ const meta = {
     isSearching: false,
     searchResults: [],
     onSelectUser: fn(),
-    detectedUser: null,
-    isDetectedUserLoading: false,
-    onLoadDetectedUser: fn(),
-    onDismissDetectedUser: fn(),
     hasSelectedUser: false,
     hasError: false,
   },
@@ -54,14 +50,6 @@ const meta = {
       description: 'Latest committed search results; an empty array renders no results block.',
     },
     onSelectUser: { description: 'Invoked with the chosen user when a result row is clicked.' },
-    detectedUser: {
-      description: 'The user detected on the current admin page, or `null` to hide the banner.',
-    },
-    isDetectedUserLoading: {
-      description: "Disables the banner's Load button while a load/analysis is in flight.",
-    },
-    onLoadDetectedUser: { description: 'Load the detected user + their memberships into the tab.' },
-    onDismissDetectedUser: { description: 'Dismiss the detected-user banner without loading.' },
     hasSelectedUser: {
       description: 'Whether a user is selected — hides the results and the empty state.',
     },
@@ -89,21 +77,6 @@ export const WithResults: Story = {
   args: { searchQuery: 'ada', searchResults: mockUsers.slice(10, 14) },
 };
 
-/** The admin page has a different user open — manual Load only. */
-export const WithDetectedUser: Story = {
-  args: {
-    detectedUser: { userId: '00uFAKE0001', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
-  },
-};
-
-/** The detected user is being loaded, so the banner's Load button is disabled. */
-export const DetectedUserLoading: Story = {
-  args: {
-    detectedUser: { userId: '00uFAKE0001', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
-    isDetectedUserLoading: true,
-  },
-};
-
 /** The tab's merged error channel, rendered through the `alerts` slot. */
 export const WithError: Story = {
   args: {
@@ -119,30 +92,18 @@ export const UserSelected: Story = {
 };
 
 /**
- * The whole tightened rung at once: the search box, the one-line detected-user
- * banner and the compact results under their quiet match count.
- */
-export const BannerAndResults: Story = {
-  args: {
-    searchQuery: 'ada',
-    searchResults: mockUsers.slice(10, 14),
-    detectedUser: { userId: '00uFAKE0001', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
-  },
-};
-
-/**
- * The same rung at 360px — the width the demotion was for. The banner keeps its
- * verb on the row and each result stays two lines.
+ * The same rung at 360px — the width the compaction was for. Each result stays
+ * two lines.
+ *
+ * Three detected-user stories used to sit here, and they went with the banner
+ * itself (ADR-0022): the subject was deleted, not silenced. What it offered is
+ * now the masthead's handoff affordance, whose own `ContextBar` stories cover
+ * the offer, the decline and the return on a new entity.
  */
 export const Compact360: Story = {
   args: {
     searchQuery: 'ada',
     searchResults: mockUsers.slice(10, 14),
-    detectedUser: {
-      userId: '00uFAKE0005',
-      userName: 'Bartholomew Featherstonehaugh-Wintergreen',
-      userStatus: 'LOCKED_OUT',
-    },
   },
   parameters: { viewport: { value: 'sidepanelCompact' } },
 };

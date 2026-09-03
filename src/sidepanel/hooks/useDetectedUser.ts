@@ -1,14 +1,19 @@
 /**
  * @module sidepanel/hooks/useDetectedUser
- * @description On-demand loader for the Okta user detected on the active admin page.
+ * @description On-demand loader for one Okta user, by id.
  *
  * The Users tab stays pinned to the user you explicitly selected — it is never
- * hijacked by admin navigation. This hook does **not** fetch on its own; it exposes
- * a `loadDetectedUser` action that the tab's "Detected in admin — Load" banner
- * invokes on click, which fetches the user's details (§8: through the rate-limited
- * scheduler via `makeApiRequest('/api/v1/users/{id}')`) and their memberships.
- * Nothing hits Okta until you ask for it, so navigating admin with the panel open
- * costs nothing.
+ * hijacked by admin navigation. This hook does **not** fetch on its own; it
+ * exposes a `loadUserById` action that fetches the user's details (§8: through
+ * the rate-limited scheduler via `makeApiRequest('/api/v1/users/{id}')`) and
+ * their memberships. Nothing hits Okta until you ask for it, so navigating admin
+ * with the panel open costs nothing.
+ *
+ * It had a second entry point, `loadDetectedUser`, which was `loadUserById`
+ * applied to whatever user the admin console had open — the tab's detected-user
+ * banner's Load button. That banner is now the masthead's handoff offer, which
+ * accepts by setting `selectedUserId`, and the deep-link path that fulfils it
+ * already ends in `loadUserById`. One entry point, one code path.
  */
 
 import { useCallback, useRef } from 'react';
@@ -22,8 +27,6 @@ const log = createLogger('useDetectedUser');
 interface UseDetectedUserOptions {
   /** Tab whose content script holds the page + fetches user details. */
   targetTabId: number | undefined;
-  /** Id of the user detected on the page, or undefined when not on a user page. */
-  detectedUserId: string | undefined;
   /** Loads + classifies the user's memberships (drives loading/error via its own callbacks). */
   loadMemberships: (user: OktaUser) => Promise<void>;
   /** Sets (or clears) the tab's selected user. */
@@ -39,11 +42,6 @@ interface UseDetectedUserOptions {
 /** Return shape of {@link useDetectedUser}. */
 interface UseDetectedUserReturn {
   /**
-   * Load the page-detected user into the tab: fetch details, select them, and load
-   * their memberships. No-op when there is no detected user / connected tab.
-   */
-  loadDetectedUser: () => Promise<void>;
-  /**
    * Load an explicit user id into the tab (fetch details, select, load memberships).
    * Used to fulfil a deep link such as the Overview's "View all groups". No-op when
    * no tab is connected or `userId` is empty.
@@ -52,14 +50,13 @@ interface UseDetectedUserReturn {
 }
 
 /**
- * Hook exposing an on-demand loader for the page-detected user.
+ * Hook exposing an on-demand loader for one user by id.
  *
  * @param options - See {@link UseDetectedUserOptions}.
- * @returns `loadDetectedUser`, invoked by the tab's detected-user banner.
+ * @returns `loadUserById`, invoked to fulfil a `selectedUserId` request.
  */
 export function useDetectedUser({
   targetTabId,
-  detectedUserId,
   loadMemberships,
   onSelectUser,
   onError,
@@ -132,10 +129,5 @@ export function useDetectedUser({
     [targetTabId],
   );
 
-  const loadDetectedUser = useCallback(async () => {
-    if (!detectedUserId) return;
-    await loadUserById(detectedUserId);
-  }, [detectedUserId, loadUserById]);
-
-  return { loadDetectedUser, loadUserById };
+  return { loadUserById };
 }

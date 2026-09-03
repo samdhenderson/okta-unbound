@@ -15,7 +15,7 @@
  * Read-only.
  */
 
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useOwedLoad } from './useOwedLoad';
 import { useOktaApi } from './useOktaApi';
 import { extractReferencedGroupIds } from '../../shared/rules/groupRuleIndex';
@@ -43,6 +43,15 @@ export interface UseGroupRuleReferencesReturn {
   status: SourceStatus;
   /** Error message when the rules listing could not be loaded. */
   error: string | null;
+  /**
+   * Re-run the reference resolution for the group currently held, ignoring the
+   * once-per-input latch that governs the automatic load.
+   *
+   * The **only** re-run this hook exposes, deliberately (ADR-0069 §7). It is
+   * cheap in the common case: the work behind it is `ensureGroupRulesLoaded`,
+   * which serves a warm `RulesCache` without spending a request.
+   */
+  reload: () => void;
 }
 
 /**
@@ -90,11 +99,15 @@ export function useGroupRuleReferences(
     setError(null);
   }
 
-  // A load is owed whenever the group or the API target changes, and is paid the
-  // next time the view is visible. `ensureGroupRulesLoaded` is memoized on
-  // `targetTabId`, so the pair below is the whole input.
-  useOwedLoad(targetTabId == null ? groupId : `${targetTabId}:${groupId}`, enabled, () => {
+  /**
+   * Resolve the referencing rules for `groupId`. Shared by the owed automatic
+   * load and by {@link UseGroupRuleReferencesReturn.reload}, so the manual path
+   * can never drift from the automatic one.
+   */
+  const load = useCallback(() => {
     const runId = ++runIdRef.current;
+    setStatus('loading');
+    setError(null);
 
     ensureGroupRulesLoaded()
       .then((all) => {
@@ -117,7 +130,12 @@ export function useGroupRuleReferences(
         setError(err instanceof Error ? err.message : 'Failed to load referencing rules');
         setStatus('error');
       });
-  });
+  }, [groupId, ensureGroupRulesLoaded]);
 
-  return { rules, status, error };
+  // A load is owed whenever the group or the API target changes, and is paid the
+  // next time the view is visible. `ensureGroupRulesLoaded` is memoized on
+  // `targetTabId`, so the pair below is the whole input.
+  useOwedLoad(targetTabId == null ? groupId : `${targetTabId}:${groupId}`, enabled, load);
+
+  return { rules, status, error, reload: load };
 }
