@@ -1,10 +1,25 @@
 # ADR-0067: What a dormant-access finding may claim
 
 - Status: Proposed
-- Date: 2026-09-02
+- Date: 2026-09-02 (rescoped 2026-09-03 — the finding left the Home tab; see
+  _Where this applies_)
 - Relates to: ADR-0036 (never asserted), ADR-0040 (delta plus drift), ADR-0056
-  (snapshot depth), ADR-0006 (untrusted responses). Implements the wording gate
-  on `I-028`; depends on `D-076`; interacts with `D-077`
+  (snapshot depth), ADR-0006 (untrusted responses), ADR-0065 (the export
+  descriptor this now governs). Implements the wording gate on `I-028`; depends
+  on `D-076`; interacts with `D-077`
+
+## Where this applies
+
+One surface renders this finding: the **org-report export**
+`report-dormant-app-access`
+(`src/sidepanel/export/descriptors/orgReports.ts`), whose rows are read by
+`readDormantAccessRows` (`src/sidepanel/export/orgReportSource.ts`) and which
+reaches the reader twice — as the Export tab's on-screen preview, and as the
+downloaded CSV. The join and every string it uses stay in
+`src/sidepanel/components/groups/ruleOrphans.ts`.
+
+Everything below governs that surface, and any future one that renders the same
+join. It no longer governs the Home tab, which used to be the point of it.
 
 ## Context
 
@@ -39,6 +54,29 @@ of it false:
 3. **The threshold is inherited from the wrong clock (`D-077`).**
    `STALE_AGE_DAYS = 365` was reasoned about the _profile_ clock and has never
    been re-derived against this one.
+
+### The motivating surface was Home, and Home no longer carries it
+
+`I-028` proposed this as a **Home tab** row, and every paragraph above was
+written with that rung in mind. It is not there any more, and this ADR is
+rescoped rather than withdrawn because the finding itself survives elsewhere.
+
+Home's row budget was cut to four tests — a row costs no walk of its own, it
+names a subject, a verb exists on that rung, and it is not a superset of a
+sharper row — and this finding fails the first outright. Its population is
+groups that grant app access, so producing it needs an **apps walk plus a
+per-app assignment read**, the tightest rate budget in the org; and the claim it
+makes is only as strong as its anchor, which is a full group walk. That is a
+lot of an org's request budget to spend because a tab was opened, on a rung
+whose whole premise is that it costs nothing. The dormancy threshold is also not
+Home's to own: 180 days is a judgement about app access (§4), and Home is the
+rung least able to explain it.
+
+So the finding moved to where its cost is already paid — the export, which the
+reader asks for by name. Nothing else about it changed: the join, the anchor,
+the threshold and every string in §1 are the same objects in the same module,
+and the Home hook is the only thing that stopped calling them. What follows is
+therefore the same record, pointed at one surface instead of two.
 
 ## Decision
 
@@ -86,9 +124,13 @@ Rejected wordings, and why they lose:
 | `INVISIBLE_MAINTAINERS` pasted in       | Now false in spirit here — the invisible fillers it names all leave this timestamp. (`I-028`) |
 | "Dormant since `<date>`", unhedged      | Only true as of the anchor; see §3.                                                           |
 
-The row label states the threshold rather than a mood, and is derived from the
-constant so it cannot drift from it: **"App access with no membership change in
-6 months"**.
+The report's label states the threshold rather than a mood, and is derived from
+the constant so it cannot drift from it: **"App access with no membership change
+in 6 months"**, from `dormantAccessLabel()`. On the export surface that is the
+descriptor's `displayName` — the string a reader picks the report by, before any
+caveat is on screen — so it carries the same obligation the Home row did, and
+the same reason: a reader choosing between three org reports is choosing on that
+line alone.
 
 ### 2. `APP_GROUP` rows are labelled, not excluded
 
@@ -123,10 +165,14 @@ Therefore:
 - The caveat names that date (`dormantClockNote`), so the reader knows what the
   claim is anchored to.
 - If `lastFullWalkAt` is `null`, or older than **30 days**, the report is
-  suppressed the way an unread collection already is — em dash, no findings, the
-  note saying which read is missing. 30 days is an order of magnitude below the
-  dormancy window, so the anchor's lag can never be a material fraction of the
-  silence it certifies.
+  suppressed the way an unread collection already is — no findings, and a note
+  saying which read is missing rather than a softened claim. On the export
+  surface that means **no rows and no Download control**, with
+  `dormantAnchorNote` supplying the sentence; the caveat cell falls back to
+  `DORMANT_ACCESS_CAVEAT_UNANCHORED`, which drops the clock sentence because
+  there is no clock to name. 30 days is an order of magnitude below the dormancy
+  window, so the anchor's lag can never be a material fraction of the silence it
+  certifies.
 
 Without the anchor the harm is specific: a group that gained fifty members
 yesterday, whose profile was last edited in 2021, reads as _dormant with high
@@ -154,19 +200,26 @@ The mitigation for a threshold that has not been measured is that the row shows
 the **actual** age ("no membership change in 2 years"), so the reader judges the
 interval instead of trusting the cutoff.
 
-### 5. The rows navigate; they never mutate
+### 5. The rows are read; they never mutate
 
 No **mutating** verb, no selection, no path into the bulk machinery from these
-findings — now or later. `D-076` already notes that a wrong number here is one
-click from bulk action; the whole value of this report is a claim strong enough
-to act on, which is exactly why the acting must happen somewhere the admin has
-seen the group.
+findings — now or later, on whatever surface renders them. `D-076` already notes
+that a wrong number here is one click from bulk action; the whole value of this
+report is a claim strong enough to act on, which is exactly why the acting must
+happen somewhere the admin has seen the group.
 
-**Read-only egress is not a verb in this sense.** Exporting the findings under
-ADR-0065 is explicitly permitted: it changes nothing in Okta, and the CSV carries
-this ADR's caveat as a column, so the claim travels with the rows rather than
-being stripped by the trip. The line this section draws is between _reading a
-possibly-wrong list_ and _acting on one_ — only the second is forbidden here.
+**Read-only egress is not a verb in this sense**, and after the rescope it is
+the only thing this finding does. Exporting under ADR-0065 is explicitly
+permitted: it changes nothing in Okta, and the caveat rides as a column on every
+row, so the claim travels with the rows rather than being stripped by the trip.
+The line this section draws is between _reading a possibly-wrong list_ and
+_acting on one_ — only the second is forbidden.
+
+The section keeps its forward-looking half deliberately. The export is
+structurally incapable of mutating anything, so on today's one surface this rule
+costs nothing to obey; it is written for the surface that renders these rows
+next to a checkbox, which is the change that would need to re-read this ADR and
+will not think to.
 
 ## Consequences
 
@@ -175,10 +228,29 @@ possibly-wrong list_ and _acting on one_ — only the second is forbidden here.
   reason this ADR precedes the code; it also means any future report tempted to
   phrase itself this way must clear the same three tests (anchored clock, narrowed
   caveat, own threshold).
-- Still zero requests, and no new machinery: `lastMembershipUpdated` is on the
-  `RawOktaGroup` rows the snapshot holds, `lastFullWalkAt` is on `FigureSource`,
-  and `buildReport` already blanks `findings` when `value` is `null`, so a stale
-  anchor cannot leak a partial list of names.
+- **The strongest claim the panel makes is now the one a reader has to ask
+  for.** That is a smaller audience than a Home row and, on reflection, the right
+  one: the reader who opens the Export tab and picks this report by name has
+  already decided the question is worth an org's request budget, and is the
+  reader most likely to read a caveat column. It also means the claim is never
+  made unprompted, which is the mitigation this ADR most wanted and could not
+  have on a tab that renders on open.
+- **The export's `displayName` does not yet state the threshold**, and §1 says it
+  must. `report-dormant-app-access` reads _"Report: App access with no membership
+  change"_, which is the label with the number taken out — the one part of the
+  string that made it check-able. It is derived from `dormantAccessLabel()` or it
+  drifts from `DORMANT_ACCESS_DAYS` the first time that constant moves, which
+  `D-077` intends it to. This is the one obligation the rescope leaves unmet.
+- **`dormantAccessLabel()` now has no production caller.** Home was it. The fix
+  for the bullet above is also the fix for this one; a dead-code sweep that
+  removes the helper instead would delete the mechanism §1 relies on and leave
+  the descriptor free to write its own number.
+- Still zero requests of its own, and no new machinery: `lastMembershipUpdated`
+  is on the `RawOktaGroup` rows the snapshot holds, and the anchor is
+  `snapshot.groups.lastFullWalkAt`. The suppression happens once, in
+  `resolveReportCount`, which the export calls rather than re-deriving — so a
+  stale anchor cannot leak a partial list of names on either surface, and could
+  not diverge between them while there were two.
 - **If Okta changes what bumps the field, this report is the thing to re-check.**
   Two directions, one of which is dangerous: a field that starts moving more often
   (rule re-evaluation, profile push) only under-reports, which is safe; a write
@@ -206,6 +278,15 @@ possibly-wrong list_ and _acting on one_ — only the second is forbidden here.
   merging them drags the weaker caveat over the stronger finding.
 - **Exclude `APP_GROUP` rows.** Rejected in §2 — it hides a real class of finding
   and narrows the population relative to the sibling report for no stated reason.
+- **Withdraw the record when the finding left Home.** Rejected, and the reason
+  is worth stating because withdrawal was the tidier option. The finding did not
+  leave the product — it renders in the Export tab and downloads as a CSV, which
+  is if anything the surface where its claim travels furthest from the context
+  that qualifies it. A withdrawn ADR would leave `DORMANT_MAINTAINERS`, the
+  anchor and the 180-day threshold in the tree with nothing explaining why they
+  are worded as they are, and the next author to touch them would have only
+  `git log`. An ADR is withdrawn when its subject is gone, not when one of its
+  consumers is.
 - **A per-clock constant inside `clutterAnalysis`.** Left to `D-077`: this
   report's threshold belongs beside this report's join, not in the module whose
   contract is "what is knowable from a group list alone".
