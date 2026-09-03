@@ -58,7 +58,7 @@ export type { SkeletonVariant, SkeletonSize } from './Skeleton';
 export type { ListRowDensity, ListRowState, ListRowAs, ListRowProps } from './ListRow';
 export type { AlertMessageData, AlertAction } from './AlertMessage';
 export type { DetailSectionProps } from './DetailSection';
-export type { ActionBarProps, ActionDescriptor, ActionPriority } from './ActionBar';
+export type { ActionBarProps, ActionDescriptor, ActionPriority, ActionRegister } from './ActionBar';
 export type { BadgeVariant, BadgeProps } from './Badge';
 export type { EntityLinkProps } from './EntityLink';
 export type { FilterToggleProps } from './FilterToggle';
