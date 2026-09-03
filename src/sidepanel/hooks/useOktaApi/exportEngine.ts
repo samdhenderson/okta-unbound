@@ -8,12 +8,20 @@
  * projects the chosen columns to an escaped CSV and downloads it. Adding an entity
  * is writing an {@link EntityExport} descriptor — this engine never changes.
  *
+ * A descriptor may instead declare `source: { kind: 'snapshot' }`, in which case
+ * its rows are joined out of the org snapshot by the tab and handed to
+ * `runExport` directly (ADR-0065). `fetchAllRows` and `countRows` never see one.
+ * The only thing this module does differently for such a descriptor is honour
+ * its verdict: a `partial` answer force-includes the completeness column and
+ * marks the filename. Every cell still goes through `escapeCSV`.
+ *
  * @see {@link module:sidepanel/export/types} for the descriptor contract.
  */
 
 import type { CoreApi } from './core';
 import type { AuditLogEntry } from './types';
 import type { EntityExport, CellValue } from '@/sidepanel/export/types';
+import type { CountResolution } from '@/sidepanel/components/home/orgFigures';
 import { parseNextLink, nextPageUrl } from '@/shared/utils/oktaPagination';
 import { openingWalkEstimate, refinedWalkEstimate } from '@/shared/scheduler/planEstimate';
 import { parseOktaList } from '@/shared/schemas/okta';
@@ -61,6 +69,14 @@ export interface RunExportArgs<Row> {
   enabledColumnIds: string[];
   /** Optional label (e.g. a group name) folded into the filename. */
   contextLabel?: string;
+  /**
+   * For a snapshot-sourced descriptor, the verdict its source returned.
+   *
+   * A `partial` verdict forces the descriptor's completeness column into the
+   * file and marks the filename `-partial`. Omitted for every endpoint
+   * descriptor, where there is no such verdict to carry.
+   */
+  resolution?: CountResolution;
 }
 
 /**
@@ -178,11 +194,20 @@ export function createExportEngineOperations(coreApi: CoreApi) {
    * @param args - Descriptor, fetched rows, enabled column ids, optional label.
    */
   const runExport = async <Row>(args: RunExportArgs<Row>): Promise<void> => {
-    const { descriptor, rows, enabledColumnIds, contextLabel } = args;
+    const { descriptor, rows, enabledColumnIds, contextLabel, resolution } = args;
     const startTime = Date.now();
 
-    const columns = descriptor.columnCatalog.filter((column) =>
-      enabledColumnIds.includes(column.id),
+    // The one entity-agnostic honesty rule the engine enforces (ADR-0065): when
+    // a snapshot-sourced answer is a floor, the column carrying *why* it is a
+    // floor goes into the file even if the reader deselected it. The
+    // incompleteness of an answer is not a column preference, and a CSV outlives
+    // the screen that would have caveated it. Appended last so an existing
+    // column order — and any saved preset — is undisturbed.
+    const snapshotSource = descriptor.source?.kind === 'snapshot' ? descriptor.source : null;
+    const isPartial = snapshotSource !== null && resolution?.status === 'partial';
+    const forcedId = isPartial ? snapshotSource.completenessColumnId : undefined;
+    const columns = descriptor.columnCatalog.filter(
+      (column) => enabledColumnIds.includes(column.id) || column.id === forcedId,
     );
     const headers = columns.map((column) => column.label);
     const dataRows: CellValue[][] = rows.map((row) =>
@@ -195,7 +220,10 @@ export function createExportEngineOperations(coreApi: CoreApi) {
 
     const csv = generateCSV(headers, dataRows);
     const stem = sanitizeFilename(contextLabel ?? descriptor.displayName);
-    downloadCSV(csv, `${stem}-${descriptor.id}-${getDateForFilename()}.csv`);
+    // Identifiable before it is opened: a floor and a total must not share a
+    // filename in a downloads folder.
+    const partialMarker = isPartial ? '-partial' : '';
+    downloadCSV(csv, `${stem}-${descriptor.id}${partialMarker}-${getDateForFilename()}.csv`);
 
     await logExportAudit(coreApi, descriptor, rows.length, startTime);
   };

@@ -11,6 +11,23 @@
  *
  * The hook is 100% generic over the descriptor contract — adding a new
  * {@link module:sidepanel/export/types.EntityExport} needs zero changes here.
+ *
+ * ## Two ways rows arrive, one place that branches
+ *
+ * A descriptor either names a list endpoint (the default, and what every
+ * endpoint descriptor does) or declares `source: { kind: 'snapshot' }` and joins
+ * its rows out of the already-mounted org snapshot (ADR-0065). This hook is the
+ * single place that branch lives. The snapshot path **issues nothing**: it reads
+ * the handles it is handed, which expose no `sync`, so an export cannot fetch,
+ * top up, or mount a listener. It also never probes for a match-count — there is
+ * no endpoint to probe and no filter box to hint at.
+ *
+ * The snapshot path does not get to decide what happens next. Its source returns
+ * a `CountResolution` alongside the rows, and an `unavailable` verdict means
+ * **there is no export**: {@link UseExportTab.canExport} is false, the tab
+ * renders {@link UseExportTab.snapshotNote} instead of a Download control, and
+ * the source has already returned zero rows. A verb whose result cannot be
+ * trusted is a verb with no wire (ADR-0039).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -20,6 +37,8 @@ import { buildExportEndpoint } from '../export/endpoint';
 import { listDescriptors } from '../export/registry';
 import type { EntityExport, ExportColumn, EntityContextOption } from '../export/types';
 import type { ExportApiDeps } from '../export/types.deps';
+import type { OrgSnapshotView } from '../export/snapshot';
+import type { CountResolution, OrgFigureStatus } from '../components/home/orgFigures';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('useExportTab');
@@ -63,6 +82,7 @@ export interface ExportTabApi {
     rows: Row[];
     enabledColumnIds: string[];
     contextLabel?: string;
+    resolution?: CountResolution;
   }) => Promise<void>;
 }
 
@@ -74,6 +94,15 @@ export interface UseExportTabOptions {
   registry: Record<string, EntityExport>;
   /** Live search functions, used to resolve a search-to-select descriptor's context search. */
   deps: ExportApiDeps;
+  /**
+   * The mounted org snapshot, for snapshot-sourced descriptors.
+   *
+   * Read-only and optional: a build with no snapshot mounted simply reports
+   * those descriptors as unavailable rather than fetching to repair it — an
+   * unread collection is not a reason to fetch, it is a reason to say so
+   * (ADR-0065 §3). Memoize it; the join re-runs on a new identity.
+   */
+  snapshot?: OrgSnapshotView;
   /** Okta org origin used to build per-row deep links in the preview. */
   oktaOrigin?: string;
   /** Whether an Okta tab is connected; export/preview are disabled when false. */
@@ -163,6 +192,21 @@ export interface UseExportTab {
   canExport: boolean;
   /** Whether an Okta tab is connected. */
   hasConnectedTab: boolean;
+
+  /**
+   * For a snapshot-sourced descriptor, whether its answer may be published —
+   * `null` for every endpoint descriptor.
+   *
+   * `'reading'` means wait, `'unavailable'` means there is no export, and
+   * `'partial'` means the rows ship with the shortfall stated on each one.
+   */
+  snapshotStatus: OrgFigureStatus | null;
+  /**
+   * The sentence explaining {@link UseExportTab.snapshotStatus} — what the
+   * number is out of, or which read is missing. `null` when there is nothing to
+   * say.
+   */
+  snapshotNote: string | null;
 }
 
 /** Coerce an unknown thrown value into a display message. */
@@ -181,6 +225,7 @@ export function useExportTab({
   api,
   registry,
   deps,
+  snapshot,
   oktaOrigin: _oktaOrigin,
   hasConnectedTab,
   onError,
@@ -205,6 +250,17 @@ export function useExportTab({
 
   const descriptors = useMemo(() => listDescriptors(registry), [registry]);
   const descriptor = selectedId ? (registry[selectedId] ?? null) : null;
+
+  const snapshotSource = descriptor?.source?.kind === 'snapshot' ? descriptor.source : null;
+
+  // The join, run eagerly rather than on Preview: its verdict is what decides
+  // whether a Download control may be rendered at all, and that has to be known
+  // before the reader presses anything. Pure, synchronous, and zero requests —
+  // it reads handles that expose no `sync`.
+  const snapshotResult = useMemo(
+    () => (snapshotSource && snapshot ? snapshotSource.read(snapshot) : null),
+    [snapshotSource, snapshot],
+  );
 
   const validColumnIds = useMemo(
     () => descriptor?.columnCatalog.map((column) => column.id) ?? [],
@@ -317,6 +373,13 @@ export function useExportTab({
     // Never probe from a hidden tab: the count is a live hint for a filter box
     // nobody can see, and the effect re-fires on a `targetTabId` change.
     if (!enabled) return;
+    // A snapshot-sourced descriptor has no endpoint to probe. Guarded on the
+    // source rather than only on `filter.kind`, so a future snapshot descriptor
+    // that does offer a filter still cannot reach the wire from here.
+    if (snapshotSource) {
+      setMatchCount(null);
+      return;
+    }
     if (!descriptor || descriptor.filter.kind === 'none') {
       setMatchCount(null);
       return;
@@ -345,7 +408,7 @@ export function useExportTab({
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [enabled, descriptor, contextId, filterText, api]);
+  }, [enabled, descriptor, snapshotSource, contextId, filterText, api]);
 
   const applyPreset = useCallback(
     (id: string) => {
@@ -379,6 +442,16 @@ export function useExportTab({
 
   const fetchRows = useCallback(
     async (target: EntityExport): Promise<unknown[]> => {
+      // The snapshot arm. No endpoint is built, no request is issued, and no
+      // progress bar is started — there is nothing to wait for. `snapshotResult`
+      // is already computed; this only publishes it as the preview.
+      if (snapshotResult) {
+        setPreviewRows(snapshotResult.rows);
+        setFetched(snapshotResult.rows.length + snapshotResult.dropped);
+        setDropped(snapshotResult.dropped);
+        setCapped(false);
+        return snapshotResult.rows;
+      }
       const endpoint = buildExportEndpoint(descriptor as EntityExport, {
         contextId: contextId ?? undefined,
         filterText,
@@ -395,7 +468,16 @@ export function useExportTab({
         completeProgress();
       }
     },
-    [descriptor, contextId, filterText, api, startProgress, updateProgress, completeProgress],
+    [
+      descriptor,
+      snapshotResult,
+      contextId,
+      filterText,
+      api,
+      startProgress,
+      updateProgress,
+      completeProgress,
+    ],
   );
 
   const loadPreview = useCallback(async () => {
@@ -422,6 +504,9 @@ export function useExportTab({
         rows,
         enabledColumnIds: orderedEnabledIds,
         contextLabel: contextLabel ?? undefined,
+        // Carried through so the engine can force the completeness column and
+        // mark the filename. Undefined for every endpoint descriptor.
+        resolution: snapshotResult?.resolution,
       });
       await saveLastUsed(orderedEnabledIds);
     } catch (error) {
@@ -438,11 +523,19 @@ export function useExportTab({
     contextLabel,
     saveLastUsed,
     filterText,
+    snapshotResult,
     onError,
   ]);
 
   const contextReady = descriptor?.context.kind !== 'search-to-select' || contextId !== null;
-  const canExport = enabledColumns.length > 0 && hasConnectedTab && contextReady && !isBusy;
+  // A snapshot-sourced descriptor's answer must be publishable before either
+  // control is offered. `value === null` covers both `reading` and `unavailable`
+  // — nothing to show yet, and nothing that may ever be shown — and it is the
+  // resolution's own verdict rather than a second reading of the collections.
+  const snapshotReady =
+    snapshotSource === null || (snapshotResult?.resolution.value ?? null) !== null;
+  const canExport =
+    enabledColumns.length > 0 && hasConnectedTab && contextReady && snapshotReady && !isBusy;
 
   return {
     phase,
@@ -482,5 +575,11 @@ export function useExportTab({
 
     canExport,
     hasConnectedTab,
+
+    snapshotStatus: snapshotSource ? (snapshotResult?.resolution.status ?? 'unavailable') : null,
+    snapshotNote: snapshotSource
+      ? (snapshotResult?.resolution.note ??
+        'The org snapshot has not been read yet, so there is nothing to export.')
+      : null,
   };
 }

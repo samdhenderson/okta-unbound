@@ -499,7 +499,11 @@ const App: React.FC = () => {
           `EntityLink` at any depth can navigate without a prop chain (ADR-0030). */}
       <NavigationProvider handlers={navigationHandlers}>
         {/* The panel's one mount of the org snapshot index — Home and the ⌘K
-          palette are siblings, so only the shell can serve both (`I-033`). */}
+          palette are siblings, so only the shell can serve both (`I-033`).
+          Export reads this snapshot too now (ADR-0065) and is deliberately NOT
+          added to `enabled`: the flag gates the *sync*, not the read, so a
+          report already has every row, and leaving it off keeps "cannot sync"
+          structural rather than "nobody calls sync" (ADR-0040 §7, ADR-0018). */}
         <OrgEntityIndexProvider
           oktaOrigin={tabContext.oktaOrigin ?? null}
           targetTabId={tabContext.targetTabId ?? null}

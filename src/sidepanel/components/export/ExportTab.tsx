@@ -8,13 +8,27 @@
  * context picker, filter box, column picker, preset controls, action buttons, and
  * preview table. Every Okta read routes through the rate-limited scheduler path; no
  * entity-specific code lives here, so new descriptors need zero tab changes.
+ *
+ * ## The org snapshot, read-only
+ *
+ * A snapshot-sourced descriptor (ADR-0065) joins its rows out of the collections
+ * the shell already mounts, so this tab reads
+ * {@link module:sidepanel/contexts/OrgEntityIndexContext.useOrgEntityIndex} and
+ * projects the four handles onto the narrow
+ * {@link module:sidepanel/export/snapshot.OrgSnapshotView}. That projection is
+ * the guard: it carries rows and read-state and **no `sync`**, so nothing on
+ * this tab can issue a request, mount a listener, or trigger a top-up from the
+ * snapshot. `useOrgFigures` keeps sole ownership of the one top-up a mount may
+ * spend (ADR-0040). An export from here costs zero requests.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeader, AlertMessage, Button } from '../shared';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import type { OperationResult } from '../../hooks/useOktaApi/types';
 import { useExportTab } from '../../hooks/useExportTab';
+import { useOrgEntityIndex } from '../../contexts/OrgEntityIndexContext';
 import { buildRegistry } from '../../export/registry';
+import type { OrgSnapshotView } from '../../export/snapshot';
 import type { ExportApiDeps } from '../../export/types.deps';
 import EntityPicker from './EntityPicker';
 import ExportContextBar from './ExportContextBar';
@@ -103,10 +117,25 @@ const ExportTab: React.FC<ExportTabProps> = ({
 
   const registry = useMemo(() => buildRegistry(deps), [deps]);
 
+  // Read-only, and narrowed on purpose: `OrgSnapshotView` has no `sync`, so a
+  // report descriptor cannot fetch to repair an unread collection — it reports
+  // the collection as unread instead (ADR-0065 §3).
+  const index = useOrgEntityIndex();
+  const snapshot = useMemo<OrgSnapshotView>(
+    () => ({
+      groups: index.groups,
+      rules: index.rules,
+      apps: index.apps,
+      appGroups: index.appGroups,
+    }),
+    [index.groups, index.rules, index.apps, index.appGroups],
+  );
+
   const tab = useExportTab({
     api,
     registry,
     deps,
+    snapshot,
     oktaOrigin,
     hasConnectedTab: targetTabId != null,
     onError: setError,
@@ -209,25 +238,37 @@ const ExportTab: React.FC<ExportTabProps> = ({
               canSave={tab.enabledCount > 0}
             />
 
-            <div className="flex items-center gap-3">
-              <Button
-                variant="secondary"
-                onClick={tab.loadPreview}
-                disabled={!tab.canExport}
-                loading={tab.isBusy}
-              >
-                Preview
-              </Button>
-              <Button
-                variant="primary"
-                icon="download"
-                onClick={tab.download}
-                disabled={!tab.canExport}
-                loading={tab.isBusy}
-              >
-                Download CSV
-              </Button>
-            </div>
+            {/* A report whose collections cannot support an answer has no export
+                — the controls are omitted, not disabled, and the row's own
+                sentence says which read is missing (ADR-0039, ADR-0065). */}
+            {tab.snapshotStatus === 'unavailable' ? (
+              <AlertMessage message={{ type: 'info', text: tab.snapshotNote ?? '' }} />
+            ) : (
+              <div className="space-y-2">
+                {tab.snapshotStatus === 'partial' && tab.snapshotNote && (
+                  <AlertMessage message={{ type: 'warning', text: tab.snapshotNote }} />
+                )}
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={tab.loadPreview}
+                    disabled={!tab.canExport}
+                    loading={tab.isBusy}
+                  >
+                    Preview
+                  </Button>
+                  <Button
+                    variant="primary"
+                    icon="download"
+                    onClick={tab.download}
+                    disabled={!tab.canExport}
+                    loading={tab.isBusy}
+                  >
+                    Download CSV
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {tab.previewRows !== null && (
               <ExportPreviewTable

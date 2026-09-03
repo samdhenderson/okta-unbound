@@ -35,7 +35,12 @@
  * see nothing filling this". A stronger claim earns a stricter precondition, and
  * {@link ReportInput.suppressed} is where that is expressed.
  */
-import { resolveCount, type CountInput, type OrgFigureStatus } from './orgFigures';
+import {
+  resolveCount,
+  type CountInput,
+  type CountResolution,
+  type OrgFigureStatus,
+} from './orgFigures';
 import type { GroupFinding } from '../groups/ruleOrphans';
 
 /**
@@ -134,6 +139,33 @@ export interface ReportInput extends Omit<CountInput, 'count'> {
 }
 
 /**
+ * Resolve one report's count against its collections and its own precondition.
+ *
+ * Extracted from {@link buildReport} so a report's **export** applies the
+ * identical rule rather than re-deriving it at the export layer — one function,
+ * two surfaces (ADR-0065). A snapshot-sourced descriptor calls this and ships
+ * the verdict alongside its rows; nothing downstream gets to decide separately
+ * whether a number may be published.
+ *
+ * @param counts - The collections behind the count, and the count itself.
+ * @param suppressed - A failed precondition, stated as the line to show instead
+ * of a number. See {@link ReportInput.suppressed}.
+ * @returns The status, the value (`null` when nothing supports one), and the
+ * line explaining it.
+ */
+export function resolveReportCount(counts: CountInput, suppressed?: string): CountResolution {
+  const resolved = resolveCount(counts);
+  // A failed precondition only ever *downgrades*: it turns a number into an em
+  // dash, and it never renames a failure the collections already reported. A
+  // report whose rules were never read should still say so — that sentence
+  // points at the read the admin can go and fix, where this one would point at
+  // a second, less immediate cause.
+  const blocked =
+    suppressed !== undefined && (resolved.status === 'ok' || resolved.status === 'partial');
+  return blocked ? { status: 'unavailable', value: null, note: suppressed } : resolved;
+}
+
+/**
  * Build one report row.
  *
  * @param input - See {@link ReportInput}.
@@ -147,26 +179,18 @@ export function buildReport({
   suppressed,
   ...counts
 }: ReportInput): HomeReport {
-  const resolved = resolveCount({ ...counts, count: findings.length });
-  // A failed precondition only ever *downgrades*: it turns a number into an em
-  // dash, and it never renames a failure the collections already reported. A
-  // report whose rules were never read should still say so — that sentence
-  // points at the read the admin can go and fix, where this one would point at
-  // a second, less immediate cause.
-  const blocked =
-    suppressed !== undefined && (resolved.status === 'ok' || resolved.status === 'partial');
-  const value = blocked ? null : resolved.value;
+  const resolved = resolveReportCount({ ...counts, count: findings.length }, suppressed);
   return {
     key,
     label,
-    status: blocked ? 'unavailable' : resolved.status,
-    value,
-    note: blocked ? suppressed : resolved.note,
+    status: resolved.status,
+    value: resolved.value,
+    note: resolved.note,
     // Gated on the resolved value rather than on `findings` directly: the
     // findings were computed from whatever rows happened to be on disk, and when
     // the collections behind them cannot support a count they cannot support a
     // list of names either.
-    findings: value === null ? [] : findings.slice(0, REPORT_PREVIEW_LIMIT),
+    findings: resolved.value === null ? [] : findings.slice(0, REPORT_PREVIEW_LIMIT),
     caveat,
   };
 }
