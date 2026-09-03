@@ -21,7 +21,8 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import MemberExplorer, { type MemberSourceContext } from './MemberExplorer';
+import MemberExplorer from './MemberExplorer';
+import type { MemberSourceContext } from './memberSourceContext';
 import { toMemberSourceSegments } from '../groups/memberSourceBuckets';
 import { buildMemberSourceIndex } from '../../../shared/membership/memberSourceIndex';
 import type { MemberSourceBreakdown } from '../../../shared/membership/groupSource';

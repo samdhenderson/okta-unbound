@@ -75,7 +75,8 @@
  */
 import React, { useMemo } from 'react';
 import { AlertMessage, Button, DetailSection, EmptyState, Modal, Skeleton } from '../../shared';
-import MemberExplorer, { type MemberSourceContext } from '../../members/MemberExplorer';
+import MemberExplorer from '../../members/MemberExplorer';
+import type { MemberSourceContext } from '../../members/memberSourceContext';
 import type { MemberFilter } from '../../members/memberAnalytics';
 import MemberSourceNotes from './MemberSourceNotes';
 import { toMemberSourceSegments } from '../memberSourceBuckets';

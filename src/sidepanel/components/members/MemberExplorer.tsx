@@ -42,8 +42,7 @@ import { useMembershipProofs } from '../users/GroupMembershipsListProof';
 import { useMemberFilters } from '../../hooks/useMemberFilters';
 import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
 import type { GroupMembership } from '../../../shared/types';
-import type { MemberSourceIndex } from '../../../shared/membership/memberSourceIndex';
-import type { MemberSourceBucket } from '../groups/memberSourceBuckets';
+import type { MemberSourceContext } from './memberSourceContext';
 import {
   type MemberFilter,
   type SortField,
@@ -54,25 +53,6 @@ import {
   getObservedFactorLabels,
   dimensionTitle,
 } from './memberAnalytics';
-
-/**
- * Everything the explorer needs to show — and filter by — where each member's
- * membership came from.
- *
- * One bundle rather than flat props because the feature is present or absent as a
- * whole: an index with no segments has nothing to draw, and segments with no index
- * would draw a meter whose pills could not resolve to anyone.
- */
-export interface MemberSourceContext {
-  /** Per-member source classification, from `buildMemberSourceIndex`. */
-  index: MemberSourceIndex;
-  /**
-   * The exclusive display segments, in render order, from
-   * `toMemberSourceSegments`. The caller owns this because how many rules earn a
-   * named segment is a presentation decision the index deliberately does not make.
-   */
-  segments: MemberSourceBucket[];
-}
 
 /** Props for {@link MemberExplorer}. */
 interface MemberExplorerProps {

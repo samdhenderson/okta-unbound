@@ -49,7 +49,7 @@ import AttributeFilterList from './AttributeFilterList';
 import type { MemberFiltersApi } from '../../hooks/useMemberFilters';
 import type { MemberMfaResult, MfaScanStatus } from '../../../shared/types';
 import type { AttributeSummary, BreakdownRow, SortField } from './memberAnalytics';
-import type { MemberSourceContext } from './MemberExplorer';
+import type { MemberSourceContext } from './memberSourceContext';
 
 /** Props for {@link MemberFilterDrawer}. */
 export interface MemberFilterDrawerProps {
