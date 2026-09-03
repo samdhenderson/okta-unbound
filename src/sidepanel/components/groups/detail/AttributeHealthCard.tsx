@@ -23,11 +23,20 @@
  * dominant house style. It is a flag on a card, not an assertion that the record
  * is wrong — the rule is deliberately conservative (see that function), and the
  * dominant value is shown alongside so a reader can see what it diverges *from*.
+ *
+ * ## The "Other" row is reachable, or it is not offered
+ *
+ * `discoverAttributeBreakdowns` keeps the top values and folds the rest into a
+ * single `Other (N values)` row. Those N values are the ones most likely to *be*
+ * the drift, so the row is a text button that asks the caller to reveal them —
+ * following the same "clickable only when wired" contract `BreakdownReport`
+ * already uses. Without `onShowOther` it stays inert text rather than a dead
+ * affordance.
  */
 import React from 'react';
 import RuleLinkRow from './RuleLinkRow';
 import { Badge } from '../../shared';
-import { outlierValues, type AttributeSummary } from '../../members/memberAnalytics';
+import { outlierValues, OTHER_VALUE, type AttributeSummary } from '../../members/memberAnalytics';
 import type { AttributeRuleRef } from '../../../../shared/rules/groupAttributeIndex';
 
 /** Props for {@link AttributeHealthCard}. */
@@ -41,6 +50,12 @@ export interface AttributeHealthCardProps {
   rules: AttributeRuleRef[];
   /** Deep-links a dependent rule into the Rules tab. */
   onNavigateToRule?: (ruleId: string) => void;
+  /**
+   * Reveals the values folded into the aggregated `Other (N values)` row. Omit
+   * and that row renders as inert text — the row is only made interactive when
+   * something is actually wired to answer it.
+   */
+  onShowOther?: () => void;
 }
 
 /**
@@ -57,6 +72,7 @@ const AttributeHealthCard: React.FC<AttributeHealthCardProps> = ({
   summary,
   rules,
   onNavigateToRule,
+  onShowOther,
 }) => {
   const outliers = new Set(outlierValues(summary));
   const values = summary.rows.filter((row) => row.count > 0);
@@ -95,8 +111,9 @@ const AttributeHealthCard: React.FC<AttributeHealthCardProps> = ({
         <div>
           <h3 className="text-xs font-medium text-neutral-600">Values</h3>
           <ul className="mt-1.5 space-y-1">
-            {values.map((row) => (
-              <li key={row.value} className="flex items-baseline justify-between gap-2 text-xs">
+            {values.map((row) => {
+              const isOther = row.value === OTHER_VALUE;
+              const label = (
                 <span
                   className={`min-w-0 truncate font-mono ${
                     outliers.has(row.value) ? 'text-warning-text' : 'text-neutral-700'
@@ -111,11 +128,32 @@ const AttributeHealthCard: React.FC<AttributeHealthCardProps> = ({
                   )}
                   {row.label}
                 </span>
-                <span className="shrink-0 tabular-nums text-neutral-500">
-                  {row.count.toLocaleString()} ({Math.round(row.pct)}%)
-                </span>
-              </li>
-            ))}
+              );
+
+              return (
+                <li key={row.value} className="flex items-baseline justify-between gap-2 text-xs">
+                  {isOther && onShowOther ? (
+                    /* Raw <button> (§3 exception): the chromeless "View" text-link
+                     idiom `AttributeFacet` already carries, awaiting the shared
+                     `TextLink` primitive. `Button`'s padded CTA chrome would break
+                     the baseline-aligned value row it sits in. */
+                    <button
+                      type="button"
+                      onClick={onShowOther}
+                      className="flex min-w-0 items-baseline gap-1.5 text-left hover:underline focus:outline-2 focus:outline-offset-2 focus:outline-primary"
+                    >
+                      {label}
+                      <span className="shrink-0 font-medium text-primary-text">View</span>
+                    </button>
+                  ) : (
+                    label
+                  )}
+                  <span className="shrink-0 tabular-nums text-neutral-500">
+                    {row.count.toLocaleString()} ({Math.round(row.pct)}%)
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

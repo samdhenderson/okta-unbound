@@ -291,6 +291,44 @@ describe('computeDimensionBreakdown', () => {
     expect(rows).toHaveLength(12);
     expect(rows.some((r) => r.value === OTHER_VALUE)).toBe(false);
   });
+
+  /*
+    The Insights card's "Other (N values)" drill-in depends on exactly this:
+    `discoverAttributeBreakdowns` keeps only `maxRows` values and folds the rest
+    into an aggregate that *discards* which values they were, so the tail has to
+    be recoverable from the roster instead of carried through the summary.
+  */
+  it('recovers the values a truncated summary folded into its Other row', () => {
+    // Two members per department, so the distribution has a real spread and is
+    // not dropped by the near-unique identifier guard.
+    const many: OktaUser[] = Array.from({ length: 40 }, (_, i) =>
+      user(`u${i}`, { department: `Dept${String(i % 20).padStart(2, '0')}` }),
+    );
+
+    const summary = discoverAttributeBreakdowns(many, { maxRows: 6 }).find(
+      (a) => a.key === 'department',
+    );
+    const other = summary?.rows.find((r) => r.value === OTHER_VALUE);
+
+    // The summary aggregates the tail and names none of it.
+    expect(other).toBeDefined();
+    expect(other?.label).toBe('Other (14 values)');
+    expect(other?.count).toBe(28);
+    expect(JSON.stringify(summary?.rows)).not.toContain('Dept19');
+
+    // The full distribution re-derived from the same roster names all of it.
+    const full = computeDimensionBreakdown(many, 'department');
+    const named = summary?.rows
+      .filter((r) => r.value !== OTHER_VALUE && r.value !== NONE_VALUE)
+      .map((r) => r.value);
+    const hidden = full.map((r) => r.value).filter((v) => !named?.includes(v));
+
+    expect(hidden).toHaveLength(14);
+    expect(hidden).toContain('Dept19');
+    expect(hidden.reduce((sum, v) => sum + (full.find((r) => r.value === v)?.count ?? 0), 0)).toBe(
+      other?.count,
+    );
+  });
 });
 
 describe('getObservedFactorLabels', () => {

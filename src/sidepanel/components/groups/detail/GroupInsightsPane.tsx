@@ -34,6 +34,13 @@
  *    before ever visiting Members renders its own small idle/loading/error/done
  *    gate that calls the identical `analyzeMembers()`, which `getOrFetch` already
  *    coalesces against a concurrent call from the Members tab. Not a second fetch.
+ *
+ *    A card's aggregated `Other (N values)` row opens the same
+ *    {@link BreakdownDetailsModal} the Members tab uses, over the full
+ *    distribution {@link computeDimensionBreakdown} re-derives from the roster
+ *    already in hand — no second fetch there either, and the long list is only
+ *    paid for when somebody opens it. Read-only: this pane has no member list,
+ *    so no `onRowClick` is wired and the rows stay inert.
  * 2. **MFA coverage** — the group's opt-in, explicit MFA-enrollment scan
  *    ({@link module:sidepanel/hooks/useMemberMfaScan}, owned by the caller and
  *    passed through the same way `useGroupSource` is). Never auto-runs. Disabled
@@ -44,7 +51,7 @@
  *    closed. Moved here (and out of its old always-visible position below the tab
  *    card) because it answers the rarest questions of the five tabs.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   AlertMessage,
   Button,
@@ -55,7 +62,13 @@ import {
 import GroupMetadataSection from './GroupMetadataSection';
 import AttributeHealthCard from './AttributeHealthCard';
 import GroupMfaCoverageSection from './GroupMfaCoverageSection';
-import { discoverAttributeBreakdowns, type AttributeSummary } from '../../members/memberAnalytics';
+import BreakdownDetailsModal from '../../members/BreakdownDetailsModal';
+import {
+  computeDimensionBreakdown,
+  dimensionTitle,
+  discoverAttributeBreakdowns,
+  type AttributeSummary,
+} from '../../members/memberAnalytics';
 import {
   indexRulesByAttribute,
   type AttributeReferencingRule,
@@ -110,6 +123,9 @@ interface GroupInsightsPaneProps {
   lastMembershipUpdated?: Date;
 }
 
+/** No value can be an active filter here — this pane has no member list. */
+const EMPTY_ACTIVE_VALUES: Set<string> = new Set();
+
 /**
  * Renders the attribute-spread cards, the gated MFA-coverage scan, and the
  * folded "About this group" metadata for one group.
@@ -135,6 +151,19 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
   lastMembershipUpdated,
 }) => {
   const rosterReady = memberStatus === 'done' && members !== null;
+
+  /*
+    Which attribute's hidden "Other" tail is open, if any. The tail is
+    re-derived on demand rather than carried through `AttributeSummary`:
+    `computeDimensionBreakdown` defaults to unlimited rows, is pure, and runs
+    over the roster this pane already holds — so the summary shape stays
+    untouched and the full list costs nothing until it is asked for.
+  */
+  const [detailKey, setDetailKey] = useState<string | null>(null);
+  const detailRows = useMemo(
+    () => (detailKey && members ? computeDimensionBreakdown(members, detailKey) : []),
+    [detailKey, members],
+  );
 
   const summaries = useMemo(() => (members ? discoverAttributeBreakdowns(members) : []), [members]);
   const ruleIndex = useMemo(() => indexRulesByAttribute(feedingRules), [feedingRules]);
@@ -208,6 +237,7 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
                 summary={summary}
                 rules={rules}
                 onNavigateToRule={onNavigateToRule}
+                onShowOther={() => setDetailKey(summary.key)}
               />
             ))}
           </div>
@@ -244,6 +274,16 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
           />
         )}
       </DetailSection>
+
+      {/* The values a card's "Other (N values)" row folded away. Read-only: no
+        member list lives on this tab, so no row-click filter is wired. */}
+      <BreakdownDetailsModal
+        isOpen={detailKey !== null}
+        onClose={() => setDetailKey(null)}
+        title={detailKey ? dimensionTitle(detailKey) : ''}
+        rows={detailRows}
+        activeValues={EMPTY_ACTIVE_VALUES}
+      />
 
       <CollapsibleSection title="About this group" defaultOpen={false}>
         <GroupMetadataSection

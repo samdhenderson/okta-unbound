@@ -1,7 +1,13 @@
+import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn } from 'storybook/test';
-import AttributeHealthCard from './AttributeHealthCard';
-import type { AttributeSummary } from '../../members/memberAnalytics';
+import { expect, fn, userEvent, within } from 'storybook/test';
+import AttributeHealthCard, { type AttributeHealthCardProps } from './AttributeHealthCard';
+import BreakdownDetailsModal from '../../members/BreakdownDetailsModal';
+import {
+  OTHER_VALUE,
+  type AttributeSummary,
+  type BreakdownRow,
+} from '../../members/memberAnalytics';
 import type { AttributeRuleRef } from '../../../../shared/rules/groupAttributeIndex';
 
 const summary: AttributeSummary = {
@@ -164,5 +170,99 @@ export const LegitimateSpreadIsNotDrift: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.queryByText(/outlier/i)).toBeNull();
+  },
+};
+
+/**
+ * A truncated attribute: `discoverAttributeBreakdowns` keeps the leading values
+ * and folds the rest into one `Other (N values)` row. Those N are exactly where
+ * drift hides, so with no way to open the row the card would state a number it
+ * refuses to explain.
+ */
+const truncated: AttributeSummary = {
+  key: 'costCenter',
+  label: 'Cost center',
+  distinct: 9,
+  populated: 40,
+  total: 40,
+  fillRate: 100,
+  rows: [
+    { value: 'CC-1000', label: 'CC-1000', count: 12, pct: 30 },
+    { value: 'CC-1001', label: 'CC-1001', count: 10, pct: 25 },
+    { value: 'CC-1002', label: 'CC-1002', count: 6, pct: 15 },
+    { value: OTHER_VALUE, label: 'Other (6 values)', count: 12, pct: 30 },
+  ],
+};
+
+/** The full distribution the pane re-derives with `computeDimensionBreakdown`. */
+const fullRows: BreakdownRow[] = [
+  { value: 'CC-1000', label: 'CC-1000', count: 12, pct: 30 },
+  { value: 'CC-1001', label: 'CC-1001', count: 10, pct: 25 },
+  { value: 'CC-1002', label: 'CC-1002', count: 6, pct: 15 },
+  { value: 'CC-2001', label: 'CC-2001', count: 3, pct: 7.5 },
+  { value: 'CC-2002', label: 'CC-2002', count: 3, pct: 7.5 },
+  { value: 'CC-2003', label: 'CC-2003', count: 2, pct: 5 },
+  { value: 'CC-2004', label: 'CC-2004', count: 2, pct: 5 },
+  { value: 'CC-2005', label: 'CC-2005', count: 1, pct: 2.5 },
+  { value: 'CC-2006', label: 'CC-2006', count: 1, pct: 2.5 },
+];
+
+/**
+ * The pane's wiring in miniature: the card's `onShowOther` opens the same
+ * read-only `BreakdownDetailsModal` the Members tab uses, over the untruncated
+ * distribution. No `onRowClick` — the Insights tab has no member list to filter.
+ */
+const OtherDrillIn = (props: AttributeHealthCardProps) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <AttributeHealthCard {...props} onShowOther={() => setOpen(true)} />
+      <BreakdownDetailsModal
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title="Cost center"
+        rows={fullRows}
+        activeValues={new Set()}
+      />
+    </>
+  );
+};
+
+/**
+ * The aggregated tail is reachable. Clicking `Other (6 values)` reveals the six
+ * values the summary declined to name — read-only, because this tab has no
+ * member list a value could filter.
+ */
+export const OtherRowRevealsItsValues: Story = {
+  args: { rules: [], summary: truncated },
+  render: (args) => <OtherDrillIn {...args} />,
+  play: async ({ canvas, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+
+    // The tail is named but not itemised on the card.
+    await expect(canvas.queryByText('CC-2006')).toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: /Other \(6 values\)/ }));
+
+    const dialog = await body.findByRole('dialog');
+    await expect(within(dialog).getByText('CC-2006')).toBeVisible();
+    await expect(within(dialog).getByText('CC-2001')).toBeVisible();
+
+    // Read-only: no member list here, so no row promises a filter.
+    await expect(within(dialog).queryByText(/filter the member list/)).toBeNull();
+    await expect(within(dialog).getByRole('button', { name: /CC-2006/ })).toBeDisabled();
+  },
+};
+
+/**
+ * Without a handler the same row stays inert text — the "clickable only when
+ * wired" contract `BreakdownReport` already keeps, so no surface ever offers a
+ * drill-in that goes nowhere.
+ */
+export const OtherRowInertWhenUnwired: Story = {
+  args: { rules: [], summary: truncated },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Other (6 values)')).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: /Other \(6 values\)/ })).toBeNull();
   },
 };

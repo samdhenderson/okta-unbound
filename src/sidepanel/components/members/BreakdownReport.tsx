@@ -4,7 +4,9 @@
  *
  * Each row is a clickable filter toggle (except the aggregated "Other" row, which
  * can instead reveal its hidden values). Bars are plain divs sized by percentage
- * using existing color tokens.
+ * using existing color tokens. Both handlers are optional and a row is
+ * interactive only when its handler is wired, so a read-only surface renders the
+ * same report without any dead affordances.
  */
 import React from 'react';
 import type { BreakdownRow } from './memberAnalytics';
@@ -16,8 +18,13 @@ interface BreakdownReportProps {
   rows: BreakdownRow[];
   /** Canonical values currently selected as filters (for highlight). */
   activeValues: Set<string>;
-  /** Called when a clickable value row is toggled. */
-  onRowClick: (row: BreakdownRow) => void;
+  /**
+   * Called when a clickable value row is toggled. **Omit to render the value
+   * rows inert** — the same "clickable only when wired" contract
+   * {@link BreakdownReportProps.onShowOther} uses, for surfaces that have no
+   * member list to filter (the Insights tab's attribute cards).
+   */
+  onRowClick?: (row: BreakdownRow) => void;
   /** Called when the aggregated "Other" row is clicked, to reveal its values. */
   onShowOther?: () => void;
   /** Optional empty-state message when there are no rows. */
@@ -26,8 +33,10 @@ interface BreakdownReportProps {
 
 /**
  * A labeled list of horizontal proportion bars. Each row is clickable to toggle a
- * facet filter (except the aggregated "Other" row). Dependency-free — bars are
- * just divs sized by percentage using existing color tokens.
+ * facet filter when `onRowClick` is supplied (the aggregated "Other" row uses
+ * `onShowOther` instead); rows whose handler is absent render inert.
+ * Dependency-free — bars are just divs sized by percentage using existing color
+ * tokens.
  */
 const BreakdownReport: React.FC<BreakdownReportProps> = ({
   rows,
@@ -45,8 +54,9 @@ const BreakdownReport: React.FC<BreakdownReportProps> = ({
       {rows.map((row) => {
         const isOther = row.value === OTHER_VALUE;
         const isActive = activeValues.has(row.value);
-        // "Other" is clickable only when a details handler is supplied.
-        const clickable = isOther ? !!onShowOther : true;
+        // Every row is clickable only when its handler is supplied: the "Other"
+        // row needs a details handler, a value row needs a filter toggle.
+        const clickable = isOther ? !!onShowOther : !!onRowClick;
 
         return (
           // A row-shaped raw <button> (§3 data-viz exception): a proportion bar
@@ -60,7 +70,7 @@ const BreakdownReport: React.FC<BreakdownReportProps> = ({
             disabled={!clickable}
             onClick={() => {
               if (isOther) onShowOther?.();
-              else onRowClick(row);
+              else onRowClick?.(row);
             }}
             className={`
               press-subtle relative w-full text-left rounded-md px-2.5 py-1.5
@@ -70,7 +80,7 @@ const BreakdownReport: React.FC<BreakdownReportProps> = ({
             `
               .trim()
               .replace(/\s+/g, ' ')}
-            aria-pressed={!isOther ? isActive : undefined}
+            aria-pressed={!isOther && clickable ? isActive : undefined}
           >
             {/* Proportion bar background */}
             <div

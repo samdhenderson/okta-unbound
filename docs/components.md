@@ -479,7 +479,8 @@ comment at the call site:
 - **Awaiting a new shared primitive (accepted future work):**
   - Chromeless **text-links** ("Clear all", "View details") have no shared
     `TextLink` primitive — adding one would discharge these across `GroupFilterPanel`,
-    `AttributeFacet`, and `ComparisonOverviewTab`.
+    `AttributeFacet`, `AttributeHealthCard` (its `Other (N values)` drill-in), and
+    `ComparisonOverviewTab`.
   - `FilterPill` legend-row toggles and the semantic-colored variants need a
     `className` escape hatch to match without inline classes.
   - The active-filter chip's `rounded-full` close button (`IconButton` is

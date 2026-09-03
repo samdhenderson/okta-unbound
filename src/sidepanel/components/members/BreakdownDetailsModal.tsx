@@ -4,7 +4,7 @@
  *
  * Displays every value (including those collapsed into "Other" in the summary) as
  * a scrollable {@link BreakdownReport}, with a "Copy all" of the real value labels.
- * Each row toggles a member-list filter.
+ * Each row toggles a member-list filter when the caller wires one.
  */
 import React from 'react';
 import Modal from '../shared/Modal';
@@ -26,14 +26,20 @@ interface BreakdownDetailsModalProps {
   rows: BreakdownRow[];
   /** Canonical values currently active as filters, for row highlighting. */
   activeValues: Set<string>;
-  /** Toggle a value as a member-list filter. */
-  onRowClick: (row: BreakdownRow) => void;
+  /**
+   * Toggle a value as a member-list filter. **Omit on surfaces with no member
+   * list to filter** (the Insights tab's attribute cards): the rows then render
+   * inert and the blurb drops the "click to filter" promise rather than
+   * offering an affordance that does nothing.
+   */
+  onRowClick?: (row: BreakdownRow) => void;
 }
 
 /**
  * Shows the full value distribution for a composition dimension — including the
  * values that were collapsed into the "Other" row — in a scrollable modal.
- * Each value is clickable to toggle it as a filter.
+ * Each value is clickable to toggle it as a filter when `onRowClick` is wired;
+ * without it the modal is a read-only reveal.
  */
 const BreakdownDetailsModal: React.FC<BreakdownDetailsModalProps> = ({
   isOpen,
@@ -64,8 +70,8 @@ const BreakdownDetailsModal: React.FC<BreakdownDetailsModalProps> = ({
       <div className="space-y-(--sp-rung)">
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm text-neutral-600">
-            All {realValues.length.toLocaleString()} values. Click any value to filter the member
-            list by it.
+            All {realValues.length.toLocaleString()} values
+            {onRowClick ? '. Click any value to filter the member list by it.' : '.'}
           </p>
           <CopyButton
             getText={() => realValues.join('\n')}
