@@ -50,7 +50,6 @@ import {
   impactDismiss,
   impactLead,
   impactModal,
-  loadRulesButton,
   moreActions,
   openRule,
   previewImpact,
@@ -92,12 +91,18 @@ async function assertLead(page, mode) {
 
 export async function walk({ page, drive, beat }) {
   await beat('load', async () => {
-    // Rules fetches nothing until asked, so every take on this tab starts here.
-    // The act does not play this beat - the chapter's first act already showed
-    // the ask - but it has to be walked, because the list does not exist
-    // otherwise. See the `rules` scene's plan in `reel/src/script.ts`.
-    await drive.click(loadRulesButton(page));
-    await drive.settle(2000);
+    // Rules used to fetch nothing until asked, and every take on this tab
+    // started with that press. ADR-0069 moved the fetch onto tab activation
+    // (`useOwedLoad`, `RulesTab.tsx`), so the list is already arriving on its
+    // own by the time this beat gets the camera - there is no button left to
+    // press, only a list to wait for before `open` can find its rule in it.
+    // The act still does not play this beat - the chapter's first act already
+    // showed the tab arriving - but it has to be walked, because the list does
+    // not exist otherwise. See the `rules` scene's plan in `reel/src/script.ts`.
+    await drive.waitFor(openRule(page, SUBJECT), {
+      why: 'the rules list never finished loading, or lost the rule this act is about',
+    });
+    await drive.settle(1200);
   });
 
   await beat('open', async () => {

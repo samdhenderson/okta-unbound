@@ -17,7 +17,9 @@
 /**
  * Not filmed yet, and deliberately.
  *
- * `policies`, `export`, `explorer` and `history` are blocked on demo fixtures
+ * `export` and `explorer` earned chapters of their own once their demo
+ * fixtures landed and dropped off this list — see `CHAPTERS` for `export` and
+ * `explorer`. `policies` and `history` are still blocked on demo fixtures
  * rather than on design — see the plan's chapter checklist for what each one
  * needs. `overview` is **not** on this list: that tab no longer exists —
  * `home` replaced it, both in position and in job — so there is nothing left
@@ -26,7 +28,7 @@
  * Kept here as a list rather than as commented-out entries so the gap is a
  * statement instead of an oversight.
  */
-export const DEFERRED = ['policies', 'export', 'explorer', 'history'];
+export const DEFERRED = ['policies', 'history'];
 
 /**
  * `films` is the fingerprint's business, not the composition's.
@@ -111,11 +113,31 @@ export const CHAPTERS = [
     tab: 'rules',
     kind: 'tour',
     story: 'demo-scenes--rule-impact',
-    // The Rules tab opens on an explicit "No Rules Loaded" empty state of about
-    // 200 characters, which never clears the default >400 content heuristic. It
-    // must name its own anchor or the runner waits out its whole timeout and
-    // then films the empty state anyway.
-    ready: 'text=Load Rules',
+    /*
+      This used to anchor on the "No Rules Loaded" empty state's own `Load
+      Rules` button, which is now a hang rather than a fix: the Rules tab
+      auto-fetches on activation via `useOwedLoad` (`RulesTab.tsx:537`,
+      ADR-0069), so that empty state, and its verb, render only if the
+      auto-load failed or was never eligible. In the demo neither appears, so
+      the runner would wait out its whole timeout and then film whatever
+      landed instead, silently, rather than failing loudly on a missing
+      anchor.
+
+      The anchor has to prove the *list* arrived, and almost nothing else on
+      this rung does. `Total Rules` was the obvious replacement and is wrong
+      for the same shape of reason as the verb it replaced: `RulesStatsGrid`
+      is gated on `activePanel === 'stats'` (`RulesTab.tsx:659`) and
+      `activePanel` starts at `'none'` (`:174`), so the grid is behind the
+      Stats toggle, itself behind More. It never renders on arrival. The
+      filter panel is gated the same way, on `showFilters`.
+
+      What always renders once the fetch lands is the rules themselves, so the
+      anchor is a rule. `Engineering by department` is seeded by
+      `src/sidepanel/demo/snapshot.ts`, which is already a `SHARED_INPUTS`
+      fingerprint dependency, so a fixture rename invalidates this chapter
+      rather than quietly un-anchoring it.
+    */
+    ready: 'text=Engineering by department',
     walk: () => import('./walks/rules.mjs'),
   },
   // Rules is two acts on one tab (ADR-0053): the inventory, then what one rule
@@ -129,10 +151,38 @@ export const CHAPTERS = [
     tab: 'rules',
     kind: 'deep',
     story: 'demo-scenes--rule-impact',
-    // Same empty state, same reason as the act above: the Rules tab opens on
-    // "No Rules Loaded", which never clears the default content heuristic.
-    ready: 'text=Load Rules',
+    // Same anchor, same reasoning as the act above, and the same rule: this
+    // chapter's own subject is `Engineering by department`, so the anchor and
+    // the walk's first beat are asking for the same thing.
+    ready: 'text=Engineering by department',
     walk: () => import('./walks/rules-impact.mjs'),
+  },
+  {
+    id: 'export',
+    films: ['home', 'export'],
+    title: 'Export',
+    tab: 'export',
+    kind: 'tour',
+    story: 'demo-scenes--home',
+    walk: () => import('./walks/export.mjs'),
+  },
+  {
+    id: 'explorer',
+    films: ['home', 'explorer'],
+    title: 'Explorer',
+    tab: 'explorer',
+    kind: 'tour',
+    story: 'demo-scenes--home',
+    // `explorer` has no rail seat (ADR-0063) — it is reached only through the
+    // ⌘K palette — and `appscope.mjs`'s own fingerprint is explicit that
+    // non-static reach, palette navigation named first among its examples, is
+    // invisible to it. `capture.mjs` only cross-checks tabs a walk clicks IN
+    // THE RAIL against `films`, so nothing enforces this entry the way the
+    // module doc above describes for every other chapter: forgetting `explorer`
+    // here does not fail the capture run, it just leaves a change under this
+    // tab unnoticed. The clip does not break; it goes immortal, filmed once and
+    // never invalidated again.
+    walk: () => import('./walks/explorer.mjs'),
   },
   {
     id: 'attributes',

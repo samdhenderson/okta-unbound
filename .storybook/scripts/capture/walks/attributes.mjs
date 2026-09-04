@@ -10,6 +10,12 @@
  * which is why it can afford to compose filters at all — and why the before and
  * after figures are read off the panel rather than asserted.
  *
+ * Composition (the facet spread, and the MFA breakdown the reporting chapter
+ * reads) moved off the Members tab onto its own `Insights` tab on the group
+ * detail rung. This chapter opens through Members regardless — the roster is
+ * still the population the facets narrow — and switches to Insights only once
+ * it is time to open Composition.
+ *
  * @module
  */
 import {
@@ -17,6 +23,7 @@ import {
   compositionTab,
   facetSegment,
   groupRow,
+  insightsTab,
   membershipCard,
   readFacets,
   readRosterCounts,
@@ -64,6 +71,13 @@ export async function walk({ page, drive, beat }) {
   });
 
   await beat('facets', async () => {
+    // Composition lives on its own Insights tab now, not on Members — folded
+    // into this beat rather than given its own, because `reel/src/script.ts`
+    // already names `facets` in its plan and mark, and a tab switch on the way
+    // to opening Composition is a precondition for the shot, not a shot of its
+    // own (the same idiom `open` already uses for its own run of clicks).
+    await drive.click(insightsTab(page), { navigates: true });
+    await drive.settle(1200);
     // Composition is a `CollapsibleSection` with `defaultOpen={false}`; nothing
     // inside it is reachable until it is opened, and a collapsed `.disclose` is
     // a real element with a zero box, so a locator resolves and then cannot be

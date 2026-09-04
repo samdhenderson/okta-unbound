@@ -10,12 +10,17 @@
  * That last step is the point. A coverage report that states a number and
  * cannot show you who it means is a slide; this one hands back the rows.
  *
+ * Composition (the tab the MFA breakdown lives on) moved off Members onto its
+ * own `Insights` tab, so the `arm` beat now switches there before opening
+ * Composition and picking the MFA factors tab inside it.
+ *
  * @module
  */
 import {
   compositionSection,
   compositionTab,
   groupRow,
+  insightsTab,
   membershipCard,
   mfaScanButton,
   mfaScanningButton,
@@ -37,6 +42,13 @@ export async function walk({ page, drive, beat }) {
   });
 
   await beat('arm', async () => {
+    // Composition lives on its own Insights tab now, not on Members. Folded
+    // into `arm` rather than a new beat for the same reason `attributes.mjs`
+    // folds it into `facets`: `reel/src/script.ts` already names `arm` in its
+    // plan and mark, and the switch is a precondition for arming the scan, not
+    // a beat of its own.
+    await drive.click(insightsTab(page), { navigates: true });
+    await drive.settle(1200);
     await drive.click(compositionSection(page));
     await drive.settle(1200);
     // `Attributes` is the tab that opens; `MFA factors` is the one worth a click.
