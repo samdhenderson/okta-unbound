@@ -7,9 +7,10 @@ chat with artifacts on). It is self-contained.
 
 ## The film
 
-A silent, unnarrated ~3:45 product film for **Okta Unbound**, a Chrome
-side-panel extension for Okta group and user administration. Its argument: an
-admin can diagnose and fix a real access problem without ever leaving the tab
+A ~3:45 product film for **Okta Unbound**, a Chrome side-panel extension for
+Okta group and user administration, carrying Sam's own recorded narration over
+a picture that still has to work with the sound off. Its argument: an admin
+can diagnose and fix a real access problem without ever leaving the tab
 they are already signed in to. Seven chapters, one per tab, plus a title card and
 a premise card.
 
@@ -164,8 +165,9 @@ are pure synthetic, and currently pure type:
 - Buildable in **Remotion**: React, inline SVG, CSS transforms, springs. No
   external asset pipeline, no 3D engine, no video-editor effects. If it cannot be
   drawn in code it cannot ship.
-- It plays **silent**, and it is watched without narration. Anything that needs
-  explaining does not work.
+- It carries recorded narration now, and it still has to **play muted and lose
+  nothing**. Anything that needs explaining does not work if it only exists in
+  the voice; put it on screen too.
 
 ## What to hand back
 
