@@ -37,6 +37,9 @@
     "reel:poster": "npm --prefix reel run still",
     "reel:theme": "node reel/scripts/sync-theme.mjs",
     "reel:theme:check": "node reel/scripts/sync-theme.mjs --check",
+    "reel:vo:budget": "npm --prefix reel run vo:budget",
+    "reel:vo:measure": "npm --prefix reel run vo:measure",
+    "reel:vo:check": "npm --prefix reel run vo:check",
     "storybook": "node .storybook/scripts/gen-doc-pages.mjs && storybook dev -p 6006",
     "build-storybook": "npm run docs && node .storybook/scripts/gen-doc-pages.mjs && storybook build"
   },

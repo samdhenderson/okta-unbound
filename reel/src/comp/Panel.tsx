@@ -82,8 +82,11 @@ export const Panel: React.FC<PanelProps> = ({ src, ramp, pose, crop, reveal = 1 
               trimBefore={segment.trimBefore}
               playbackRate={segment.playbackRate || 1}
               style={{ width: '100%', height: '100%', objectFit: 'fill' }}
-              // The captures are silent. Saying so keeps Remotion from mixing
-              // an empty audio track into every chapter.
+              // The footage itself carries no sound - the shoot records a
+              // silent screencast, never the browser's audio output - so
+              // there is nothing on this track to mix in. This is unrelated
+              // to whether the film is silent: narration is mounted
+              // separately, per act, as its own `<Audio>` in `Chapter.tsx`.
               muted
             />
           );

@@ -19,9 +19,17 @@
  * the beat means the caption follows.
  */
 import React, { useMemo } from 'react';
-import { AbsoluteFill, Series, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
+import {
+  AbsoluteFill,
+  Audio,
+  Series,
+  interpolate,
+  useCurrentFrame,
+  useVideoConfig,
+} from 'remotion';
 import { capture, clip, type CaptureId, type Manifest } from '../captures';
 import { buildRamp } from '../ramp';
+import { voClip } from '../vo';
 import {
   STAGES,
   WORKING_STAGE,
@@ -594,17 +602,34 @@ export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
   return (
     <AbsoluteFill style={{ fontFamily: INTER, color: STAGE.ink }}>
       <Series>
-        {scene.acts.map((act, index) => (
-          // Keyed off the piece id or the capture, never `act.capture` alone -
-          // a piece has none, so every piece act keyed as `undefined-N`.
-          <Series.Sequence key={actKey(act, index)} durationInFrames={lengths[index]!}>
-            {act.kind === 'piece' ? (
-              <ActPiece chapter={scene.id} index={index} />
-            ) : (
-              <ActFilm chapter={scene.id} index={index} />
-            )}
-          </Series.Sequence>
-        ))}
+        {scene.acts.map((act, index) => {
+          const key = actKey(act, index);
+          // `undefined` when the act's WAV has not been recorded yet - see
+          // `vo.ts`'s module doc on why that is a soft absence rather than a
+          // throw. Narration is mounted per act, here, rather than once at
+          // the film level beside `<Band/>`/`<SeamOverFilm/>` in `Reel.tsx`:
+          // a voiceover is scoped to the one act it was written for, and an
+          // act is exactly the unit `<Series.Sequence>` already times and
+          // trims for its footage, so giving the narration the same sequence
+          // costs nothing extra and keeps the two in lockstep automatically.
+          // The film-level slot beside the band and the seam is reserved for
+          // furniture that outlives a chapter boundary, which narration never
+          // does.
+          const src = voClip(key);
+          return (
+            // Keyed off the piece id or the capture, never `act.capture`
+            // alone - a piece has none, so every piece act keyed as
+            // `undefined-N`.
+            <Series.Sequence key={key} durationInFrames={lengths[index]!}>
+              {act.kind === 'piece' ? (
+                <ActPiece chapter={scene.id} index={index} />
+              ) : (
+                <ActFilm chapter={scene.id} index={index} />
+              )}
+              {src && <Audio src={src} />}
+            </Series.Sequence>
+          );
+        })}
       </Series>
       {rail && (
         <FilmIndex

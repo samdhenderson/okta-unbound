@@ -6,12 +6,15 @@
   "type": "module",
   "scripts": {
     "studio": "remotion studio src/index.ts",
-    "render": "remotion render src/index.ts reel-delivery ../clips/okta-unbound-reel.mp4 --muted --crf=16 --pixel-format=yuv420p --timeout=120000",
+    "render": "remotion render src/index.ts reel-delivery ../clips/okta-unbound-reel.mp4 --crf=16 --pixel-format=yuv420p --timeout=120000",
     "still": "remotion still src/index.ts reel-delivery ../clips/poster.png --frame=90 --timeout=120000",
     "type-check": "tsc --noEmit",
-    "chapter": "remotion render src/index.ts --muted --timeout=120000",
-    "draft": "remotion render src/index.ts reel ../clips/draft.mp4 --muted --image-format=jpeg --crf=28 --scale=0.5 --timeout=120000",
-    "check-verbs": "node scripts/check-verbs.mjs"
+    "chapter": "remotion render src/index.ts --timeout=120000",
+    "draft": "remotion render src/index.ts reel ../clips/draft.mp4 --image-format=jpeg --crf=28 --scale=0.5 --timeout=120000",
+    "check-verbs": "node scripts/check-verbs.mjs",
+    "vo:budget": "node scripts/vo-budget.mjs",
+    "vo:measure": "node scripts/measure-vo.mjs",
+    "vo:check": "node scripts/check-vo.mjs"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.518",
