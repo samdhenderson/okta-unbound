@@ -73,7 +73,7 @@ const ExportFilterBox: React.FC<ExportFilterBoxProps> = ({
         hint={help}
         disabled={disabled}
       />
-      <div className="min-h-4">
+      <div className="min-h-4" data-testid="export-match-count">
         <MatchCountLine loading={matchCountLoading} matchCount={matchCount} />
       </div>
     </div>

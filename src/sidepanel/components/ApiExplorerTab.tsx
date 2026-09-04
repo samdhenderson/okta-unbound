@@ -83,7 +83,9 @@ const ApiExplorerTab: React.FC<ApiExplorerTabProps> = ({ targetTabId, oktaOrigin
 
         {result && (
           <div className="flex items-center gap-2">
-            <Badge variant={statusVariant(result.status)}>{result.status ?? 'unknown'}</Badge>
+            <Badge variant={statusVariant(result.status)} testId="explorer-status-badge">
+              {result.status ?? 'unknown'}
+            </Badge>
           </div>
         )}
 
