@@ -69,21 +69,16 @@
  * ## The figures are read, not typed
  *
  * `SCRIPT.md`'s first rule for the synthetic layer is that every figure on
- * screen came off the capture. Four of the six numbers on the findings card are
- * `figure()` reads from `captures/home.json` (`emptyGroups`, `unruled`,
- * `pausedRules`, `groupsTotal`), and both application denominators plus the rule
- * denominator come from the `apps` and `rules` manifests. So a re-shoot that
- * changes the org changes this panel, and a manifest that stops carrying a key
- * fails the render rather than printing a stale number.
- *
- * **One number here is not a read, and it is called out rather than hidden.**
- * `Push apps pushing nothing: 2` is a join `useOrgFigures` computes over the
- * demo snapshot; no walk reads it, so {@link PUSH_APPS_UNREAD} carries it as a
- * literal. It is kept because the card has five rows on film and a four-row
- * recreation is a different component, which is the failure this shot exists to
- * avoid. `walks/home.mjs` is already parked on this card for four other reads;
- * one more selector retires the constant. Same shape as `SCRIPT.md`'s
- * `REVISION 6` and `REVISION 7`: filed, not dropped.
+ * screen came off the capture. The findings card is two rows now
+ * (`useOrgFigures` merged what used to be eight down to two, `b9406dc` /
+ * `929650c`), and both of its counts are `figure()` reads from
+ * `captures/home.json`: `pausedRules` for "Group rules paused" and `unfilled`
+ * for "Groups with no members that no rule fills". The card's caption totals
+ * come from the same `home` manifest (`groupsTotal`) plus the `apps` and
+ * `rules` manifests. So a re-shoot that changes the org changes this panel,
+ * and a manifest that stops carrying a key fails the render rather than
+ * printing a stale number. Every number on this card is a read; there is no
+ * literal left to file.
  *
  * `capture()` is called inside the component, never at module scope, so a stale
  * manifest fails this one composition instead of taking down `Reel.tsx`'s
@@ -227,16 +222,16 @@ const CUE = {
 const PAPER = '#ffffff';
 
 /**
- * `Push apps pushing nothing`, the one number on this card no walk reads.
+ * How many rows the findings card draws.
  *
- * `useOrgFigures` derives it by joining the app rows that have a stored
- * assignment against the groups some rule targets; it is on screen in
- * `captures/home.mp4` at the `findings` beat and it is 2, but `walks/home.mjs`
- * reads `unruled`, `emptyGroups`, `pausedRules` and `groupsTotal` off that frame
- * and not this. See the module doc for why the row is kept anyway and what
- * retires this constant.
+ * `useOrgFigures` builds exactly two boxes today - `Group rules paused` and
+ * `Groups with no members that no rule fills` - each with one sub-count, so
+ * this is a constant rather than `figures.findings.length` read back out of
+ * itself. {@link readFigures} throws if it ever produces a different count,
+ * so a future third row fails the render instead of silently drawing a card
+ * whose caption sits in the wrong place.
  */
-const PUSH_APPS_UNREAD = 2;
+const CARD_ROWS = 2;
 
 /** The panel's interior geometry, in panel-local px. Mirrors `captures/home.mp4`. */
 const L = {
@@ -255,11 +250,24 @@ const L = {
   /** The four working-set rows' tops, and their shared height. */
   rows: [222, 288, 408, 474],
   rowH: 60,
-  /** The findings card. */
+  /**
+   * The findings card. Two rows now rather than five (`CARD_ROWS`), so its
+   * foot sits at 732 instead of the old 930 - {@link readFigures} throws if
+   * the row count it builds ever disagrees with `CARD_ROWS`, which is what
+   * keeps this number honest.
+   */
   card: { y: 600, rowH: 66 },
-  /** The two caption lines under it. */
-  caption: 958,
-  note: 982,
+  /**
+   * The two caption lines under it, at the same 28f/24f gaps the five-row
+   * card used, just measured from the shorter card's foot (`600 + 2*66 =
+   * 732`) instead of the old one's. The status bar below stays at its own
+   * fixed offset - it is pinned to the panel's bottom edge in the real app,
+   * not stacked under the content - so a shorter card only opens more canvas
+   * between `note` and `footY`, exactly as a warm org with two findings would
+   * render for real.
+   */
+  caption: 732 + 28,
+  note: 732 + 28 + 24,
   /** The status bar. */
   footY: 1036,
 } as const;
@@ -335,7 +343,8 @@ type IconName =
   | 'close'
   | 'chevron'
   | 'refresh'
-  | 'pin';
+  | 'pin'
+  | 'pause';
 
 /**
  * One glyph, in a 24x24 box centred on `cx`/`cy` and scaled to `size`.
@@ -433,6 +442,13 @@ const Glyph: React.FC<{
         );
       case 'pin':
         return <path d="M10 3 h4 v6 l3 3.5 H7 L10 9 Z M12 12.5 V21" {...common} />;
+      case 'pause':
+        return (
+          <>
+            <path d="M10 9 V15 M14 9 V15" {...common} />
+            <circle cx={12} cy={12} r={9} {...common} />
+          </>
+        );
     }
   })();
   return <g transform={`translate(${cx} ${cy}) scale(${k}) translate(-12 -12)`}>{body}</g>;
@@ -645,19 +661,21 @@ const Surface: React.FC<{ level: SurfaceLevel; figures: PanelFigures }> = ({ lev
       </g>
       {figures.findings.map((finding, i) => {
         const y = L.card.y + i * L.card.rowH;
+        const cy = y + L.card.rowH / 2;
         return (
           <g key={finding.label}>
             {i > 0 ? (
               <rect x={L.pad} y={y} width={CW} height={1} fill={COLOR['neutral-200']} />
             ) : null}
-            {txt(L.pad + 70, y + 42, String(finding.count), {
-              size: 26,
+            {mark(finding.icon, L.pad + 24, cy, 20, COLOR['neutral-400'])}
+            {txt(L.pad + 48, y + 30, finding.label, { size: 15, weight: 600 })}
+            {txt(L.pad + 48, y + 49, finding.of, { size: 13, fill: COLOR['neutral-600'] })}
+            {txt(L.w - L.pad - 44, y + 38, String(finding.count), {
+              size: 16,
               weight: 700,
               anchor: 'end',
             })}
-            {txt(L.pad + 84, y + 32, finding.label, { size: 15, weight: 600 })}
-            {txt(L.pad + 84, y + 51, finding.of, { size: 13, fill: COLOR['neutral-600'] })}
-            {mark('chevron', L.w - L.pad - 24, y + L.card.rowH / 2, 16, COLOR['neutral-400'])}
+            {mark('chevron', L.w - L.pad - 24, cy, 16, COLOR['neutral-400'])}
           </g>
         );
       })}
@@ -1045,6 +1063,8 @@ interface Finding {
   count: number;
   label: string;
   of: string;
+  /** The leading glyph, matching `OrgSnapshotCard`'s `subCount.icon`. */
+  icon: IconName;
 }
 
 /** Everything on this panel that came off a capture rather than out of a head. */
@@ -1057,8 +1077,9 @@ interface PanelFigures {
  * Read the panel's numbers off the manifests, or throw naming what is missing.
  *
  * Called from render, never at module scope: a stale manifest must fail this
- * composition rather than `Reel.tsx`'s module-scope chapter list. See the module
- * doc for the one figure here that is a literal and what retires it.
+ * composition rather than `Reel.tsx`'s module-scope chapter list. Every number
+ * here is a `figure()` read - see the module doc's "figures are read, not
+ * typed" section for which key backs which row.
  */
 function readFigures(): PanelFigures {
   const home = capture('home');
@@ -1067,24 +1088,36 @@ function readFigures(): PanelFigures {
 
   const groupsTotal = figureNumber(home, 'groupsTotal');
   const appsTotal = figure<{ total: number }>(apps, 'inventory').total;
-  const inactiveApps = figure<{ shown: number }>(apps, 'inactive').shown;
   const rulesTotal = figure<Record<string, number>>(rules, 'stats')['Total Rules'];
 
-  const ofGroups = `of ${groupsTotal} groups`;
-  const ofApps = `of ${appsTotal} applications`;
+  const findings: readonly Finding[] = [
+    {
+      icon: 'pause',
+      count: figureNumber(home, 'pausedRules'),
+      label: 'Group rules paused',
+      of: `of ${rulesTotal} group rules`,
+    },
+    {
+      icon: 'users',
+      count: figureNumber(home, 'unfilled'),
+      label: 'Groups with no members that no rule fills',
+      of: `of ${groupsTotal} groups`,
+    },
+  ];
+
+  // `CARD_ROWS` sizes the caption and note lines under the card (see the `L`
+  // layout doc). A row count that disagrees with it would draw a card of one
+  // height and hang the caption where a different height's card would end.
+  if (findings.length !== CARD_ROWS) {
+    throw new Error(
+      `PanelInk: readFigures() built ${findings.length} findings rows but the layout ` +
+        `(L.caption, L.note) is measured for CARD_ROWS = ${CARD_ROWS}. Update CARD_ROWS ` +
+        `and the caption/note offsets together with the new row count.`,
+    );
+  }
 
   return {
-    findings: [
-      { count: figureNumber(home, 'emptyGroups'), label: 'Groups with no members', of: ofGroups },
-      { count: figureNumber(home, 'unruled'), label: 'Groups no rule fills', of: ofGroups },
-      { count: inactiveApps, label: 'Deactivated applications', of: ofApps },
-      { count: PUSH_APPS_UNREAD, label: 'Push apps pushing nothing', of: ofApps },
-      {
-        count: figureNumber(home, 'pausedRules'),
-        label: 'Paused group rules',
-        of: `of ${rulesTotal} group rules`,
-      },
-    ],
+    findings,
     totals: [`${groupsTotal} groups`, `${appsTotal} applications`, `${rulesTotal} group rules`],
   };
 }

@@ -22,8 +22,18 @@ import usersCause from '../../captures/users-cause.json';
 import usersFix from '../../captures/users-fix.json';
 import usersGap from '../../captures/users-gap.json';
 
-/** The manifest schema this composition understands. Asserted, never branched on. */
-export const SCHEMA = 4;
+/**
+ * The manifest schema this composition understands. Asserted, never branched on.
+ *
+ * Must move in step with `SCHEMA` in `.storybook/scripts/capture/capture.mjs`,
+ * which is the other half of the same contract: that constant invalidates the
+ * footage, this one refuses to compose footage it does not understand. Bumping
+ * the rig without bumping this fails the render rather than the type check,
+ * because the schema is a value in a JSON file and not a type, so `tsc` has
+ * nothing to disagree with. The failure is loud and names the fix, which is the
+ * intended behaviour and not a gap.
+ */
+export const SCHEMA = 5;
 
 /** One recorded beat, in clip-local ms. */
 export interface Beat {

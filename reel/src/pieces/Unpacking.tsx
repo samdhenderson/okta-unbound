@@ -1,4 +1,34 @@
 /**
+ * PARKED. Not in `SCRIPT`, and it will throw if you render it.
+ *
+ * This piece reads `figure(manifest, 'unruled')`, a Home figure that no longer
+ * exists: `useOrgFigures` merged "Groups with no members" and "Groups no rule
+ * fills" into a single row, because either count alone overstates the problem.
+ * A group with no members that some rule fills is a cohort waiting for its
+ * first hire, and a filled group no rule maintains may be fed by SCIM, an IdP,
+ * Workflows or a person. What the card reports now is the intersection.
+ *
+ * That is fatal to this drawing rather than inconvenient. The piece lights
+ * `unruled` cells in a grid of `groupsTotal` under the claim that most of the
+ * org is maintained by hand, and the intersection is a handful of dead end
+ * groups rather than a majority. The grid would light three cells under a
+ * sentence about most of the org, and the ledger's other half, "groups a rule
+ * maintains", would be counting something nobody measured.
+ *
+ * It is kept rather than deleted because the drawing is good and the argument
+ * is true of a real org; it is the demo org's own shape, and the card's new
+ * honesty about it, that stopped carrying the claim. Reviving it needs a figure
+ * a walk can read off the panel. "Groups no rule fills" survives as a Groups
+ * tab filter pill, so the read exists, but `chapterTab` checks a piece like any
+ * other act, so drawing it would make this an act of the Groups chapter rather
+ * than of Home. The `piece-unpacking` composition in `Root.tsx` is left
+ * registered so that work can start from a preview; until then its `figure()`
+ * throw names the retired key and lists what the manifest does carry, which is
+ * the fastest possible explanation of this comment.
+ *
+ * See `script.ts`'s Home scene for the cut itself.
+ */
+/**
  * @module reel/pieces/Unpacking
  * @description Set piece B3: a finding's count, and the denominator behind it.
  *

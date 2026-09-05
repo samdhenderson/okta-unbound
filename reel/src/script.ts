@@ -201,6 +201,28 @@ export const SCRIPT: Scene[] = [
   {
     id: 'home',
     title: 'Home',
+    /*
+      B3, the unpacking, is cut, and the reason is worth keeping.
+
+      It drew a proportion: `unruled` groups lit inside a grid of
+      `groupsTotal`, under the claim that most of the org is maintained by
+      hand. That claim rested on a number Home stopped reporting when
+      `useOrgFigures` merged "Groups with no members" and "Groups no rule
+      fills" into one row, on the argument that either alone overstates the
+      problem. What survives on the card is the intersection, which is a
+      handful of dead end groups rather than a majority, so the grid would
+      light a few cells under a sentence about most of the org.
+
+      It could not simply move to the tab that still has the number. "Groups
+      no rule fills" lives on as a Groups tab filter pill, but a set piece is
+      checked by `chapterTab` like any other act, so a piece drawing a Groups
+      figure cannot sit in the Home chapter.
+
+      `pieces/Unpacking.tsx` and its `PIECES` entry stay. The drawing is good
+      and the argument is true of a real org; it is the demo's own shape that
+      no longer carries it. Reviving it needs a figure a walk can read off the
+      panel, which today means the Groups tab, and therefore a Groups act.
+    */
     acts: [
       {
         capture: 'home',
@@ -252,9 +274,20 @@ export const SCRIPT: Scene[] = [
           {
             beat: 'findings',
             headline: 'Spot actionable items right away.',
+            /*
+              Two points, because the card has two rows.
+
+              This used to print three, drawn from a card that carried eight.
+              `useOrgFigures` merged "Groups with no members" and "Groups no
+              rule fills" into one row, on the argument that either alone
+              overstates the problem: an empty group a rule fills is a cohort
+              waiting for its first hire, and a filled group no rule maintains
+              may be fed by SCIM, an IdP, Workflows or a person. The finding is
+              the intersection, and the film says what the card says.
+            */
             points: [
-              (m) => `${figure<number>(m, 'unruled')} groups with no rule filling them.`,
-              (m) => `${figure<number>(m, 'emptyGroups')} empty groups with nobody in them.`,
+              (m) =>
+                `${figure<number>(m, 'unfilled')} groups hold nobody, and no rule will fill them.`,
               (m) => `${figure<number>(m, 'pausedRules')} inactive rule left behind.`,
             ],
           },
@@ -271,12 +304,6 @@ export const SCRIPT: Scene[] = [
            */
         ],
       },
-      // B3, the unpacking. It follows `findings` and reads that beat's own
-      // figures, so the proportion it draws is the one the panel was showing
-      // when the camera left it. Home's footage plus its own set piece is one
-      // movement, not two, so neither act carries a label and the band keeps
-      // saying the same thing across the join.
-      { kind: 'piece', piece: 'unpacking', from: 'home' },
     ],
   },
 
@@ -649,7 +676,12 @@ export const SCRIPT: Scene[] = [
             beat: 'load',
             stage: 'home',
             headline: 'Audit your automation logic directly.',
-            points: ['Rules are fetched when you ask, and not before.'],
+            // The point used to read "Rules are fetched when you ask, and not
+            // before", which was true of a tab that would not load itself and
+            // stopped being true when ADR-0069 moved the fetch onto activation.
+            // The inventory is the claim now, and the grid behind it is the
+            // evidence, which is what the beat actually shows.
+            points: ['Every rule in the org, counted before you touch one.'],
           },
           {
             beat: 'dormant',

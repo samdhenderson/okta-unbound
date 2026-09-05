@@ -49,15 +49,6 @@ Target: 29.45s (budget ~77 words)
 > groups nobody is filling and `figure:pausedRules` rule left switched off.
 > Every finding opens to the names behind it.
 
-### piece-unpacking-1
-
-Target: 4.50s (budget ~12 words)
-
-_Near silent. The proportion on screen is the argument; one line is enough
-to point at it._
-
-> This is what that count is actually made of.
-
 ## Users
 
 ### users-gap-0 (The gap)
