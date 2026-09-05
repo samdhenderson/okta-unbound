@@ -7,7 +7,7 @@ chat with artifacts on). It is self-contained.
 
 ## The film
 
-A ~3:45 product film for **Okta Unbound**, a Chrome side-panel extension for
+A ~6:09 product film for **Okta Unbound**, a Chrome side-panel extension for
 Okta group and user administration, carrying Sam's own recorded narration over
 a picture that still has to work with the sound off. Its argument: an admin
 can diagnose and fix a real access problem without ever leaving the tab
