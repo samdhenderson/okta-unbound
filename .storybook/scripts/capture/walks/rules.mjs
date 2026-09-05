@@ -16,7 +16,7 @@
  *
  * @module
  */
-import { ruleExpand, ruleFilter } from '../selectors.mjs';
+import { filtersSection, openRule, ruleFilter } from '../selectors.mjs';
 
 /** The demo org's one INACTIVE rule, and the longest expression in it. */
 const DORMANT = 'Interns → cohort group';
@@ -37,24 +37,44 @@ export async function walk({ page, drive, beat }) {
     // this beat has no narrative use for. Waiting on the chapter's own
     // subject — the one inactive rule `dormant` opens — proves the load
     // finished and gives `dormant` a specific fault to name if it did not.
-    await drive.waitFor(ruleExpand(page, DORMANT), {
+    // `ruleExpand` used to point at this row - a button named `Expand <rule>`,
+    // the way a Groups/Apps row works. Rule cards do not have that control any
+    // more; the whole row is one `openRule` overlay named plainly "Open rule"
+    // (`RuleCard.tsx`), disambiguated only by the row it lives in
+    // (`ruleRow`, matched on the row's own heading). `ruleExpand` therefore
+    // matched nothing at all, and a locator matching zero elements times out
+    // on `waitFor(visible)` exactly the way a slow list would - the two
+    // failures are indistinguishable from the outside, which is what made this
+    // one look like a fold problem instead of a stale selector.
+    await drive.waitFor(openRule(page, DORMANT), {
       why: 'the rules list never finished loading, or the demo org lost its one inactive rule',
     });
     await drive.settle(1200);
   });
 
   await beat('active', async () => {
+    // The status chips used to sit permanently above the list. They now live
+    // behind the strip's `Filters` disclosure (`RulesFilterPanel.tsx`) - with
+    // it shut, `All Rules` / `Active Only` are in the DOM at a zero box, so
+    // this beat has nothing to click until it opens the panel first.
+    await drive.click(filtersSection(page));
+    // The panel's own `animate-rise-in` plus the stagger-reveal list beneath
+    // it are still moving past the first settle window on a cold run - the
+    // check rig caught a few px of drift here at ~6.3s in. Longer settles,
+    // not a workaround: the disclosure and the list beneath it are real
+    // motion this beat should hold on rather than cut through.
+    await drive.settle(1400);
     // The narrowing is the argument: the difference between every rule and the
     // ones actually in force is exactly the rule nobody remembered to delete.
     await drive.click(ruleFilter(page, 'Active Only'));
-    await drive.settle(1600);
+    await drive.settle(2000);
     await drive.click(ruleFilter(page, 'All Rules'));
-    await drive.settle(1200);
+    await drive.settle(1600);
   });
 
   await beat('dormant', async () => {
-    await drive.scrollTo(ruleExpand(page, DORMANT));
-    await drive.click(ruleExpand(page, DORMANT));
+    await drive.scrollTo(openRule(page, DORMANT));
+    await drive.click(openRule(page, DORMANT), { navigates: true });
     await drive.settle(1800);
   });
 }

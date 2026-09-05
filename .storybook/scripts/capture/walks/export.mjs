@@ -52,7 +52,13 @@ export async function walk({ page, drive, beat }) {
 
   await beat('pick', async () => {
     await drive.scrollTo(exportEntityCard(page, REPORT));
-    await drive.click(exportEntityCard(page, REPORT));
+    // `navigates` even though the rail never moves. The option's job is to
+    // declare a scroll window, not to describe a tab change, and picking a
+    // descriptor swaps the tab from its `pick` phase to `configure`: the
+    // picker list is replaced wholesale and the scroller snaps back to the
+    // top. Undeclared, that is a 720px jump the `still` guard reports as the
+    // panel moving on its own, which is exactly what it is there to catch.
+    await drive.click(exportEntityCard(page, REPORT), { navigates: true });
     await drive.settle(1400);
 
     // The configure phase's own heading is the proof the right descriptor

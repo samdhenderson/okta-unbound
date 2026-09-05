@@ -27,6 +27,7 @@ import {
   noFactorsRow,
   readMfaBreakdown,
   readRosterCounts,
+  SCROLL_ROOT,
 } from '../selectors.mjs';
 
 const HERO = 'Engineering - All';
@@ -49,6 +50,11 @@ export async function walk({ page, drive, beat }) {
     // a beat of its own.
     await drive.click(insightsTab(page), { navigates: true });
     await drive.settle(1200);
+    // The Insights tab stacks an MFA coverage summary above Composition, so the
+    // section header lands well below the fold at capture geometry (see the
+    // same note in `attributes.mjs`'s `facets` beat). `drive.click` refuses an
+    // offstage element rather than landing on it, so this has to scroll first.
+    await drive.scrollTo(compositionSection(page));
     await drive.click(compositionSection(page));
     await drive.settle(1200);
     // `Attributes` is the tab that opens; `MFA factors` is the one worth a click.
@@ -79,11 +85,31 @@ export async function walk({ page, drive, beat }) {
 
   await beat('unenrolled', async () => {
     // Close the loop: the claim's own row is the filter that produces the people
-    // it is about.
-    await drive.click(noFactorsRow(page));
+    // it is about. Like every value click in `CompositionReports.tsx`, this one
+    // calls `jumpToMembers` and switches `activeTab` to Members, snapping the
+    // scroller to the top of that pane — `navigates: true` declares the window
+    // that jump needs so it does not read as the app drifting on its own.
+    await drive.click(noFactorsRow(page), { navigates: true });
     await drive.settle(1500);
     await drive.read('rosterUnenrolled', () => readRosterCounts(page));
-    await drive.scrollBy(420, 1600);
-    await drive.settle(1200);
+    // The unenrolled roster can be short enough to fit the panel outright —
+    // this demo group's own MFA gap is a handful of rows, not a page of them —
+    // and `scrollBy` throws on a nonzero ask that produces zero motion (see its
+    // own doc: a declared window with nothing in it is worse than no scroll at
+    // all). Measure the room actually available and ask for no more than that.
+    const room = await page.evaluate(
+      (selector) => {
+        const el = document.querySelector(selector);
+        // Remaining room from the CURRENT position, not the scroller's total
+        // range — `open`'s own scroll and the click just above may already sit
+        // partway down, and `scrollBy` is relative to wherever that left it.
+        return el ? el.scrollHeight - el.clientHeight - el.scrollTop : 0;
+      },
+      SCROLL_ROOT,
+    );
+    if (room > 20) {
+      await drive.scrollBy(Math.min(420, room), 1600);
+      await drive.settle(1200);
+    }
   });
 }

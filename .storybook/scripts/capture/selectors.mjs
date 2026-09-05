@@ -625,6 +625,67 @@ export const insightsTab = (page) =>
  */
 export const filtersSection = (page) => page.getByRole('button', { name: startsWith('Filters') });
 
+/**
+ * The Members tab's own "Filters" disclosure trigger (`FilterToggle`), which
+ * opens `MemberFilterDrawer` below the search field.
+ *
+ * A distinct export from {@link filtersSection} even though both resolve the
+ * same `getByRole('button', { name: startsWith('Filters') })` query: that one
+ * is the Rules rung's `Sort by` disclosure and this one is the Members roster's
+ * drawer, and the two never mount together — but naming them for the surface
+ * they actually open is what keeps a future walk from reasoning about the
+ * wrong one.
+ *
+ * `FilterToggle` states its active-filter count in words, not a bare digit
+ * (`Filters, 1 applied` once the first cut is live), so this matches the
+ * constant `Filters` prefix rather than the exact string.
+ */
+export const memberFilterToggle = (page) =>
+  page.getByRole('button', { name: startsWith('Filters') });
+
+/**
+ * A profile-attribute row inside the Members filter drawer's
+ * `AttributeFilterList` — the route into that attribute's full value picker.
+ *
+ * `ListRow`'s accessible name comes from its `ariaLabel` prop, not its visible
+ * text: `AttributeFilterList` sets it to the exact sentence
+ * `"<label>: choose a value to filter by"` so a reader knows what activating
+ * the row does before they take it. Matched in full because that sentence has
+ * no variable suffix to complicate it.
+ */
+export const attributeFilterRow = (page, label) =>
+  page.getByRole('button', { name: `${label}: choose a value to filter by`, exact: true });
+
+/**
+ * A value row inside the attribute value picker (`BreakdownDetailsModal` over
+ * `BreakdownReport`, toggle mode) that `attributeFilterRow` opens.
+ *
+ * **Scoped to the open dialog.** `BreakdownReport` renders the identical row
+ * shape wherever it is mounted — the Insights tab's read-only cards, this
+ * drawer's picker, and (in `navigate` mode) the old Composition surface this
+ * chapter no longer uses — so an unscoped lookup risks resolving off the
+ * dialog if more than one happens to be in the DOM.
+ *
+ * **Matched as a prefix, not the full name.** A toggle-mode row carries no
+ * `aria-label` of its own; its accessible name is just its visible text, the
+ * value's label immediately followed by its count and percentage with no
+ * separating space in the DOM (`readRosterCounts` documents the same
+ * no-space trap for the roster heading). `startsWith(label)` is what survives
+ * that without having to restate the count here.
+ */
+export const valuePickerRow = (page, label) =>
+  page.getByRole('dialog').getByRole('button', { name: startsWith(label) });
+
+/**
+ * The value picker's "Done" button.
+ *
+ * Closes `BreakdownDetailsModal` without discarding whatever filter was just
+ * toggled inside it — the modal only ever reads the live filter set back from
+ * `useMemberFilters`, it does not stage a draft that Done commits.
+ */
+export const valuePickerDone = (page) =>
+  page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true });
+
 /* --- MFA ----------------------------------------------------------------- */
 
 /**
@@ -962,8 +1023,19 @@ export async function readWorklistCause(page, heading) {
 
 /** How many groups a remedy group accounts for, off its own count chip. */
 export async function readWorklistGroupCount(page, heading) {
+  // `StableWidth` (`CauseWorklist.tsx`'s count badge) renders the reserved
+  // widest form as an `aria-hidden`, `invisible` (visibility:hidden) twin
+  // ahead of the live badge in the DOM, so this used to be a plain
+  // `getByText(...).first()` and it silently picked the hidden twin every
+  // time - `.innerText()` on a `visibility:hidden` element returns `''`
+  // (innerText is layout-aware; textContent would not have caught this),
+  // which parsed to `NaN` and made a real "1 group" read back as the guard's
+  // "accounts for no groups". `span:visible` is Playwright's own visibility
+  // check, the same one `waitFor(visible)` uses, so this reads the badge a
+  // viewer actually sees.
   const chip = worklistRemedy(page, heading)
-    .getByText(/^\d+ groups?$/)
+    .locator('span:visible')
+    .filter({ hasText: /^\d+ groups?$/ })
     .first();
   return Number(/(\d+)/.exec(await chip.innerText())?.[1]);
 }
@@ -1520,9 +1592,21 @@ export async function readExplorerStatus(page) {
  */
 export const palette = (page) => page.getByRole('dialog', { name: 'Jump to section' });
 
-/** The palette's own search field. */
+/**
+ * The palette's own search field.
+ *
+ * `searchbox`, not `textbox`, and the difference is the whole selector.
+ * `TabJumpPalette` renders its `Input` as `type="search"`, whose implicit ARIA
+ * role is `searchbox`; a `textbox` query matches it not at all. That is not a
+ * near miss, it is zero elements, and it cost a take: the palette opened on
+ * camera and the walk then reported no field to type into.
+ *
+ * {@link jumpBarInput} looks like a counter-example and is not. Home's jump bar
+ * is `type="text"`, so `textbox` is right there and wrong here, which is
+ * exactly why this is worth a comment rather than a shared helper.
+ */
 export const paletteInput = (page) =>
-  palette(page).getByRole('textbox', { name: 'Search sections' });
+  palette(page).getByRole('searchbox', { name: 'Search sections' });
 
 /* --- Readiness ----------------------------------------------------------- */
 
