@@ -29,6 +29,9 @@ npm run capture          # film the demo chapters that changed (ADR-0045)
 npm run capture:check    # judge the footage: settle, scroller, opening frame
 npm run studio           # Remotion studio - edit the reel with no re-shoot
 npm run reel             # render clips/okta-unbound-reel.mp4
+npm run reel:vo:budget   # per-beat narration time budget, derived from the cut (ADR-0073)
+npm run reel:vo:measure  # ffprobe captures/vo/ -> reel/src/vo.generated.ts
+npm run reel:vo:check    # narration gate: every act voiced, every line inside its budget
 ```
 
 ## Message-passing model (the one thing to know)
