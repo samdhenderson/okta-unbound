@@ -1341,6 +1341,21 @@ export const ruleExpand = (page, name) =>
 export const ruleFilter = (page, label) => page.getByRole('button', { name: startsWith(label) });
 
 /**
+ * The Rules strip's `Stats` panel toggle.
+ *
+ * Behind **More**, and that is a property of the control rather than of the
+ * viewport: `RulesListActionBar` builds it with `panelAction`, which gives a
+ * closed panel `priority: 'tier'`, so the strip overflows it and the tier is
+ * `inert` until {@link moreActions} is pressed. A role query finds nothing
+ * before that, exactly as it does for {@link deactivateRule}.
+ *
+ * Named `Stats` closed and `Hide stats` open, so this matches the closed form
+ * only: pressing it when it already reads `Hide stats` would shut the panel the
+ * caller wanted.
+ */
+export const statsPanel = (page) => page.getByRole('button', { name: 'Stats', exact: true });
+
+/**
  * Read the `RulesStatsGrid` cards: `Total Rules`, `Active`, `Inactive`,
  * `Conflicts`.
  *

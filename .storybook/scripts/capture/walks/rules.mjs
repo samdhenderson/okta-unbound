@@ -16,7 +16,14 @@
  *
  * @module
  */
-import { filtersSection, openRule, ruleFilter } from '../selectors.mjs';
+import {
+  filtersSection,
+  moreActions,
+  openRule,
+  readRuleStats,
+  ruleFilter,
+  statsPanel,
+} from '../selectors.mjs';
 
 /** The demo org's one INACTIVE rule, and the longest expression in it. */
 const DORMANT = 'Interns → cohort group';
@@ -31,12 +38,23 @@ export async function walk({ page, drive, beat }) {
     // the list panel's own empty-state prompt for when the auto-fetch itself
     // failed, so a click on it here would land on nothing.
     //
-    // The stats grid is no longer the free read it used to be either: it now
-    // sits behind the strip's `Stats` toggle, itself behind `More` (`RulesListActionBar.tsx`
-    // gives it `priority: 'tier'`), so reading it here would cost two clicks
-    // this beat has no narrative use for. Waiting on the chapter's own
-    // subject — the one inactive rule `dormant` opens — proves the load
-    // finished and gives `dormant` a specific fault to name if it did not.
+    // The stats grid is no longer the free read it used to be: it sits behind
+    // the strip's `Stats` toggle, itself behind `More` (`RulesListActionBar.tsx`
+    // gives a closed panel `priority: 'tier'`). It is opened anyway, and the two
+    // clicks are the chapter's subject rather than a detour: this act is called
+    // "The inventory", and the grid is the inventory stated as four numbers.
+    //
+    // It is also not optional. `reel/src/script.ts` draws the `dormant` beat's
+    // RuleBoard out of `figure(m, 'stats')`, and `PanelInk` reads the same key,
+    // so a walk that skips this read does not merely film less: it fails the
+    // render, at frame 3, with `no figure "stats" was read during capture`.
+    // The panel is off frame by the time that board is drawn, which is exactly
+    // why the number has to be taken here while it is still on camera (ADR-0045
+    // section 5).
+    //
+    // Waiting on the chapter's own subject, the one inactive rule `dormant`
+    // opens, proves the load finished and gives `dormant` a specific fault to
+    // name if it did not.
     // `ruleExpand` used to point at this row - a button named `Expand <rule>`,
     // the way a Groups/Apps row works. Rule cards do not have that control any
     // more; the whole row is one `openRule` overlay named plainly "Open rule"
@@ -49,7 +67,28 @@ export async function walk({ page, drive, beat }) {
     await drive.waitFor(openRule(page, DORMANT), {
       why: 'the rules list never finished loading, or the demo org lost its one inactive rule',
     });
+    await drive.settle(900);
+
+    await drive.click(moreActions(page));
+    await drive.settle(700);
+    await drive.click(statsPanel(page), { navigates: true });
     await drive.settle(1200);
+
+    const stats = await drive.read('stats', () => readRuleStats(page));
+    // The board this feeds draws `active` and `dormant` as parts of a whole, so
+    // a total that does not exceed its own inactive count would render a
+    // segment wider than the bar it sits in. Refused here rather than debugged
+    // later out of a diagram that looks merely ugly.
+    const total = stats['Total Rules'] ?? 0;
+    if (total === 0) {
+      throw new Error('the stats grid reports no rules at all, so the inventory has no subject');
+    }
+    if ((stats.Inactive ?? 0) === 0) {
+      throw new Error(
+        'the stats grid reports no inactive rules, and `dormant` is about the one that is',
+      );
+    }
+    await drive.settle(1000);
   });
 
   await beat('active', async () => {
