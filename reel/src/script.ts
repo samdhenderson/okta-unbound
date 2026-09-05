@@ -186,9 +186,16 @@ interface CoverageRow {
  *
  * Users is the first chapter to be three acts on one tab, and the `compare`
  * chapter is gone into it: the comparison was never a place, it was how the gap
- * gets diagnosed. `attributes` and `reporting` are still their own chapters and
- * still out of rail order - they are the two captures waiting to be folded into
- * Groups the same way, and until they are they run where they always did.
+ * gets diagnosed. Groups is the second: `attributes` and `reporting` filmed the
+ * `groups` tab but used to sit after Rules, so the rail moved backwards to
+ * reach them. Both are folded in now, as the third and fourth act of one
+ * Groups chapter, alongside the original single-act `groups` capture - three
+ * scenarios on one tab, told in rail order, exactly the shape Users set.
+ *
+ * Export and Explorer close the film. Both are new captures added after this
+ * restructure landed, and both slot in after Rules, which keeps the whole
+ * chapter list walking `TAB_DEFS` forwards with no tab visited twice: home,
+ * users, groups, apps, rules, export, explorer.
  */
 export const SCRIPT: Scene[] = [
   {
@@ -439,8 +446,19 @@ export const SCRIPT: Scene[] = [
     id: 'groups',
     title: 'Groups',
     acts: [
+      /*
+       * Three acts, one tab, in the order the argument actually builds: where a
+       * membership came from, what a group varies along, then what a report
+       * over that group exposes. `attributes` and `reporting` were their own
+       * chapters until this fold and neither carries an `after` cue - each
+       * mark's figure is read inside the same beat it is printed on, so moving
+       * the two into acts alongside `groups` changes nothing about when a cue
+       * lands. Checked directly rather than assumed, because a fold is exactly
+       * the situation `ActFilm`'s per-act window guard exists for.
+       */
       {
         capture: 'groups',
+        label: 'The source',
         plan: [
           { beat: 'cascade', speed: 'half', easeMs: 350 },
           { beat: 'open-group', speed: 'half', easeMs: 450, holdMs: 800 },
@@ -461,6 +479,124 @@ export const SCRIPT: Scene[] = [
                 from,
                 entries: [{ label: 'members', value: figure<Counts>(m, 'roster').total }],
               }),
+          },
+        ],
+      },
+      {
+        capture: 'attributes',
+        label: 'The match',
+        plan: [
+          { beat: 'open', speed: 'brisk', easeMs: 400, holdMs: 3000 },
+          // Held, and held longer than the walk took. The facet board is the
+          // chapter's whole evidence and it has six cards to deal out; at the beat's
+          // own length it arrived and left before the last one had finished
+          // arriving. The panel is off frame here, so the hold costs nothing but
+          // time and buys the only look at the thing being claimed.
+          { beat: 'facets', speed: 'dwell', easeMs: 500, holdMs: 3600 },
+          { beat: 'filter', speed: 'half', easeMs: 400, holdMs: 1400 },
+          { beat: 'compose', speed: 'half', easeMs: 350, holdMs: 3200 },
+          { beat: 'roster', speed: 'dwell', easeMs: 350, holdMs: 1200, tailMs: 3200 },
+        ],
+        marks: [
+          {
+            beat: 'open',
+            stage: 'home',
+            headline: 'Before you write a rule, see what you are matching on.',
+          },
+          {
+            beat: 'facets',
+            stage: 'focus',
+            headline: 'Every attribute this group actually varies along.',
+            points: ['Values, counts, and which ones a rule can filter on.'],
+            // The whole board, not one attribute. The claim is about a *set* of
+            // dimensions being discovered, so an enlargement of a single spread
+            // would be arguing something narrower than the slide beside it.
+            diagram: (m, plot, from) =>
+              React.createElement(FacetBoard, { plot, from, facets: figure<Facet[]>(m, 'facets') }),
+          },
+          // The panel comes back for the clicking. The board says what the
+          // dimensions are; only the product can show them being used.
+          { beat: 'filter', stage: 'home' },
+          {
+            beat: 'compose',
+            headline: 'Stack two filters and you have the population a rule would match.',
+            points: ['Counted locally, without reloading the page.'],
+            diagram: (m, plot, from) =>
+              React.createElement(Funnel, {
+                plot,
+                from,
+                steps: [
+                  { label: 'members', value: figure<Counts>(m, 'rosterBefore').shown },
+                  {
+                    label: figure<Filter>(m, 'firstFilter').value,
+                    value: figure<Counts>(m, 'rosterFiltered').shown,
+                  },
+                  {
+                    // The panel's own casing. Lower-casing it produced "and
+                    // employee", which reads as prose rather than as the value the
+                    // viewer just watched being clicked.
+                    label: `and ${figure<Filter>(m, 'secondFilter').value}`,
+                    value: figure<Counts>(m, 'rosterComposed').shown,
+                  },
+                ],
+              }),
+          },
+          { beat: 'roster' },
+        ],
+      },
+      {
+        capture: 'reporting',
+        label: 'The exposure',
+        plan: [
+          { beat: 'open', speed: 'brisk', easeMs: 400, holdMs: 3000 },
+          { beat: 'arm', speed: 'half', easeMs: 400, holdMs: 3200 },
+          // The scan is the one genuinely irreducible operation in the app, and the
+          // only place a progress bar is showing work somebody waits on. It is
+          // played fast because the wait is the subject, not the spectacle.
+          { beat: 'scan', speed: 'sprint', easeMs: 500, holdMs: 600 },
+          { beat: 'breakdown', speed: 'dwell', easeMs: 400, holdMs: 3600 },
+          { beat: 'unenrolled', speed: 'half', easeMs: 450, holdMs: 3000, tailMs: 4000 },
+        ],
+        marks: [
+          {
+            beat: 'open',
+            stage: 'home',
+            headline: 'Deprecating SMS authentication. Who is exposed?',
+          },
+          {
+            beat: 'arm',
+            points: [
+              'Calculates the exact cost before running the scan.',
+              'One API call per member. It never runs on its own.',
+            ],
+          },
+          {
+            beat: 'breakdown',
+            stage: 'focus',
+            headline: 'Map the exact authentication posture.',
+            diagram: (m, plot, from) =>
+              React.createElement(FactorLadder, {
+                plot,
+                from,
+                rows: figure<CoverageRow[]>(m, 'coverage'),
+                highlight: 'No factors enrolled',
+              }),
+          },
+          {
+            beat: 'unenrolled',
+            stage: 'home',
+            headline: 'Turn reports into actionable target lists.',
+            points: [
+              (m) => {
+                const gap = figure<CoverageRow[]>(m, 'coverage').find(
+                  (r) => r.label === 'No factors enrolled',
+                );
+                if (!gap) throw new Error('reporting: the coverage scan found no unenrolled row');
+                const roster = figure<Counts>(m, 'rosterUnenrolled');
+                return `${gap.count} of ${roster.total} have no secure second factor.`;
+              },
+              'Click the finding to reveal the vulnerable accounts.',
+            ],
           },
         ],
       },
@@ -622,129 +758,127 @@ export const SCRIPT: Scene[] = [
   },
 
   {
-    id: 'attributes',
-    title: 'Attributes',
+    id: 'export',
+    title: 'Export',
     acts: [
+      /*
+       * One act, one tab, the way `apps` is: a single scenario needs no label.
+       *
+       * The chapter closes a loop the rest of the film only states
+       * structurally. Home's `report` beat names "App access no rule
+       * maintains" in place, on the Home rung, and never leaves it; this
+       * chapter finds the identical finding in the Export tab's own catalog
+       * and hands it back as a file, without going through Home first. The
+       * second idea is `ExportTab.tsx`'s own: a snapshot-sourced descriptor
+       * joins its rows out of collections the shell already holds, so this
+       * download costs zero requests. `columns` is the beat that makes that
+       * argument visible - toggling a column and getting an instant preview
+       * back is only unremarkable if you already believe nothing was fetched
+       * to produce it, and that is exactly the belief this act is arguing for.
+       */
       {
-        capture: 'attributes',
+        capture: 'export',
         plan: [
-          { beat: 'open', speed: 'brisk', easeMs: 400, holdMs: 3000 },
-          // Held, and held longer than the walk took. The facet board is the
-          // chapter's whole evidence and it has six cards to deal out; at the beat's
-          // own length it arrived and left before the last one had finished
-          // arriving. The panel is off frame here, so the hold costs nothing but
-          // time and buys the only look at the thing being claimed.
-          { beat: 'facets', speed: 'dwell', easeMs: 500, holdMs: 3600 },
-          { beat: 'filter', speed: 'half', easeMs: 400, holdMs: 1400 },
-          { beat: 'compose', speed: 'half', easeMs: 350, holdMs: 3200 },
-          { beat: 'roster', speed: 'dwell', easeMs: 350, holdMs: 1200, tailMs: 3200 },
+          { beat: 'open', speed: 'brisk', easeMs: 350, holdMs: 2600 },
+          { beat: 'pick', speed: 'half', easeMs: 400, holdMs: 1400 },
+          { beat: 'columns', speed: 'dwell', easeMs: 400, holdMs: 3000 },
+          { beat: 'preview', speed: 'half', easeMs: 400, holdMs: 3400, tailMs: 3600 },
         ],
         marks: [
           {
             beat: 'open',
             stage: 'home',
-            headline: 'Before you write a rule, see what you are matching on.',
+            headline: 'Hand a finding back as a file.',
+            points: ['The same report Home names, found on its own without going back there.'],
           },
           {
-            beat: 'facets',
-            stage: 'focus',
-            headline: 'Every attribute this group actually varies along.',
-            points: ['Values, counts, and which ones a rule can filter on.'],
-            // The whole board, not one attribute. The claim is about a *set* of
-            // dimensions being discovered, so an enlargement of a single spread
-            // would be arguing something narrower than the slide beside it.
-            diagram: (m, plot, from) =>
-              React.createElement(FacetBoard, { plot, from, facets: figure<Facet[]>(m, 'facets') }),
+            /*
+             * Held until the configure screen has actually confirmed which
+             * report opened. The entity hub's cards share no distinguishing
+             * name beyond their own text, so a slide naming the report before
+             * the heading has answered would be asserting which one is on
+             * screen rather than showing it.
+             */
+            beat: 'pick',
+            after: 'descriptor',
+            points: [(m) => `Opened: ${figure<string>(m, 'descriptor')}`],
           },
-          // The panel comes back for the clicking. The board says what the
-          // dimensions are; only the product can show them being used.
-          { beat: 'filter', stage: 'home' },
           {
-            beat: 'compose',
-            headline: 'Stack two filters and you have the population a rule would match.',
-            points: ['Counted locally, without reloading the page.'],
-            diagram: (m, plot, from) =>
-              React.createElement(Funnel, {
-                plot,
-                from,
-                steps: [
-                  { label: 'members', value: figure<Counts>(m, 'rosterBefore').shown },
-                  {
-                    label: figure<Filter>(m, 'firstFilter').value,
-                    value: figure<Counts>(m, 'rosterFiltered').shown,
-                  },
-                  {
-                    // The panel's own casing. Lower-casing it produced "and
-                    // employee", which reads as prose rather than as the value the
-                    // viewer just watched being clicked.
-                    label: `and ${figure<Filter>(m, 'secondFilter').value}`,
-                    value: figure<Counts>(m, 'rosterComposed').shown,
-                  },
-                ],
-              }),
+            beat: 'columns',
+            headline: 'Nothing was fetched, so nothing has to be fetched again.',
+            points: ['Drop a column and the preview updates in place, with no reload.'],
           },
-          { beat: 'roster' },
+          {
+            beat: 'preview',
+            headline: 'Zero requests between the finding and the download.',
+            points: [
+              (m) =>
+                `${figure<number>(m, 'previewRows')} rows, joined entirely out of what the panel already held.`,
+            ],
+          },
         ],
       },
     ],
   },
 
   {
-    id: 'reporting',
-    title: 'Reporting',
+    id: 'explorer',
+    title: 'Explorer',
     acts: [
+      /*
+       * One act, one tab. Explorer keeps no seat in the icon rail (ADR-0063,
+       * `railHidden` in `tabs.ts`) - it is a destination reached on purpose,
+       * not one browsed into - so the command palette is not a mechanical
+       * precondition to get past. It is the opening idea: there is nowhere to
+       * click, so summoning the palette is the first thing the chapter argues.
+       *
+       * The payoff is `ApiExplorerTab.tsx`'s own: the response viewer opens on
+       * a values free Shape view, with Redacted one click away. That is both
+       * the interesting idea, you can see the shape of what an endpoint
+       * returns without seeing whose data fills it, and the reason this tab is
+       * safe to put in front of a camera at all.
+       *
+       * `status` is the only figure this chapter reads, and it is deliberately
+       * not printed. An HTTP status is not a quantity the way a row count or a
+       * member count is - "200" on a slide would read as a metric worth
+       * dwelling on, when what it actually confirms is a plain precondition
+       * the walk already gates on before filming the rest of the beat. The
+       * argument this chapter is making is about what the response viewer
+       * chooses to show and hide, not about whether the request succeeded, so
+       * the marks below carry no figure at all rather than reach for the one
+       * number available and dress it up as evidence it is not.
+       */
       {
-        capture: 'reporting',
+        capture: 'explorer',
         plan: [
-          { beat: 'open', speed: 'brisk', easeMs: 400, holdMs: 3000 },
-          { beat: 'arm', speed: 'half', easeMs: 400, holdMs: 3200 },
-          // The scan is the one genuinely irreducible operation in the app, and the
-          // only place a progress bar is showing work somebody waits on. It is
-          // played fast because the wait is the subject, not the spectacle.
-          { beat: 'scan', speed: 'sprint', easeMs: 500, holdMs: 600 },
-          { beat: 'breakdown', speed: 'dwell', easeMs: 400, holdMs: 3600 },
-          { beat: 'unenrolled', speed: 'half', easeMs: 450, holdMs: 3000, tailMs: 4000 },
+          { beat: 'summon', speed: 'natural', easeMs: 350, holdMs: 2600 },
+          { beat: 'request', speed: 'half', easeMs: 400, holdMs: 1800 },
+          { beat: 'shape', speed: 'dwell', easeMs: 400, holdMs: 3400 },
+          { beat: 'values', speed: 'half', easeMs: 400, holdMs: 3000, tailMs: 3600 },
         ],
         marks: [
           {
-            beat: 'open',
+            beat: 'summon',
             stage: 'home',
-            headline: 'Deprecating SMS authentication. Who is exposed?',
+            headline: 'There is no rail icon for this tab.',
+            points: ['Command palette is the only way in.'],
           },
           {
-            beat: 'arm',
-            points: [
-              'Calculates the exact cost before running the scan.',
-              'One API call per member. It never runs on its own.',
-            ],
+            beat: 'request',
+            headline: 'Ask Okta a question directly, without leaving the panel.',
+            points: ['The same rules the Rules tab renders, fetched live.'],
           },
           {
-            beat: 'breakdown',
+            beat: 'shape',
             stage: 'focus',
-            headline: 'Map the exact authentication posture.',
-            diagram: (m, plot, from) =>
-              React.createElement(FactorLadder, {
-                plot,
-                from,
-                rows: figure<CoverageRow[]>(m, 'coverage'),
-                highlight: 'No factors enrolled',
-              }),
+            headline: 'The response opens on its shape, not its contents.',
+            points: ['Every field, typed, with no value on screen yet.'],
           },
           {
-            beat: 'unenrolled',
+            beat: 'values',
             stage: 'home',
-            headline: 'Turn reports into actionable target lists.',
-            points: [
-              (m) => {
-                const gap = figure<CoverageRow[]>(m, 'coverage').find(
-                  (r) => r.label === 'No factors enrolled',
-                );
-                if (!gap) throw new Error('reporting: the coverage scan found no unenrolled row');
-                const roster = figure<Counts>(m, 'rosterUnenrolled');
-                return `${gap.count} of ${roster.total} have no secure second factor.`;
-              },
-              'Click the finding to reveal the vulnerable accounts.',
-            ],
+            headline: 'Values are one click away, and redacted by default.',
+            points: ['Proof the data is real, without exposing whose it is.'],
           },
         ],
       },

@@ -11,6 +11,8 @@
 import { staticFile } from 'remotion';
 import apps from '../../captures/apps.json';
 import attributes from '../../captures/attributes.json';
+import explorer from '../../captures/explorer.json';
+import exportTab from '../../captures/export.json';
 import groups from '../../captures/groups.json';
 import home from '../../captures/home.json';
 import reporting from '../../captures/reporting.json';
@@ -86,6 +88,10 @@ const MANIFESTS = {
   apps,
   rules,
   'rules-impact': rulesImpact,
+  // `export` is a reserved word, so the binding is renamed and the key is not.
+  // The key is the capture id and has to stay the chapter's own name.
+  export: exportTab,
+  explorer,
   attributes,
   reporting,
 } as const;
