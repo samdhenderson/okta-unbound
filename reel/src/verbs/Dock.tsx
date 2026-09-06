@@ -23,6 +23,7 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import { interpolate, useCurrentFrame } from 'remotion';
 import { STAGE } from '../theme';
 import { EASING, FRAMES } from './ease';
+import { useVerbPart } from './useVerb';
 
 export type DockEdge = 'left' | 'right' | 'up' | 'down';
 
@@ -84,10 +85,7 @@ export const Dock: React.FC<DockProps> = ({
   });
   const eased = EASING.entrance(linear);
   const travel = (1 - eased) * distance * SIGN[edge];
-  const opacity = interpolate(frame, [from, from + FRAMES.dockOpacity], [0, 1], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
+  const opacity = useVerbPart('dock', 'opacity', from);
   const transform = AXIS[edge] === 'x' ? `translateX(${travel}px)` : `translateY(${travel}px)`;
 
   // The hairline tracks the same eased progress as the translate, not the

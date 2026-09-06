@@ -436,9 +436,149 @@ function checkNoDashesInStrings() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 4. Every registered verb is exported, demonstrated, and internally coherent
+// ---------------------------------------------------------------------------
+/**
+ * `verbs/registry.ts` is the single declaration of the verb grammar, and three
+ * things have to stay true of it that a type cannot say.
+ *
+ * A verb must be **exported from the barrel**, or a set piece cannot import it
+ * and the registry entry is a promise nothing keeps. A verb must have a **row
+ * in `comp/Verbs.tsx`**, because that matrix is the only place all seven are
+ * seen together and the one artefact a reviewer looks at to judge whether the
+ * grammar still reads as one grammar - `Root.tsx` once hand-listed preview
+ * compositions and silently fell two behind `PIECES`, which is exactly this
+ * failure with a different registry. And a verb's **named sub-windows must fit
+ * inside its own frame budget**, or a part is scheduled past the end of the
+ * verb that owns it and simply never plays, with nothing anywhere reporting it.
+ *
+ * Parsed by regex rather than imported, for the same reason every other check
+ * in this file is: this is a `.mjs` gate and the registry is TypeScript. The
+ * shapes matched here are narrow enough that a registry the regex cannot read
+ * fails loudly instead of silently passing with zero verbs found.
+ */
+const REGISTRY = path.join(SRC, 'verbs/registry.ts');
+const VERBS_BARREL = path.join(SRC, 'verbs/index.ts');
+const VERBS_MATRIX = path.join(SRC, 'comp/Verbs.tsx');
+
+/** The seventh verb: declared in `pencil/`, deliberately outside `VERBS`. */
+const PENCIL_VERBS = ['draw'];
+
+/** Every verb in the registry, with its frame budget and its named parts. */
+function readRegistry() {
+  const source = codeOnly(fs.readFileSync(REGISTRY, 'utf8'));
+  const open = source.indexOf('export const VERBS = {');
+  if (open === -1) {
+    fail(`check-verbs: could not find "export const VERBS = {" in ${path.relative(SRC, REGISTRY)}.`);
+    return [];
+  }
+  const body = source.slice(open);
+  const verbs = [];
+  // Top-level entries only: a verb key sits at exactly two spaces of indent,
+  // its `parts` at four, and a part's own window at six.
+  const entry = /^ {2}([a-z][a-zA-Z]*): \{$/gm;
+  let match;
+  while ((match = entry.exec(body)) !== null) {
+    const name = match[1];
+    const next = body.indexOf('\n  },', match.index);
+    const chunk = body.slice(match.index, next === -1 ? undefined : next);
+    const frames = chunk.match(/^ {4}frames: (.+),$/m);
+    const parts = [...chunk.matchAll(/^ {6}([a-zA-Z]+): \{ at: (.+?), over: (.+?) \},$/gm)].map(
+      (p) => ({ part: p[1], at: p[2].trim(), over: p[3].trim() }),
+    );
+    verbs.push({ name, frames: frames ? frames[1].trim() : null, parts });
+  }
+  return verbs;
+}
+
+/**
+ * Resolve the small arithmetic the registry is allowed to state for a frame
+ * count: a literal, a `framesFor('token')` call, or either plus/minus a
+ * literal. Anything else returns null and is skipped rather than guessed at.
+ */
+function resolveFrames(expression, durations) {
+  const literal = expression.match(/^(\d+)$/);
+  if (literal) return Number(literal[1]);
+  const call = expression.match(/^framesFor\('(\w+)'\)(?:\s*([-+])\s*(\d+))?$/);
+  if (call) {
+    const base = durations[call[1]];
+    if (base === undefined) return null;
+    if (!call[2]) return base;
+    return call[2] === '+' ? base + Number(call[3]) : base - Number(call[3]);
+  }
+  return null;
+}
+
+/** `DUR` tokens as frame counts, read from the generated theme at the film's fps. */
+function readDurations() {
+  const theme = fs.readFileSync(THEME_GENERATED, 'utf8');
+  const durBlock = theme.slice(theme.indexOf('export const DUR = {'));
+  const out = {};
+  for (const m of durBlock.matchAll(/^ {2}'?([a-z-]+)'?: '(\d+(?:\.\d+)?)ms',$/gm)) {
+    out[m[1]] = Math.round((Number(m[2]) / 1000) * 60);
+  }
+  return out;
+}
+
+function checkVerbRegistry() {
+  const verbs = readRegistry();
+  if (verbs.length === 0) {
+    fail('check-verbs: the verb registry parsed to zero verbs - the regex or the file shape moved.');
+    return;
+  }
+
+  const barrel = fs.readFileSync(VERBS_BARREL, 'utf8');
+  const matrix = fs.readFileSync(VERBS_MATRIX, 'utf8');
+  const durations = readDurations();
+
+  for (const { name, frames, parts } of verbs) {
+    const component = name[0].toUpperCase() + name.slice(1);
+    if (!new RegExp(`export \\* from '\\./${component}';`).test(barrel)) {
+      fail(
+        `check-verbs: verb "${name}" is registered but verbs/index.ts does not export ` +
+          `'./${component}'. A registry entry no set piece can import is a dead entry.`,
+      );
+    }
+    if (!matrix.includes(`verb="${name}"`)) {
+      fail(
+        `check-verbs: verb "${name}" is registered but has no row in comp/Verbs.tsx. ` +
+          `Add <Row verb="${name}" ...> so the grammar can be seen whole.`,
+      );
+    }
+    const total = frames === null ? null : resolveFrames(frames, durations);
+    if (total === null) continue;
+    for (const { part, at, over } of parts) {
+      const start = resolveFrames(at, durations);
+      const length = resolveFrames(over, durations);
+      if (start === null || length === null) continue;
+      if (start + length > total) {
+        fail(
+          `check-verbs: verb "${name}" part "${part}" runs to frame ${start + length} ` +
+            `but "${name}" is only ${total}f long. A part past its verb's end never plays.`,
+        );
+      }
+    }
+  }
+
+  for (const pencil of PENCIL_VERBS) {
+    if (!matrix.includes(`verb="${pencil}"`)) {
+      fail(`check-verbs: the pencil verb "${pencil}" has no row in comp/Verbs.tsx.`);
+    }
+  }
+
+  if (!failed) {
+    console.log(
+      `verb registry: ${verbs.length} verbs, all exported and demonstrated, ` +
+        `${verbs.reduce((n, v) => n + v.parts.length, 0)} parts inside their budgets.`,
+    );
+  }
+}
+
 checkSpringRatchet();
 checkEaseTokens();
 checkNoDashesInStrings();
+checkVerbRegistry();
 
 if (failed) {
   process.exit(1);

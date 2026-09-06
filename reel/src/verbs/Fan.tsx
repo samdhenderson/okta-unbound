@@ -27,9 +27,9 @@
  * doc for why that fails silently instead of throwing.
  */
 import React from 'react';
-import { interpolate, useCurrentFrame } from 'remotion';
+import { interpolate } from 'remotion';
 import { EASING, FRAMES } from './ease';
-import { release } from './useVerb';
+import { release, useVerbPart } from './useVerb';
 
 /** fan parent's shadow recipe, from the spec's shadow-recipe table. */
 export const FAN_PARENT_SHADOW = '0 50px 100px -36px rgba(0,0,0,.95)';
@@ -60,13 +60,8 @@ export const Fan: React.FC<FanProps> = ({
   style,
   children,
 }) => {
-  const frame = useCurrentFrame();
-  const scaleT = EASING.standard(
-    interpolate(frame, [from, from + 6], [0, 1], {
-      extrapolateLeft: 'clamp',
-      extrapolateRight: 'clamp',
-    }),
-  );
+  // The 6f window is `fan`'s `contract` part, not a loose literal.
+  const scaleT = EASING.standard(useVerbPart('fan', 'contract', from));
   const scale = interpolate(scaleT, [0, 1], [1, 0.92]);
 
   return (
@@ -103,23 +98,14 @@ export const FanChild: React.FC<FanChildProps> = ({
   style,
   children,
 }) => {
-  const frame = useCurrentFrame();
-  const t = EASING.entrance(
-    interpolate(frame, [from, from + FRAMES.fanChild], [0, 1], {
-      extrapolateLeft: 'clamp',
-      extrapolateRight: 'clamp',
-    }),
-  );
+  const t = EASING.entrance(useVerbPart('fan', 'child', from));
   const sign = angle < 0 ? -1 : 1;
   const startAngle = angle + sign * arc;
   const rotation = interpolate(t, [0, 1], [startAngle, angle]);
   // Reuses dock's 8f opacity window rather than a new constant: both are "an
   // entrance's opacity ramp," and the spec never gives fan's own children a
   // different one.
-  const opacity = interpolate(frame, [from, from + FRAMES.dockOpacity], [0, 1], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
+  const opacity = useVerbPart('dock', 'opacity', from);
 
   return (
     <div

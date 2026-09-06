@@ -24,6 +24,7 @@
 import React from 'react';
 import { interpolate, useCurrentFrame } from 'remotion';
 import { EASING, FRAMES } from './ease';
+import { useVerb, useVerbPart } from './useVerb';
 
 /** split half's shadow recipe, from the spec's shadow-recipe table. Identical for both halves. */
 const SPLIT_HALF_SHADOW = '0 60px 110px -36px rgba(0,0,0,.95)';
@@ -66,12 +67,7 @@ export const Split: React.FC<SplitProps> = ({
 }) => {
   const frame = useCurrentFrame();
 
-  const openT = EASING.standard(
-    interpolate(frame, [from, from + FRAMES.split], [0, 1], {
-      extrapolateLeft: 'clamp',
-      extrapolateRight: 'clamp',
-    }),
-  );
+  const openT = useVerb('split', from);
 
   // `openness` is the one number everything below scales by: the gap, the
   // tilt, and the delta bar. Rejoining is just this number heading back to 0
@@ -103,12 +99,7 @@ export const Split: React.FC<SplitProps> = ({
       ? `translateX(${gapPx / 2}px) rotate(${rightTilt}deg)`
       : `translateY(${gapPx / 2}px) rotate(${rightTilt}deg)`;
 
-  const barRaw = interpolate(
-    frame,
-    [from + FRAMES.splitDeltaBarAt, from + FRAMES.splitDeltaBarAt + FRAMES.splitDeltaBarDuration],
-    [0, 1],
-    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
-  );
+  const barRaw = useVerbPart('split', 'deltaBar', from);
   // Scaled by `openness` too, so the bar retreats with the halves on close
   // rather than hanging in mid-air over a gap that has already shut.
   const barT = barRaw * openness;

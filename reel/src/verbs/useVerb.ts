@@ -1,14 +1,12 @@
 /**
  * @module reel/verbs/useVerb
- * @description The one hook every verb in this directory is built on: turn the
- * film's absolute frame into a verb's own eased progress.
+ * @description Turn the film's absolute frame into a verb's own eased progress.
  *
- * `DesignDocs/REEL DESIGN AND REWORK/README.md`, "Section A - the animation
- * grammar", names six verbs, each with a fixed frame budget and a fixed curve.
- * `useVerb(name, from)` is that table made callable: it reads
+ * `useVerb(name, from)` is `verbs/registry.ts`'s table made callable: it reads
  * `useCurrentFrame()` itself, clamps to `[from, from + <the verb's own frame
  * count>]`, and hands back the eased `[0, 1]` progress for that verb - never a
  * raw linear ramp, so a component built on this hook cannot forget to ease it.
+ * {@link useVerbPart} does the same for a verb's named sub-window.
  *
  * **Never wrap a verb's contents in Remotion's `<Sequence>`.** `<Sequence>`
  * remaps `useCurrentFrame()` to start at 0 inside it, and every verb here -
@@ -18,38 +16,14 @@
  * first pose for the entire shot with no error to point at. If a verb needs to
  * start later, pass a later `from`; that is the entire mechanism.
  *
- * `count` is deliberately absent from the table this hook drives internally
- * (see `VERBS` below) even though it is one of the six -
- * its roll (`standard`) and its settle (`affirm`) are two different curves
- * over two different windows with a per-column stagger on top, which is more
- * than one `[0,1]` number can carry. `Count.tsx` computes its own per-column
- * timeline directly from `FRAMES`/`EASING` instead of calling this hook, and
- * says so in its own doc comment.
+ * The table this drives lives in `registry.ts`, not here. A verb that cannot be
+ * driven by a single `[0, 1]` says so there, in its `compound` field, and reads
+ * its `parts` directly - `count` is the one that does.
  */
 import { interpolate, useCurrentFrame } from 'remotion';
-import { EASING, FRAMES } from './ease';
-
-/**
- * The verbs this hook can drive a single `[0,1]` progress for: how long each
- * one runs, and the curve it runs on.
- *
- * One table, not two keyed the same way. A verb used to be declared in a
- * `VERB_TOTAL` map and again in a `VERB_EASE` map, so adding one meant editing
- * both and a verb with a budget but no curve was a `TypeError` at render
- * rather than an error at build. Here a verb is one entry that cannot be half
- * declared, and {@link VerbName} is derived from the table rather than being a
- * third place to list the same five names. (ADR-0074 §4.)
- */
-const VERBS = {
-  dock: { frames: FRAMES.dockTotal, ease: EASING.entrance },
-  lift: { frames: FRAMES.lift, ease: EASING.standard },
-  split: { frames: FRAMES.split, ease: EASING.standard },
-  fan: { frames: FRAMES.fanTotal, ease: EASING.entrance },
-  recede: { frames: FRAMES.recede, ease: EASING.exit },
-} as const satisfies Record<string, { frames: number; ease: (input: number) => number }>;
-
-/** The verbs this hook knows how to drive a single `[0,1]` progress for. */
-export type VerbName = keyof typeof VERBS;
+import { EASING } from './tokens';
+import { VERBS } from './registry';
+import type { PartName, VerbName } from './registry';
 
 /**
  * A verb's bezier progress in `[0, 1]` over its own frame count, measured from
@@ -60,12 +34,41 @@ export type VerbName = keyof typeof VERBS;
  */
 export function useVerb(name: VerbName, from: number): number {
   const frame = useCurrentFrame();
-  const verb = VERBS[name];
-  const linear = interpolate(frame, [from, from + verb.frames], [0, 1], {
+  const spec = VERBS[name];
+  const linear = interpolate(frame, [from, from + spec.frames], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  return verb.ease(linear);
+  return EASING[spec.ease](linear);
+}
+
+/**
+ * The linear `[0, 1]` progress of one of a verb's named sub-windows, measured
+ * from the same absolute `from` the verb itself was cued at.
+ *
+ * Linear, deliberately. A sub-window is usually an opacity ramp or a bar
+ * striking in - things the spec gives a window rather than a curve - and the
+ * two callers that do want a curve (`dock`'s travel, `fan`'s contraction) ease
+ * the result themselves with the curve they mean. Easing here would apply the
+ * verb's own curve to a window it was never specified for.
+ *
+ * The point of this over hand-written arithmetic is that `at` is relative to
+ * the verb, so a caller writes `useVerbPart('split', 'deltaBar', splitFrom)`
+ * instead of `interpolate(frame, [from + FRAMES.splitDeltaBarAt, from +
+ * FRAMES.splitDeltaBarAt + FRAMES.splitDeltaBarDuration], ...)` and cannot get
+ * the addition wrong in one of the two places it appears.
+ */
+export function useVerbPart<V extends VerbName>(name: V, part: PartName<V>, from: number): number {
+  const frame = useCurrentFrame();
+  const parts = (VERBS[name] as { parts?: Record<string, { at: number; over: number }> }).parts;
+  const window = parts?.[part as string];
+  if (!window) {
+    throw new Error(`Verb "${name}" has no part "${String(part)}".`);
+  }
+  return interpolate(frame, [from + window.at, from + window.at + window.over], [0, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
 }
 
 /**

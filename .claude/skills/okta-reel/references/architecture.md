@@ -56,7 +56,7 @@ SCRIPT  ->  Scene (chapter)  ->  Act  ->  { plan: BeatPlan[], marks: Mark[] }
   tab; `chapterTab()` throws otherwise (ADR-0053).
 - An **act** is one capture, retimed. Its key is `<capture|piece-id>-<index>`,
   and that key is the narration filename, the `NARRATION.md` heading, and what
-  `reel:look --at` resolves. One definition, in `src/actKey.ts`.
+  `reel:look --at` resolves. One definition, in `reel/src/actKey.ts`.
 - A **beat plan** entry retimes a manifest beat: `speed`, `easeMs`, `holdMs`.
   `buildRamp()` turns beats + plan into constant-rate segments and frame cues.
 - A **mark** is editorial: a headline, points, a stage, a crop, a diagram id.
