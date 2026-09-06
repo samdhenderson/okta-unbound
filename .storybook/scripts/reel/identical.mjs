@@ -67,6 +67,14 @@ const TIMEOUT_MS = 120_000;
  */
 const PER_BEAT = 1;
 
+/**
+ * Frames between samples inside a set piece.
+ *
+ * Under the shortest verb budget in `verbs/registry.ts` (`lift`, 13f), so no
+ * verb can run entirely between two samples. See `sample()`.
+ */
+const PIECE_STRIDE = 12;
+
 const usage = `
 Prove a refactor did not move the picture.
 
@@ -107,14 +115,22 @@ function sample(cut, perBeat) {
     for (const act of scene.acts) {
       if (act.frames === null) continue;
 
-      // A set piece has no beats - it is one continuous synthetic run - so it
-      // is sampled as a whole. Three frames, because a piece is short and its
-      // whole argument is the motion across it.
+      // A set piece has no beats the plan can see - it is one continuous
+      // synthetic run whose structure is its verb cues, and those are internal
+      // to the component. So it is sampled at a fixed cadence instead, chosen
+      // against the verb grammar rather than by eye: the shortest verb in
+      // `VERBS` runs 13 frames (`lift`), so a stride of 12 cannot step over a
+      // whole verb. Three frames per piece - what this did before - spread 74
+      // frames apart on a 222 frame piece, and a deliberate 21 frame change to
+      // `split`'s budget inside `exploded-plates` came back "frame-identical"
+      // twice. A short act is exactly what a registry change breaks, which is
+      // the reason this function samples per act at all.
       if (act.beats.length === 0) {
-        for (let i = 0; i < 3; i += 1) {
+        const steps = Math.max(3, Math.ceil(act.frames / PIECE_STRIDE));
+        for (let i = 0; i < steps; i += 1) {
           at(
             `chapter-${scene.id}`,
-            act.from + Math.floor(((i + 0.5) * act.frames) / 3),
+            act.from + Math.floor(((i + 0.5) * act.frames) / steps),
             `${act.key}@${i}`,
           );
         }
