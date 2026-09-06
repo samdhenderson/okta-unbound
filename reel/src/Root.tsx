@@ -13,7 +13,7 @@ import { SCRIPT } from './script';
 import { Chapter, chapterLength } from './comp/Chapter';
 import { CARDS } from './comp/cards';
 import { PIECES } from './pieces';
-import { piecePreview } from './pieces/Preview';
+import { piecePreview, previewFrames } from './pieces/Preview';
 import { REEL_FRAMES, Reel } from './comp/Reel';
 import { Verbs, VERBS_FRAMES } from './comp/Verbs';
 import { FRAME } from './theme';
@@ -99,7 +99,7 @@ export const Root: React.FC = () => (
         key={`piece-${id}`}
         id={`piece-${id}`}
         component={piecePreview(id)}
-        durationInFrames={PIECES[id].frames}
+        durationInFrames={previewFrames(id)}
         fps={FRAME.fps}
         width={FRAME.width}
         height={FRAME.height}

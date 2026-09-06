@@ -63,7 +63,7 @@ export const CUT_MD = path.join(REEL_ROOT, 'CUT.generated.md');
 /**
  * Compile and load `SCRIPT`, `buildRamp` and `capture`.
  *
- * @returns {{ SCRIPT: object[], buildRamp: Function, capture: Function, PIECES: object }}
+ * @returns {{ SCRIPT: object[], buildRamp: Function, capture: Function, PIECES: object, pieceFrames: Function }}
  */
 function load() {
   rmSync(BUILD, { recursive: true, force: true });
@@ -114,6 +114,7 @@ function load() {
     buildRamp: require('./ramp.js').buildRamp,
     capture: require('./captures.js').capture,
     PIECES: require('./pieces/index.js').PIECES,
+    pieceFrames: require('./pieces/index.js').pieceFrames,
     CARDS: require('./comp/cards.js').CARDS,
   };
 }
@@ -125,7 +126,22 @@ function load() {
  * chapters end to end - but with the real per-act lengths, so the only thing
  * restated is the ordering, not the arithmetic.
  */
-function resolve({ SCRIPT, buildRamp, capture, PIECES }, fps) {
+/**
+ * How long a piece's preview composition runs, mirroring
+ * `pieces/Preview.tsx`'s `previewFrames`: the length the film gives the piece,
+ * or its own pacing when no act names it yet. The two have to agree or
+ * `reel:look` sheets a preview at a length the studio does not render it at.
+ */
+function previewFrames({ SCRIPT, pieceFrames }, id) {
+  for (const scene of SCRIPT) {
+    for (const act of scene.acts) {
+      if (act.kind === 'piece' && act.piece === id) return pieceFrames(id, act.holds);
+    }
+  }
+  return pieceFrames(id, undefined);
+}
+
+function resolve({ SCRIPT, buildRamp, capture, PIECES, pieceFrames }, fps) {
   const scenes = [];
   let reelCursor = 0;
 
@@ -149,8 +165,22 @@ function resolve({ SCRIPT, buildRamp, capture, PIECES }, fps) {
       };
 
       if (isPiece) {
-        const frames = PIECES[act.piece].frames;
-        acts.push({ ...base, piece: act.piece, frames, beats: [] });
+        // `pieceFrames`, not `PIECES[...].frames`: an act may retune the
+        // piece's own holds, and the cut has to be the length the film will
+        // actually render. Same function `Chapter` calls, so the two cannot
+        // disagree about how long an act is.
+        const frames = pieceFrames(act.piece, act.holds);
+        acts.push({
+          ...base,
+          piece: act.piece,
+          frames,
+          // The cues this piece exposes, and what the cut has done to them.
+          // `script.ts` points a reader at CUT.generated.md to find out which
+          // names `holds` will accept, so the plan has to carry them.
+          cues: Object.keys(PIECES[act.piece].cues ?? {}),
+          ...(act.holds ? { holds: act.holds } : {}),
+          beats: [],
+        });
         cursor += frames;
         continue;
       }
@@ -216,7 +246,7 @@ function build() {
     // is trying to look at it.
     previews = {
       ...Object.fromEntries(
-        Object.entries(loaded.PIECES).map(([id, piece]) => [`piece-${id}`, piece.frames]),
+        Object.entries(loaded.PIECES).map(([id]) => [`piece-${id}`, previewFrames(loaded, id)]),
       ),
       ...Object.fromEntries(Object.entries(loaded.CARDS).map(([id, card]) => [id, card.frames])),
     };
@@ -313,6 +343,19 @@ function renderDoc(cut) {
         .map((mark) => `\`${mark.diagram}\` at \`${act.key}\`:${mark.beat}`),
     );
     if (withDiagrams.length > 0) out.push(`Diagrams: ${withDiagrams.join('; ')}`, '');
+
+    const tunable = scene.acts
+      .filter((act) => act.cues?.length)
+      .map((act) => {
+        const held = Object.entries(act.holds ?? {})
+          .map(([cue, secs]) => `${cue} ${secs}s`)
+          .join(', ');
+        return (
+          `\`${act.key}\` cues: ${act.cues.map((c) => `\`${c}\``).join(', ')}` +
+          (held ? ` - held: ${held}` : '')
+        );
+      });
+    if (tunable.length > 0) out.push(`Set piece holds: ${tunable.join('; ')}`, '');
   }
 
   return `${out.join('\n')}\n`;

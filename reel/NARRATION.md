@@ -80,7 +80,7 @@ Target: 24.78s (budget ~64 words)
 
 ### piece-exploded-plates-2
 
-Target: 3.70s (budget ~10 words)
+Target: 10.82s (budget ~28 words)
 
 _Near silent. Held side by side, the two plates make the case without help._
 

@@ -387,7 +387,16 @@ export const SCRIPT: Scene[] = [
       // a card it is about to reach: `from` is `users-cause`, whose `cause`
       // figure carries both of the strings the piece holds up against each
       // other.
-      { kind: 'piece', piece: 'exploded-plates', from: 'users-cause' },
+      {
+        kind: 'piece',
+        piece: 'exploded-plates',
+        from: 'users-cause',
+        // The plates are the film's payoff and the old cut gave them under two
+        // seconds apart before rejoining. Held long enough to read the hole,
+        // then rested whole before the cut back to footage lands on the same
+        // object the camera left.
+        holds: { split: 5, rejoin: 4 },
+      },
       /*
        * The fix, in two acts around a set piece.
        *

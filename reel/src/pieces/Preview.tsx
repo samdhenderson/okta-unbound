@@ -30,9 +30,9 @@ import React from 'react';
 import { AbsoluteFill } from 'remotion';
 import { capture, type CaptureId } from '../captures';
 import { STAGES } from '../layout';
-import { SCRIPT } from '../script';
+import { SCRIPT, type PieceAct } from '../script';
 import { STAGE } from '../theme';
-import { PIECES, type Piece, type PieceId } from './index';
+import { PIECES, pieceFrames, type Piece, type PieceId } from './index';
 
 /**
  * The capture a preview falls back to when no act names the piece.
@@ -56,6 +56,22 @@ import { PIECES, type Piece, type PieceId } from './index';
 const FALLBACK_CAPTURE: CaptureId = 'users-fix';
 
 /**
+ * The first act that names a piece, or nothing if the cut does not use it yet.
+ *
+ * Two things are read off it - the footage the figures come from, and the hold
+ * overrides the cut applies - and reading them from different acts would mean a
+ * preview showing one act's pacing over another act's numbers.
+ */
+function firstActNaming(id: PieceId): PieceAct | undefined {
+  for (const scene of SCRIPT) {
+    for (const act of scene.acts) {
+      if (act.kind === 'piece' && act.piece === id) return act;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Which footage a piece's figures come from, according to the script.
  *
  * The first act that names the piece wins. A piece cut into the film twice
@@ -64,14 +80,19 @@ const FALLBACK_CAPTURE: CaptureId = 'users-fix';
  * is the one the film reaches first.
  */
 export function previewCapture(id: PieceId): CaptureId {
-  for (const scene of SCRIPT) {
-    for (const act of scene.acts) {
-      if (act.kind === 'piece' && act.piece === id) return act.from;
-    }
-  }
+  const act = firstActNaming(id);
+  if (act) return act.from;
   // Nothing in the cut names it yet. A piece that declared which footage it was
   // built against gets that; only a piece that declared nothing falls back.
   return (PIECES[id] as Piece).preview ?? FALLBACK_CAPTURE;
+}
+
+/**
+ * How long a piece's preview composition runs: the length the film gives it,
+ * or the piece's own pacing when no act names it yet.
+ */
+export function previewFrames(id: PieceId): number {
+  return pieceFrames(id, firstActNaming(id)?.holds);
 }
 
 /**
@@ -82,14 +103,20 @@ export function previewCapture(id: PieceId): CaptureId {
  * `defaultProps`, and the point is to need none.
  */
 export function piecePreview(id: PieceId): React.FC {
-  const { component: Piece, frames } = PIECES[id];
+  const { component: Piece } = PIECES[id];
+  // The cut's holds, not the piece's own pacing. A preview that ignored them
+  // would show the piece at a tempo the film does not render, which is worst
+  // exactly when someone is retuning those holds and looking to see what they
+  // did. `previewFrames` keeps the composition's length in step.
+  const holds = firstActNaming(id)?.holds;
   const Preview: React.FC = () => (
     <AbsoluteFill style={{ background: STAGE.back }}>
       <Piece
         id={id}
-        frames={frames}
+        frames={previewFrames(id)}
         plot={STAGES.focus.plot}
         manifest={capture(previewCapture(id))}
+        holds={holds}
       />
     </AbsoluteFill>
   );

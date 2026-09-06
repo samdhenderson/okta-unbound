@@ -3,10 +3,10 @@
   "fps": 60,
   "openingFrames": 1590,
   "endCardFrames": 150,
-  "chaptersEnd": 22012,
-  "frames": 22162,
+  "chaptersEnd": 22439,
+  "frames": 22589,
   "previews": {
-    "piece-exploded-plates": 222,
+    "piece-exploded-plates": 649,
     "piece-ledger": 240,
     "piece-coverage-bars": 240,
     "piece-unpacking": 270,
@@ -77,7 +77,7 @@
       "id": "users",
       "title": "Users",
       "from": 3357,
-      "frames": 4782,
+      "frames": 5209,
       "acts": [
         {
           "key": "users-gap-0",
@@ -171,7 +171,12 @@
           "from": 2241,
           "reelFrom": 5598,
           "piece": "exploded-plates",
-          "frames": 222,
+          "frames": 649,
+          "cues": ["dock", "lift", "split", "rejoin", "out", "bands", "bandsOut"],
+          "holds": {
+            "split": 5,
+            "rejoin": 4
+          },
           "beats": []
         },
         {
@@ -179,28 +184,28 @@
           "index": 3,
           "kind": "film",
           "capture": "users-fix",
-          "from": 2463,
-          "reelFrom": 5820,
+          "from": 2890,
+          "reelFrom": 6247,
           "label": "The fix",
           "frames": 1271,
           "beats": [
             {
               "beat": "open",
-              "from": 2463,
+              "from": 2890,
               "frames": 277,
-              "reelFrom": 5820
+              "reelFrom": 6247
             },
             {
               "beat": "edit",
-              "from": 2740,
+              "from": 3167,
               "frames": 346,
-              "reelFrom": 6097
+              "reelFrom": 6524
             },
             {
               "beat": "predict",
-              "from": 3086,
+              "from": 3513,
               "frames": 648,
-              "reelFrom": 6443
+              "reelFrom": 6870
             }
           ],
           "marks": [
@@ -223,10 +228,11 @@
           "index": 4,
           "kind": "piece",
           "capture": "users-fix",
-          "from": 3734,
-          "reelFrom": 7091,
+          "from": 4161,
+          "reelFrom": 7518,
           "piece": "ledger",
           "frames": 240,
+          "cues": [],
           "beats": []
         },
         {
@@ -234,16 +240,16 @@
           "index": 5,
           "kind": "film",
           "capture": "users-fix",
-          "from": 3974,
-          "reelFrom": 7331,
+          "from": 4401,
+          "reelFrom": 7758,
           "label": "The fix",
           "frames": 808,
           "beats": [
             {
               "beat": "land",
-              "from": 3974,
+              "from": 4401,
               "frames": 808,
-              "reelFrom": 7331
+              "reelFrom": 7758
             }
           ],
           "marks": [
@@ -258,7 +264,7 @@
     {
       "id": "groups",
       "title": "Groups",
-      "from": 8139,
+      "from": 8566,
       "frames": 5834,
       "acts": [
         {
@@ -267,7 +273,7 @@
           "kind": "film",
           "capture": "groups",
           "from": 0,
-          "reelFrom": 8139,
+          "reelFrom": 8566,
           "label": "The source",
           "frames": 969,
           "beats": [
@@ -275,19 +281,19 @@
               "beat": "cascade",
               "from": 0,
               "frames": 93,
-              "reelFrom": 8139
+              "reelFrom": 8566
             },
             {
               "beat": "open-group",
               "from": 93,
               "frames": 248,
-              "reelFrom": 8232
+              "reelFrom": 8659
             },
             {
               "beat": "members",
               "from": 341,
               "frames": 628,
-              "reelFrom": 8480
+              "reelFrom": 8907
             }
           ],
           "marks": [
@@ -308,7 +314,7 @@
           "kind": "film",
           "capture": "attributes",
           "from": 969,
-          "reelFrom": 9108,
+          "reelFrom": 9535,
           "label": "The match",
           "frames": 2815,
           "beats": [
@@ -316,31 +322,31 @@
               "beat": "open",
               "from": 969,
               "frames": 301,
-              "reelFrom": 9108
+              "reelFrom": 9535
             },
             {
               "beat": "facets",
               "from": 1270,
               "frames": 772,
-              "reelFrom": 9409
+              "reelFrom": 9836
             },
             {
               "beat": "filter",
               "from": 2042,
               "frames": 326,
-              "reelFrom": 10181
+              "reelFrom": 10608
             },
             {
               "beat": "compose",
               "from": 2368,
               "frames": 999,
-              "reelFrom": 10507
+              "reelFrom": 10934
             },
             {
               "beat": "roster",
               "from": 3367,
               "frames": 417,
-              "reelFrom": 11506
+              "reelFrom": 11933
             }
           ],
           "marks": [
@@ -375,7 +381,7 @@
           "kind": "film",
           "capture": "reporting",
           "from": 3784,
-          "reelFrom": 11923,
+          "reelFrom": 12350,
           "label": "The exposure",
           "frames": 2050,
           "beats": [
@@ -383,31 +389,31 @@
               "beat": "open",
               "from": 3784,
               "frames": 301,
-              "reelFrom": 11923
+              "reelFrom": 12350
             },
             {
               "beat": "arm",
               "from": 4085,
               "frames": 721,
-              "reelFrom": 12224
+              "reelFrom": 12651
             },
             {
               "beat": "scan",
               "from": 4806,
               "frames": 131,
-              "reelFrom": 12945
+              "reelFrom": 13372
             },
             {
               "beat": "breakdown",
               "from": 4937,
               "frames": 295,
-              "reelFrom": 13076
+              "reelFrom": 13503
             },
             {
               "beat": "unenrolled",
               "from": 5232,
               "frames": 602,
-              "reelFrom": 13371
+              "reelFrom": 13798
             }
           ],
           "marks": [
@@ -437,7 +443,7 @@
     {
       "id": "apps",
       "title": "Apps",
-      "from": 13973,
+      "from": 14400,
       "frames": 833,
       "acts": [
         {
@@ -446,26 +452,26 @@
           "kind": "film",
           "capture": "apps",
           "from": 0,
-          "reelFrom": 13973,
+          "reelFrom": 14400,
           "frames": 833,
           "beats": [
             {
               "beat": "open",
               "from": 0,
               "frames": 89,
-              "reelFrom": 13973
+              "reelFrom": 14400
             },
             {
               "beat": "filter",
               "from": 89,
               "frames": 344,
-              "reelFrom": 14062
+              "reelFrom": 14489
             },
             {
               "beat": "sort",
               "from": 433,
               "frames": 400,
-              "reelFrom": 14406
+              "reelFrom": 14833
             }
           ],
           "marks": [
@@ -485,7 +491,7 @@
     {
       "id": "rules",
       "title": "Rules",
-      "from": 14806,
+      "from": 15233,
       "frames": 3619,
       "acts": [
         {
@@ -494,7 +500,7 @@
           "kind": "film",
           "capture": "rules",
           "from": 0,
-          "reelFrom": 14806,
+          "reelFrom": 15233,
           "label": "The inventory",
           "frames": 1659,
           "beats": [
@@ -502,19 +508,19 @@
               "beat": "load",
               "from": 0,
               "frames": 572,
-              "reelFrom": 14806
+              "reelFrom": 15233
             },
             {
               "beat": "active",
               "from": 572,
               "frames": 331,
-              "reelFrom": 15378
+              "reelFrom": 15805
             },
             {
               "beat": "dormant",
               "from": 903,
               "frames": 756,
-              "reelFrom": 15709
+              "reelFrom": 16136
             }
           ],
           "marks": [
@@ -537,7 +543,7 @@
           "kind": "film",
           "capture": "rules-impact",
           "from": 1659,
-          "reelFrom": 16465,
+          "reelFrom": 16892,
           "label": "The consequence",
           "frames": 1960,
           "beats": [
@@ -545,19 +551,19 @@
               "beat": "open",
               "from": 1659,
               "frames": 216,
-              "reelFrom": 16465
+              "reelFrom": 16892
             },
             {
               "beat": "holds",
               "from": 1875,
               "frames": 758,
-              "reelFrom": 16681
+              "reelFrom": 17108
             },
             {
               "beat": "deactivate",
               "from": 2633,
               "frames": 986,
-              "reelFrom": 17439
+              "reelFrom": 17866
             }
           ],
           "marks": [
@@ -582,7 +588,7 @@
     {
       "id": "export",
       "title": "Export",
-      "from": 18425,
+      "from": 18852,
       "frames": 1582,
       "acts": [
         {
@@ -591,32 +597,32 @@
           "kind": "film",
           "capture": "export",
           "from": 0,
-          "reelFrom": 18425,
+          "reelFrom": 18852,
           "frames": 1582,
           "beats": [
             {
               "beat": "open",
               "from": 0,
               "frames": 218,
-              "reelFrom": 18425
+              "reelFrom": 18852
             },
             {
               "beat": "pick",
               "from": 218,
               "frames": 316,
-              "reelFrom": 18643
+              "reelFrom": 19070
             },
             {
               "beat": "columns",
               "from": 534,
               "frames": 389,
-              "reelFrom": 18959
+              "reelFrom": 19386
             },
             {
               "beat": "preview",
               "from": 923,
               "frames": 659,
-              "reelFrom": 19348
+              "reelFrom": 19775
             }
           ],
           "marks": [
@@ -643,7 +649,7 @@
     {
       "id": "explorer",
       "title": "Explorer",
-      "from": 20007,
+      "from": 20434,
       "frames": 2005,
       "acts": [
         {
@@ -652,32 +658,32 @@
           "kind": "film",
           "capture": "explorer",
           "from": 0,
-          "reelFrom": 20007,
+          "reelFrom": 20434,
           "frames": 2005,
           "beats": [
             {
               "beat": "summon",
               "from": 0,
               "frames": 379,
-              "reelFrom": 20007
+              "reelFrom": 20434
             },
             {
               "beat": "request",
               "from": 379,
               "frames": 733,
-              "reelFrom": 20386
+              "reelFrom": 20813
             },
             {
               "beat": "shape",
               "from": 1112,
               "frames": 305,
-              "reelFrom": 21119
+              "reelFrom": 21546
             },
             {
               "beat": "values",
               "from": 1417,
               "frames": 588,
-              "reelFrom": 21424
+              "reelFrom": 21851
             }
           ],
           "marks": [
