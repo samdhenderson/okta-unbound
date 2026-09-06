@@ -50,14 +50,33 @@ anything means finding every copy.
 
 ## Decision
 
-### 1. `script.ts` is data, with no value imports
+### 1. `script.ts` names visuals; it does not build them
 
-`script.ts` imports types only. No `React`, no component identifiers, no
-`createElement`. A mark that wants a diagram names one:
+No `React`, no component identifiers, no `createElement`. A mark that wants a
+diagram names one by id:
 
 ```ts
-diagram: { id: 'ratio', figures: ['unfilled', 'results'] }
+diagram: 'inactive-ratio';
 ```
+
+> **Two corrections, at implementation.**
+>
+> **It is not "types only".** `script.ts` still imports `figure` from `./captures`,
+> because a `points:` entry may be a `(manifest) => string` closure that reads a figure
+> to write a line of margin copy. That is a value import and it stays. It costs nothing
+> that matters: `captures.ts` is plain TypeScript over JSON with no React and no `.tsx`
+> in its graph, so the script remains compilable and runnable outside a bundler, which
+> is the property §5 actually needs. "No component imports" is the real rule; "types
+> only" was an overstatement of it.
+>
+> **`{ id, figures }` was too simple.** The sketch above assumed a diagram needs only a
+> list of figure keys. The real closures did per-mark work - composing a `Funnel`'s three
+> steps from four figures, defaulting a `RuleBoard`'s stats with `??`, labelling a
+> `Ratio`'s two sides differently at each of its two call sites. So a mark names an id
+> and nothing else, and the diagram reads its own figures off the manifest. Where two
+> marks used the same component for different arguments, they became two registry
+> entries (`inactive-ratio`, `sole-ratio`), named for the argument rather than the
+> component.
 
 The four figure shapes declared locally in `script.ts` (`Counts`, `Facet`, `Filter`,
 `CoverageRow`) move next to the components that consume them. The script states _what_
@@ -88,8 +107,17 @@ way the drift already in the file does not come back.
 ### 4. A verb is one table entry
 
 `VERB_TOTAL` and `VERB_EASE` collapse into a single `VERBS` table with
-`VerbName = keyof typeof VERBS`, and `comp/Verbs.tsx` derives its demo matrix from it.
-Adding a verb is a component file and one entry, not five edits across three files.
+`VerbName = keyof typeof VERBS`. Adding a verb is a component file and one entry, not two
+maps and a union listing the same names.
+
+> **Correction, at implementation.** This section originally also claimed
+> `comp/Verbs.tsx` would derive its demo matrix from the table. It does not, and the
+> claim was wrong. Each row of that matrix is a different component with its own period
+> expression - `dock` draws plates, `count` draws digits, `split` opens a pair - so there
+> is no uniform body to map over and only the `ROW_STAGGER` index would have been
+> derived. Deriving one integer while leaving seven bespoke rows in place is churn in a
+> 621-line file that the frame-identity check does not sample. The demo matrix stays
+> hand-written, and a new verb adds a row to it by hand.
 
 `Count` stays outside `VerbName`. Its roll and settle are two curves over two windows
 with a per-column stagger, so it computes its own timeline; forcing it into a table of

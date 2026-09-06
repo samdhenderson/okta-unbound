@@ -16,12 +16,27 @@
  * about and no similarity score to interpret - either the bytes match or the
  * refactor changed something it should not have.
  *
- * ## What it samples
+ * ## What it samples, and why per beat
  *
- * Frames are spread across every chapter plus the opening and end card, at
- * full scale, so the sample covers each act rather than clustering wherever
- * the reel happens to be interesting. Full scale matters: a half-scale render
- * resamples, and resampling can hide a one-pixel shift.
+ * One frame at the middle of **every beat**, plus one per set piece and four
+ * for the furniture, at full scale.
+ *
+ * It sampled three frames per act first, and that was measured to be wrong.
+ * Changing two diagrams at once - `roster-tally` and `factor-ladder` - was
+ * caught for the first and missed entirely for the second, because
+ * `reporting-2` runs 2,050 frames and three evenly spaced samples landed on
+ * 4125, 4809 and 5492 while the `breakdown` beat that draws the ladder runs
+ * 4937-5232. The check said "frame-identical" about a diagram it had never
+ * rendered.
+ *
+ * A beat is the unit the film cues things on: a mark names a beat, and a
+ * diagram, a stage change and a slide all arrive with one. So sampling per
+ * beat covers every cued visual by construction, rather than by hoping a
+ * uniform spread lands inside each window. It is the difference between
+ * evidence and a number that looks like evidence.
+ *
+ * Full scale matters too: a half-scale render resamples, and resampling can
+ * hide a one-pixel shift.
  *
  * A frame that fails to render is recorded as a failure rather than skipped.
  * A refactor that makes a frame un-renderable has moved the picture in the
@@ -44,8 +59,13 @@ const BASELINES = path.join(REEL, 'out/identical');
 
 const TIMEOUT_MS = 120_000;
 
-/** Frames sampled per act. Enough to catch a retime, cheap enough to run twice. */
-const PER_ACT = 3;
+/**
+ * Extra frames per beat, beyond the one at its midpoint.
+ *
+ * One is enough to catch anything that is *drawn* differently. Raise it to
+ * catch something that is *timed* differently within a single beat.
+ */
+const PER_BEAT = 1;
 
 const usage = `
 Prove a refactor did not move the picture.
@@ -54,7 +74,7 @@ Prove a refactor did not move the picture.
   npm run reel:identical -- --against <name>   render and compare against them
 
 Options
-  --per-act <n>   frames sampled per act (default ${PER_ACT})
+  --per-beat <n>  frames sampled per beat (default ${PER_BEAT})
 `.trim();
 
 function run(cmd, args, cwd) {
@@ -79,33 +99,48 @@ function run(cmd, args, cwd) {
  * exactly the kind of thing a registry change could break, and a uniform
  * spread would give it half a frame.
  */
-function sample(cut, perAct) {
+function sample(cut, perBeat) {
   const out = [];
+  const at = (composition, frame, label) => out.push({ composition, frame, label });
+
   for (const scene of cut.scenes) {
     for (const act of scene.acts) {
       if (act.frames === null) continue;
-      for (let i = 0; i < perAct; i += 1) {
-        const frame = act.from + Math.floor(((i + 0.5) * act.frames) / perAct);
-        out.push({
-          composition: `chapter-${scene.id}`,
-          frame,
-          label: `${act.key}@${frame}`,
-        });
+
+      // A set piece has no beats - it is one continuous synthetic run - so it
+      // is sampled as a whole. Three frames, because a piece is short and its
+      // whole argument is the motion across it.
+      if (act.beats.length === 0) {
+        for (let i = 0; i < 3; i += 1) {
+          at(
+            `chapter-${scene.id}`,
+            act.from + Math.floor(((i + 0.5) * act.frames) / 3),
+            `${act.key}@${i}`,
+          );
+        }
+        continue;
+      }
+
+      for (const beat of act.beats) {
+        for (let i = 0; i < perBeat; i += 1) {
+          at(
+            `chapter-${scene.id}`,
+            beat.from + Math.floor(((i + 0.5) * beat.frames) / perBeat),
+            `${act.key}:${beat.beat}${perBeat > 1 ? `@${i}` : ''}`,
+          );
+        }
       }
     }
   }
+
   // The furniture is composed outside any chapter, so a chapter sample can
   // never reach it. `Reel` is the only composition that draws the opening,
   // the band across a seam, and the end card.
   if (cut.openingFrames !== null && cut.frames !== null) {
-    for (const [label, frame] of [
-      ['opening-early', Math.floor(cut.openingFrames * 0.25)],
-      ['opening-late', Math.floor(cut.openingFrames * 0.85)],
-      ['first-seam', cut.openingFrames + 5],
-      ['end-card', cut.chaptersEnd + Math.floor(cut.endCardFrames / 2)],
-    ]) {
-      out.push({ composition: 'reel', frame, label });
-    }
+    at('reel', Math.floor(cut.openingFrames * 0.25), 'opening-early');
+    at('reel', Math.floor(cut.openingFrames * 0.85), 'opening-late');
+    at('reel', cut.openingFrames + 5, 'first-seam');
+    at('reel', cut.chaptersEnd + Math.floor(cut.endCardFrames / 2), 'end-card');
   }
   return out;
 }
@@ -116,19 +151,19 @@ async function main() {
   const argv = process.argv.slice(2);
   let name = null;
   let mode = null;
-  let perAct = PER_ACT;
+  let perBeat = PER_BEAT;
 
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--save') ((mode = 'save'), (name = argv[(i += 1)]));
     else if (argv[i] === '--against') ((mode = 'against'), (name = argv[(i += 1)]));
-    else if (argv[i] === '--per-act') perAct = Number(argv[(i += 1)]);
+    else if (argv[i] === '--per-beat') perBeat = Number(argv[(i += 1)]);
     else if (argv[i] === '--help' || argv[i] === '-h') return console.log(usage);
     else throw new Error(`Unknown argument "${argv[i]}"`);
   }
   if (!mode || !name) return console.log(usage);
 
   const cut = readCut();
-  const frames = sample(cut, perAct);
+  const frames = sample(cut, perBeat);
   const dir = path.join(BASELINES, name);
   mkdirSync(dir, { recursive: true });
   const record = path.join(BASELINES, `${name}.json`);

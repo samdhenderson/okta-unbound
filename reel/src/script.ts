@@ -16,15 +16,13 @@
  *  2. **No em dash or en dash on camera.** They kern badly at this size and the
  *     old reel's captions were full of them (ADR-0043). Hyphens, or a rewrite.
  */
-import React from 'react';
 import type { CaptureId, Manifest } from './captures';
 import { figure } from './captures';
 import type { BeatPlan } from './ramp';
 import type { Crop, StageName } from './layout';
 import type { PieceId } from './pieces';
-import type { Plot } from './diagrams';
-import { Funnel, Ratio, Tally } from './diagrams';
-import { FacetBoard, FactorLadder, RuleBoard } from './showcase';
+import type { DiagramId } from './diagrams/registry';
+import type { Counts, CoverageRow } from './figures';
 
 /** What the margin says, and what the camera does, from one beat onward. */
 export interface Mark {
@@ -68,8 +66,16 @@ export interface Mark {
   stage?: StageName;
   /** What part of the panel fills its rectangle. Held when omitted. */
   crop?: Crop;
-  /** A figure, enlarged. Given the plot it may draw in and the frame it arrives on. */
-  diagram?: (manifest: Manifest, plot: Plot, from: number) => React.ReactNode;
+  /**
+   * A figure, enlarged: which diagram to draw, by id.
+   *
+   * An id rather than the diagram itself, for the same reason a set piece is
+   * an id - a script that names a component is a script no program can read,
+   * and every build script that has to read the cut was parsing this file as
+   * text because of it. The diagram reads its own figures off the manifest;
+   * see `diagrams/registry.tsx`. (ADR-0074 1.)
+   */
+  diagram?: DiagramId;
 }
 
 /**
@@ -149,28 +155,6 @@ export interface Scene {
   /** The chapter card's title. Not the manifest's, so the reel can retitle a shot. */
   title: string;
   acts: Act[];
-}
-
-/* --- Figure shapes, as read by the walks ---------------------------------- */
-
-interface Counts {
-  shown: number;
-  total: number;
-}
-interface Facet {
-  attribute: string;
-  distinct: number;
-  values: { value: string; members: number; filterable: boolean }[];
-}
-interface Filter {
-  attribute: string;
-  value: string;
-  members: number;
-}
-interface CoverageRow {
-  label: string;
-  count: number;
-  pct: number;
 }
 
 /* --- The reel ------------------------------------------------------------- */
@@ -500,12 +484,7 @@ export const SCRIPT: Scene[] = [
             beat: 'members',
             headline: 'Audit membership provenance instantly.',
             points: ['Grouped by assignment source instead of alphabetical order.'],
-            diagram: (m, plot, from) =>
-              React.createElement(Tally, {
-                plot,
-                from,
-                entries: [{ label: 'members', value: figure<Counts>(m, 'roster').total }],
-              }),
+            diagram: 'roster-tally',
           },
         ],
       },
@@ -538,8 +517,7 @@ export const SCRIPT: Scene[] = [
             // The whole board, not one attribute. The claim is about a *set* of
             // dimensions being discovered, so an enlargement of a single spread
             // would be arguing something narrower than the slide beside it.
-            diagram: (m, plot, from) =>
-              React.createElement(FacetBoard, { plot, from, facets: figure<Facet[]>(m, 'facets') }),
+            diagram: 'facet-board',
           },
           // The panel comes back for the clicking. The board says what the
           // dimensions are; only the product can show them being used.
@@ -548,25 +526,7 @@ export const SCRIPT: Scene[] = [
             beat: 'compose',
             headline: 'Stack two filters and you have the population a rule would match.',
             points: ['Counted locally, without reloading the page.'],
-            diagram: (m, plot, from) =>
-              React.createElement(Funnel, {
-                plot,
-                from,
-                steps: [
-                  { label: 'members', value: figure<Counts>(m, 'rosterBefore').shown },
-                  {
-                    label: figure<Filter>(m, 'firstFilter').value,
-                    value: figure<Counts>(m, 'rosterFiltered').shown,
-                  },
-                  {
-                    // The panel's own casing. Lower-casing it produced "and
-                    // employee", which reads as prose rather than as the value the
-                    // viewer just watched being clicked.
-                    label: `and ${figure<Filter>(m, 'secondFilter').value}`,
-                    value: figure<Counts>(m, 'rosterComposed').shown,
-                  },
-                ],
-              }),
+            diagram: 'filter-funnel',
           },
           { beat: 'roster' },
         ],
@@ -601,13 +561,7 @@ export const SCRIPT: Scene[] = [
             beat: 'breakdown',
             stage: 'focus',
             headline: 'Map the exact authentication posture.',
-            diagram: (m, plot, from) =>
-              React.createElement(FactorLadder, {
-                plot,
-                from,
-                rows: figure<CoverageRow[]>(m, 'coverage'),
-                highlight: 'No factors enrolled',
-              }),
+            diagram: 'factor-ladder',
           },
           {
             beat: 'unenrolled',
@@ -646,13 +600,7 @@ export const SCRIPT: Scene[] = [
           {
             beat: 'filter',
             headline: 'Identify the applications nobody switched back on.',
-            diagram: (m, plot, from) =>
-              React.createElement(Ratio, {
-                plot,
-                from,
-                before: { label: 'applications', value: figure<Counts>(m, 'inventory').shown },
-                after: { label: 'inactive', value: figure<Counts>(m, 'inactive').shown },
-              }),
+            diagram: 'inactive-ratio',
           },
         ],
       },
@@ -693,22 +641,7 @@ export const SCRIPT: Scene[] = [
                 return `${stats.Active ?? 0} of ${stats['Total Rules'] ?? 0} rules are in force.`;
               },
             ],
-            diagram: (m, plot, from) => {
-              const stats = figure<Record<string, number>>(m, 'stats');
-              const total = stats['Total Rules'] ?? 0;
-              return React.createElement(RuleBoard, {
-                plot,
-                from,
-                total,
-                active: stats.Active ?? total,
-                stats: [
-                  { label: 'rules', value: total },
-                  { label: 'active', value: stats.Active ?? 0 },
-                  { label: 'dormant', value: stats.Inactive ?? 0 },
-                  { label: 'conflicts', value: stats.Conflicts ?? 0 },
-                ],
-              });
-            },
+            diagram: 'rule-board',
           },
         ],
       },
@@ -765,15 +698,7 @@ export const SCRIPT: Scene[] = [
               },
               (m) => `All of them in ${figure<{ group: string }>(m, 'target').group}.`,
             ],
-            diagram: (m, plot, from) => {
-              const sole = figure<{ heldSolely: number; members: number }>(m, 'sole');
-              return React.createElement(Ratio, {
-                plot,
-                from,
-                before: { label: 'members', value: sole.members },
-                after: { label: 'held by this rule alone', value: sole.heldSolely },
-              });
-            },
+            diagram: 'sole-ratio',
           },
           {
             beat: 'deactivate',

@@ -42,6 +42,7 @@ import {
 } from '../layout';
 import { SCRIPT, type Act, type FilmAct, type PieceAct, type Scene } from '../script';
 import { PIECES, piece } from '../pieces';
+import { DIAGRAMS, type DiagramId } from '../diagrams/registry';
 import { Backdrop } from './Backdrop';
 import { TAB_DEFS } from '../../../src/sidepanel/tabs';
 import { FilmIndex } from './FilmIndex';
@@ -76,7 +77,7 @@ interface Cue {
   /** Did this mark move the camera? A diagram's lifetime ends at the next one that did. */
   movesCamera: boolean;
   lines: { kind: Line['kind']; text: string }[];
-  diagram?: (manifest: Manifest, plot: Rect, from: number) => React.ReactNode;
+  diagram?: DiagramId;
 }
 
 /**
@@ -515,11 +516,23 @@ const ActFilm: React.FC<ActProps> = ({ chapter, index }) => {
         </div>
       )}
 
-      {drawn.map((entry) => (
-        <div key={`diagram-${entry.cue.from}`} style={{ opacity: entry.opacity }}>
-          {entry.cue.diagram?.(manifest, STAGES[entry.cue.stage].plot, entry.cue.from)}
-        </div>
-      ))}
+      {drawn.map((entry) => {
+        // Resolved here rather than in the cue, so a diagram is looked up on
+        // the frame it draws on. A component captured at cue-build time would
+        // be one more thing held across a re-render for no reason.
+        const Diagram = entry.cue.diagram ? DIAGRAMS[entry.cue.diagram] : undefined;
+        return (
+          <div key={`diagram-${entry.cue.from}`} style={{ opacity: entry.opacity }}>
+            {Diagram ? (
+              <Diagram
+                manifest={manifest}
+                plot={STAGES[entry.cue.stage].plot}
+                from={entry.cue.from}
+              />
+            ) : null}
+          </div>
+        );
+      })}
     </AbsoluteFill>
   );
 };
