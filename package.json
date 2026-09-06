@@ -35,6 +35,7 @@
     "studio": "npm --prefix reel run studio",
     "reel:look": "node .storybook/scripts/reel/look.mjs",
     "reel:draft": "node .storybook/scripts/reel/draft.mjs",
+    "reel:identical": "node .storybook/scripts/reel/identical.mjs",
     "reel": "npm --prefix reel run render",
     "reel:poster": "npm --prefix reel run still",
     "reel:theme": "node reel/scripts/sync-theme.mjs",
