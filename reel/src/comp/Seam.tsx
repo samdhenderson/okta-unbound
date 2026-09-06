@@ -126,13 +126,20 @@ export const Seam: React.FC<SeamProps> = ({ frame, arriveAt = 0, recedeAt }) => 
  * frames - so scrubbing this composition shows all three phases rather than
  * one frozen pose.
  */
-const PREVIEW_FRAMES = 60;
+/**
+ * How long the seam's own preview composition runs.
+ *
+ * Exported because `Root.tsx` registers the composition and needs the same
+ * number; it used to state a bare `60` of its own, which is the kind of pair
+ * that stays right until somebody re-times the rehearsal. (ADR-0074 3.)
+ */
+export const SEAM_PREVIEW_FRAMES = 60;
 
 export const SeamPreview: React.FC = () => {
   const frame = useCurrentFrame();
   return (
     <AbsoluteFill style={{ background: STAGE.back }}>
-      <Seam frame={frame} arriveAt={0} recedeAt={PREVIEW_FRAMES - 1 - FRAMES.recede} />
+      <Seam frame={frame} arriveAt={0} recedeAt={SEAM_PREVIEW_FRAMES - 1 - FRAMES.recede} />
     </AbsoluteFill>
   );
 };

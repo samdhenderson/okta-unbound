@@ -19,7 +19,7 @@
  * start later, pass a later `from`; that is the entire mechanism.
  *
  * `count` is deliberately absent from the table this hook drives internally
- * (see `VERB_TOTAL`/`VERB_EASE` below) even though it is one of the six -
+ * (see `VERBS` below) even though it is one of the six -
  * its roll (`standard`) and its settle (`affirm`) are two different curves
  * over two different windows with a per-column stagger on top, which is more
  * than one `[0,1]` number can carry. `Count.tsx` computes its own per-column
@@ -29,26 +29,27 @@
 import { interpolate, useCurrentFrame } from 'remotion';
 import { EASING, FRAMES } from './ease';
 
-/** The six verbs this hook knows how to drive a single `[0,1]` progress for. */
-export type VerbName = 'dock' | 'lift' | 'split' | 'fan' | 'recede';
+/**
+ * The verbs this hook can drive a single `[0,1]` progress for: how long each
+ * one runs, and the curve it runs on.
+ *
+ * One table, not two keyed the same way. A verb used to be declared in a
+ * `VERB_TOTAL` map and again in a `VERB_EASE` map, so adding one meant editing
+ * both and a verb with a budget but no curve was a `TypeError` at render
+ * rather than an error at build. Here a verb is one entry that cannot be half
+ * declared, and {@link VerbName} is derived from the table rather than being a
+ * third place to list the same five names. (ADR-0074 §4.)
+ */
+const VERBS = {
+  dock: { frames: FRAMES.dockTotal, ease: EASING.entrance },
+  lift: { frames: FRAMES.lift, ease: EASING.standard },
+  split: { frames: FRAMES.split, ease: EASING.standard },
+  fan: { frames: FRAMES.fanTotal, ease: EASING.entrance },
+  recede: { frames: FRAMES.recede, ease: EASING.exit },
+} as const satisfies Record<string, { frames: number; ease: (input: number) => number }>;
 
-/** Each verb's own frame budget, from the verb table. */
-const VERB_TOTAL: Record<VerbName, number> = {
-  dock: FRAMES.dockTotal,
-  lift: FRAMES.lift,
-  split: FRAMES.split,
-  fan: FRAMES.fanTotal,
-  recede: FRAMES.recede,
-};
-
-/** Each verb's own curve, from the verb table. */
-const VERB_EASE: Record<VerbName, (input: number) => number> = {
-  dock: EASING.entrance,
-  lift: EASING.standard,
-  split: EASING.standard,
-  fan: EASING.entrance,
-  recede: EASING.exit,
-};
+/** The verbs this hook knows how to drive a single `[0,1]` progress for. */
+export type VerbName = keyof typeof VERBS;
 
 /**
  * A verb's bezier progress in `[0, 1]` over its own frame count, measured from
@@ -59,12 +60,12 @@ const VERB_EASE: Record<VerbName, (input: number) => number> = {
  */
 export function useVerb(name: VerbName, from: number): number {
   const frame = useCurrentFrame();
-  const total = VERB_TOTAL[name];
-  const linear = interpolate(frame, [from, from + total], [0, 1], {
+  const verb = VERBS[name];
+  const linear = interpolate(frame, [from, from + verb.frames], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  return VERB_EASE[name](linear);
+  return verb.ease(linear);
 }
 
 /**

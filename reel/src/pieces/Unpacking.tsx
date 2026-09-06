@@ -106,8 +106,6 @@ import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
 import { figureNumber } from '../captures';
 import type { Manifest } from '../captures';
 import { FRAMES, INTER, STAGE, TYPE } from '../theme';
-import { STAGES } from '../layout';
-import { capture } from '../captures';
 import { Count, Dock, Recede } from '../verbs';
 import { EASING } from '../verbs/ease';
 import type { PieceProps } from './index';
@@ -529,23 +527,3 @@ export const Unpacking: React.FC<PieceProps> = ({ manifest }) => {
     </AbsoluteFill>
   );
 };
-
-/**
- * Props-free wrapper so this can be a registered composition while it is built.
- *
- * It paints the stage and sets the film's face, which `ActPiece` does for the
- * real thing (`Backdrop` under the piece, `INTER` on the frame). Without both,
- * a still rendered from this composition is a transparent PNG in whatever font
- * the render box had lying around - which is exactly the failure `theme.ts`
- * documents for the margin, judged in the one place the piece is judged.
- */
-export const UnpackingPreview: React.FC = () => (
-  <AbsoluteFill style={{ background: STAGE.back, fontFamily: INTER, color: STAGE.ink }}>
-    <Unpacking
-      id="placeholder"
-      frames={UNPACKING_FRAMES}
-      plot={STAGES.focus.plot}
-      manifest={capture('home')}
-    />
-  </AbsoluteFill>
-);
