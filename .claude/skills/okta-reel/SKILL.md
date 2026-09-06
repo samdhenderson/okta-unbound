@@ -75,13 +75,13 @@ Everything the film can draw is addressed by a string id. **Adding one is the
 component file plus one registry entry; nothing else.** Previews are derived, so
 a registered thing is immediately viewable in the studio.
 
-| To add…                               | Write                                                | Register in                                                        | Then                                                                       |
-| ------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| A set piece (full-frame, panel gone)  | `reel/src/pieces/<Name>.tsx` + a `*_FRAMES` literal  | `pieces/index.ts` → `PIECES`, with `preview: '<capture>'`          | name it from an act: `{ kind: 'piece', piece: '<id>', from: '<capture>' }` |
-| A diagram (drawn beside the panel)    | a component + an adapter entry                       | `diagrams/registry.tsx` → `DIAGRAMS`                               | name it from a mark: `diagram: '<id>'`                                     |
-| A card (opening, seam, end furniture) | `reel/src/comp/<Name>.tsx` + a props-free `*Preview` | `comp/cards.ts` → `CARDS`                                          | placed by `Reel.tsx`/`Chapter.tsx`, never by the script                    |
-| A verb (reusable motion primitive)    | `reel/src/verbs/<Name>.tsx`                          | `verbs/useVerb.ts` → `VERBS`, budget in `verbs/ease.ts` → `FRAMES` | add a row to `comp/Verbs.tsx` by hand — that matrix is not derived         |
-| A beat or act                         | —                                                    | `reel/src/script.ts`                                               | `npm run reel:plan`, then `npm run reel:vo:targets`                        |
+| To add…                               | Write                                                | Register in                                                          | Then                                                                                                                  |
+| ------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| A set piece (full-frame, panel gone)  | `reel/src/pieces/<Name>.tsx` + a `tempo()` sheet     | `pieces/index.ts` → `PIECES`, with `cues` and `preview: '<capture>'` | name it from an act: `{ kind: 'piece', piece: '<id>', from: '<capture>' }`; retune with `holds: { <cue>: <seconds> }` |
+| A diagram (drawn beside the panel)    | a component + an adapter entry                       | `diagrams/registry.tsx` → `DIAGRAMS`                                 | name it from a mark: `diagram: '<id>'`                                                                                |
+| A card (opening, seam, end furniture) | `reel/src/comp/<Name>.tsx` + a props-free `*Preview` | `comp/cards.ts` → `CARDS`                                            | placed by `Reel.tsx`/`Chapter.tsx`, never by the script                                                               |
+| A verb (reusable motion primitive)    | `reel/src/verbs/<Name>.tsx`                          | `verbs/useVerb.ts` → `VERBS`, budget in `verbs/ease.ts` → `FRAMES`   | add a row to `comp/Verbs.tsx` by hand — that matrix is not derived                                                    |
+| A beat or act                         | —                                                    | `reel/src/script.ts`                                                 | `npm run reel:plan`, then `npm run reel:vo:targets`                                                                   |
 
 **A piece's length is a literal, never a computation.** `Reel.tsx` resolves every
 act's length at module scope, so anything on that path that can throw —

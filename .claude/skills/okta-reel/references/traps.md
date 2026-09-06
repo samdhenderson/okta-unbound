@@ -57,6 +57,34 @@ It samples **per beat** now, which covers every cued visual by construction.
 The general lesson stands: **a passing check whose coverage you have not
 verified is not evidence.** Break the thing on purpose and watch it fail.
 
+## A frame check that could not see a whole verb
+
+`reel:identical` gave a **set piece** three samples no matter how long it ran.
+On the 222 frame `exploded-plates` that is one every 74 frames, and every verb
+in the grammar runs 13 to 26 - so the check could not see one at all. Adding 21
+frames to `split`'s entire budget came back "frame-identical". A piece is now
+sampled at a fixed 12 frame stride, under the shortest verb budget.
+
+Note the shape: this is the _same_ failure the per-beat change fixed for
+footage acts, still live for synthetic ones a month later. When you fix a
+sampling bug, check whether the other branch has it too.
+
+## A perturbation that proves nothing because the film never runs that code
+
+The first attempt to prove the above moved `split`'s `deltaBar` window and saw
+no change - correctly, because **no act passes `Split`'s `delta` prop**. That
+path exists only in the verbs matrix, which `reel:identical` does not sample.
+A perturbation has to land on a path the film actually renders, or a green
+result is about the perturbation, not the check.
+
+## A preview that shows a tempo the film does not render
+
+A piece's preview composition sized itself from `PIECES[id].frames` - the
+piece's own pacing - while the film rendered it with the act's `holds` applied.
+So the preview was wrong exactly when someone was retuning those holds and
+previewing the result. `previewFrames()` reads the cut's holds now, and
+`emit-plan` mirrors it so `reel:look` and the studio agree.
+
 ## A generated file the formatter fights
 
 `CUT.generated.md` was written unformatted, prettier reformatted it on commit,

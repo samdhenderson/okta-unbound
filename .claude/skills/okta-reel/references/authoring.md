@@ -10,11 +10,37 @@ frame of it.
 A full-frame synthetic composition that plays while the panel is gone.
 
 1. **Write** `reel/src/pieces/<Name>.tsx`. It takes `PieceProps`
-   (`id`, `frames`, `plot`, `manifest`) and exports a `<NAME>_FRAMES` literal.
+   (`id`, `frames`, `plot`, `manifest`, `holds`) and exports its cues and its
+   length.
    - Every number it prints comes from `figure(manifest, key)`. Never a literal.
-   - Export the frame budget as a **literal**, never a computation — see the
-     module doc on `pieces/index.ts` for why a throw on that path kills the
-     whole bundle.
+   - **Write the choreography as a tempo sheet, not as frame constants:**
+
+     ```ts
+     export const LEDGER_CUES = {
+       dock: { verb: 'dock' },
+       split: { verb: 'split', gap: 7, hold: 5 },
+       rejoin: { frames: 12 },
+       out: { verb: 'recede', gap: 4 },
+     } as const satisfies Record<string, Cue>;
+
+     const SHEET = tempo(LEDGER_CUES);
+     export const LEDGER_FRAMES = SHEET.frames;
+     ```
+
+     `gap` is frames (spacing between moves, read against verb budgets of
+     13-26); `hold` is seconds (the pause an editor asks for). Cues run in
+     declaration order, each starting where the last finished, and `with`
+     starts one alongside an earlier one for a second track. Never add up frame
+     numbers by hand and never write a pause as the difference between two
+     constants - that is the thing the sheet exists to end.
+
+   - **Do not subtract one from the total.** `tempo()` already accounts for a
+     verb completing _on_ its last frame; every piece used to carry its own
+     `- 1` for this.
+   - The length may be `SHEET.frames`. `tempo()` is total - no manifest, no
+     figure, no capture - so it is safe on the module-scope length path. A
+     length that reads a manifest or a figure is still banned; see
+     `pieces/index.ts`.
    - **It draws into the whole frame, not into `plot`.** `PieceProps.plot`
      says "the rectangle to draw into" and only `Placeholder` actually uses it;
      every real piece centres itself in the 1920x1080 frame, because a piece
@@ -25,8 +51,17 @@ A full-frame synthetic composition that plays while the panel is gone.
 2. **Register** in `reel/src/pieces/index.ts`:
 
    ```ts
-   '<id>': { component: <Name>, frames: <NAME>_FRAMES, preview: '<capture-id>' },
+   '<id>': {
+     component: <Name>,
+     frames: <NAME>_FRAMES,
+     cues: <NAME>_CUES,
+     preview: '<capture-id>',
+   },
    ```
+
+   `cues` is what lets the cut retune the piece: `pieceFrames()` replays the
+   sheet with an act's overrides so `Reel.tsx` can size the act without asking
+   the component. Omit it and the piece simply is not tunable.
 
    The preview composition `piece-<id>` now exists automatically.
 
@@ -51,6 +86,31 @@ A full-frame synthetic composition that plays while the panel is gone.
    act after it shifted.
 7. Add a `### <act-key>` section to `NARRATION.md`, or `check-vo.mjs` will
    report it as unrecorded.
+
+---
+
+## Retune a set piece's pauses
+
+The piece states the pacing it was built at; the cut gets to disagree, without
+opening the component.
+
+1. `reel/CUT.generated.md` lists the cues each piece act exposes, under
+   **Set piece holds**. Those names are what `holds` accepts.
+2. In `script.ts`, on the piece act:
+   ```ts
+   { kind: 'piece', piece: 'exploded-plates', from: 'users-cause',
+     holds: { split: 5, rejoin: 4 } },
+   ```
+   Seconds, by cue name. A name that is not a cue is ignored rather than
+   throwing, because a throw on the length path takes down the whole bundle.
+3. `npm run reel:plan` - the act, its chapter, and every chapter after it moved.
+4. `npm run reel:vo:targets` - the act's narration budget moved with it.
+5. Look: `npm run reel:look -- --at <act-key>`. The `piece-<id>` preview shows
+   the same pacing, because it reads the cut's holds too.
+
+Changing the piece's own `hold` in its sheet changes it everywhere; `holds` in
+the script changes it for that act. Prefer the script when the reason is
+editorial.
 
 ---
 
@@ -101,16 +161,32 @@ it, and `check-vo.mjs` will report the old ones as dead audio.
 
 ## Add a verb
 
+Two files, and the gate catches the rest.
+
 1. Write `reel/src/verbs/<Name>.tsx`, authored in **absolute composition
-   frames**, taking a `from: number`.
-2. Add its frame budget to `FRAMES` in `verbs/ease.ts`.
-3. Add one entry to `VERBS` in `verbs/useVerb.ts`:
-   `<name>: { frames: FRAMES.<name>, ease: EASING.<curve> }`.
-   `VerbName` derives from the table.
-4. Export it from `verbs/index.ts`.
-5. Add a row to `comp/Verbs.tsx` **by hand** — that demo matrix is deliberately
-   not derived, because each row's body is a different component.
-6. Look: `npm run reel:look -- verbs --sheet`.
+   frames**, taking a `from: number`. Drive it with `useVerb(name, from)` and
+   `useVerbPart(name, part, from)` - never a hand-rolled `interpolate` over
+   frame constants.
+2. Add **one entry** to `VERBS` in `verbs/registry.ts`:
+   ```ts
+   <name>: {
+     frames: framesFor('<dur-token>'),   // or a literal the verb table states
+     ease: '<curve>',
+     parts: { <window>: { at: 0, over: 8 } },   // relative to the verb's start
+     stagger: 4,                                 // if it releases children
+   },
+   ```
+   `VerbName` derives from this. A budget without a curve is now impossible.
+3. Export it from `verbs/index.ts` and add a `<Row verb="<name>" ...>` to
+   `comp/Verbs.tsx`. Each row's _body_ stays hand-written, because each is a
+   different component; the heading is derived from the verb name.
+4. `npm --prefix reel run check-verbs` fails if you skipped 3, or if a part is
+   scheduled past the end of its own verb.
+5. Look: `npm run reel:look -- verbs 60`.
+
+A verb that cannot be driven by one `[0,1]` says so in its `compound` field and
+reads its own `parts` - `count` is the one that does. `draw` and `convert` stay
+in `pencil/` with `PENCIL_FRAMES`, deliberately.
 
 Never wrap a verb's contents in Remotion's `<Sequence>`. See `traps.md`.
 

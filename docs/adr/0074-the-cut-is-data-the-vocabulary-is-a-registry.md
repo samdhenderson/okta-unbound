@@ -110,6 +110,23 @@ way the drift already in the file does not come back.
 `VerbName = keyof typeof VERBS`. Adding a verb is a component file and one entry, not two
 maps and a union listing the same names.
 
+> **Extended, at implementation.** One table was not enough, because the table was not
+> the only place a verb's timing lived. `ease.ts`'s flat `FRAMES` bag held the rest of it
+>
+> - totals under three different naming conventions (`dockTotal`, `lift`, `fanTotal`)
+>   alongside sub-beats (`splitDeltaBarAt`, `fanStagger`, `recedeOpacityWindow`) - and
+>   four of the six verbs never called `useVerb` at all, hand-rolling their own clamped
+>   `interpolate` against those keys. `Split` did it twice. So the registry moved to its
+>   own module, `verbs/registry.ts`, and absorbed **all** of it: total, curve, named
+>   sub-windows (`parts`, relative to the verb's own start) and `stagger`, in one entry
+>   that cannot be half declared. `FRAMES` survives as a derived _view_ over that table,
+>   because 95 call sites across 19 files read it and rewriting them is a large diff whose
+>   only gate is that the picture did not move.
+>
+> `useVerbPart(verb, part, from)` replaces the arithmetic each component was doing
+> against those loose keys, which is what removes the class of bug where a window's
+> offset is added correctly in one of the two places it appears.
+
 > **Correction, at implementation.** This section originally also claimed
 > `comp/Verbs.tsx` would derive its demo matrix from the table. It does not, and the
 > claim was wrong. Each row of that matrix is a different component with its own period
@@ -118,6 +135,14 @@ maps and a union listing the same names.
 > derived. Deriving one integer while leaving seven bespoke rows in place is churn in a
 > 621-line file that the frame-identity check does not sample. The demo matrix stays
 > hand-written, and a new verb adds a row to it by hand.
+>
+> **Revisited.** The bodies stay hand-written for the reason above, and that is settled.
+> What was wrong was concluding that nothing could be done: a row is now addressed as
+> `<Row verb="split">` rather than `name="SPLIT"`, its heading derived from the verb
+> name, and `check-verbs.mjs` fails a registered verb with no row. Deriving the _body_
+> was never the valuable part; making the omission **fail** was, and that needed only a
+> machine-readable handle on each row. The same gate also fails a verb the barrel does
+> not export, and a `part` scheduled past the end of the verb that owns it.
 
 `Count` stays outside `VerbName`. Its roll and settle are two curves over two windows
 with a per-column stagger, so it computes its own timeline; forcing it into a table of
@@ -133,6 +158,43 @@ resolved cut - acts, keys, frame ranges, beats, figures read - is emitted to
 
 `parse-script.mjs`, `ramp-lite.mjs` and `pieces-frames.mjs` are then deleted, and
 `actKey` collapses to one implementation.
+
+### 6. A set piece's time is a sheet of named cues
+
+A set piece opened with a wall of absolute frame constants - 18 in `ExplodedPlates`, 21
+in `Ledger`, 26 in `Unpacking` - and a separate hand-typed total. Every constant is a sum
+somebody worked out once, and every **pause is an implicit subtraction that appears
+nowhere**: how long the plates stay apart is `CLOSE_AT - SPLIT_AT - 19`. A piece's pacing
+was therefore the one editorial quantity in the film that could not be stated, only
+recomputed.
+
+`reel/tempo.ts` states the choreography as named cues, each starting where the last
+finished, with `gap` in frames (spacing between moves, read against verb budgets of 13 to 26) and `hold` in seconds (the pause an editor asks for, in the language of the cut). The
+two units are deliberate: each quantity is written in the unit the person choosing it is
+thinking in.
+
+`PieceAct.holds` then lets `script.ts` retune those holds by cue name. The piece states
+the pacing it was built at; the cut gets to disagree; neither opens the other's file.
+`pieceFrames()` replays the same arithmetic so `Reel.tsx` can size an act at module scope
+without asking the component, and `emit-plan` calls the same function so the generated
+cut cannot describe a length the film will not render.
+
+**On the frame-count literal.** ADR-0053 and `pieces/index.ts` required a piece's length
+to be a bare literal, because `Reel.tsx` resolves every act's length during module
+evaluation and `capture()`/`figure()` throw by design - a throw there takes down the whole
+bundle rather than the one composition that wanted it. A piece may now export
+`SHEET.frames` instead. The rule it relaxes was never "no computation"; it was **"nothing
+that can throw."** `tempo()` reads no manifest, no figure and no capture, and takes a
+`VerbName` that a typo makes a type error rather than a runtime lookup miss, so there is
+no input to it that produces an exception. The original prohibition stands wherever it
+was actually aimed.
+
+The sheet also absorbs the `- 1` every piece was carrying against its own total. A verb
+starting at `f` reaches its final pose _on_ frame `f + n`, and a piece of N frames renders
+0 through N-1, so a piece sized at the cursor never renders the frame its last verb
+completes on - the film's last frame kept the object on screen at about 17 percent,
+composited over the footage it cut back to. Each piece had rediscovered that by rendering
+its last frame. It is accounted for once now, in `tempo()`.
 
 ## Consequences
 
