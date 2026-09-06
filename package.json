@@ -38,6 +38,8 @@
     "reel:identical": "node .storybook/scripts/reel/identical.mjs",
     "reel": "npm --prefix reel run render",
     "reel:poster": "npm --prefix reel run still",
+    "reel:plan": "node reel/scripts/emit-plan.mjs",
+    "reel:plan:check": "node reel/scripts/emit-plan.mjs --check",
     "reel:theme": "node reel/scripts/sync-theme.mjs",
     "reel:theme:check": "node reel/scripts/sync-theme.mjs --check",
     "reel:vo:budget": "npm --prefix reel run vo:budget",

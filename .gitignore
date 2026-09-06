@@ -95,3 +95,6 @@ reel/node_modules/
 # fast during a judging pass, which is exactly when nobody is watching git.
 reel/out/
 reel/clips/
+
+# Demo reel: the CommonJS build `emit-plan.mjs` compiles into and deletes.
+reel/.tmp-plan/

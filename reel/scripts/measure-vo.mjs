@@ -44,7 +44,9 @@ async function probeSeconds(file) {
   }
   const seconds = Number(stdout.trim());
   if (!Number.isFinite(seconds)) {
-    throw new Error(`measure-vo: ffprobe returned no usable duration for ${file}: "${stdout.trim()}"`);
+    throw new Error(
+      `measure-vo: ffprobe returned no usable duration for ${file}: "${stdout.trim()}"`,
+    );
   }
   return Math.round(seconds * 100) / 100;
 }
@@ -60,7 +62,10 @@ async function main() {
   }
 
   const body = entries
-    .map(([key, { file, seconds }]) => `  ${JSON.stringify(key)}: { file: ${JSON.stringify(file)}, seconds: ${seconds} },`)
+    .map(
+      ([key, { file, seconds }]) =>
+        `  ${JSON.stringify(key)}: { file: ${JSON.stringify(file)}, seconds: ${seconds} },`,
+    )
     .join('\n');
 
   const out = `/**

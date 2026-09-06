@@ -1,0 +1,265 @@
+/**
+ * Emit the resolved cut as JSON, by running the real script through the real
+ * ramp.
+ *
+ *   node scripts/emit-plan.mjs            write plan.generated.json
+ *   node scripts/emit-plan.mjs --check    fail if it is out of date
+ *
+ * ## What this replaces
+ *
+ * Every build script used to read `src/script.ts` as text, because the file
+ * imported React and six component identifiers and so could not be evaluated
+ * outside a bundler. Text parsing cannot call a function, so `buildRamp`'s
+ * arithmetic was re-implemented by hand in `lib/ramp-lite.mjs` under a comment
+ * asking to be kept in sync, `lib/parse-script.mjs` regexed the script's
+ * structure, and `lib/pieces-frames.mjs` regexed the `PIECES` table. Three
+ * parsers and a hand-copied algorithm, all downstream of one closure.
+ *
+ * ADR-0074 removed the closure. So this runs the actual `SCRIPT` through the
+ * actual `buildRamp` and writes down what came out. The numbers here are the
+ * numbers the composition will render, not a second opinion about them.
+ *
+ * ## How it evaluates TypeScript without a bundler
+ *
+ * `tsc` compiles `script.ts` and `ramp.ts` to CommonJS in `.tmp-plan/`, which
+ * is then `require`d and deleted. Four details make that work, each of which
+ * cost a failed attempt:
+ *
+ * - **CommonJS, not ESM.** Node's ESM resolver demands file extensions, and
+ *   this source tree imports `'./captures'` everywhere. `require` resolves
+ *   extensionless specifiers; `import` does not.
+ * - **`.tmp-plan/package.json` says `commonjs`.** `reel/package.json` declares
+ *   `"type": "module"`, which would otherwise make the emitted `.js` files ESM
+ *   again and defeat the point.
+ * - **The build lands inside `reel/`.** `captures.ts` imports `remotion` for
+ *   `staticFile`, so the output has to sit where `reel/node_modules` resolves.
+ *   It also emits `require('../../captures/home.json')`, which only points at
+ *   the shoot's output from inside the project.
+ * - **Type-only imports are erased.** `script.ts` names `DiagramId` and
+ *   `PieceId` as types, so requiring it pulls in no `.tsx` and no React.
+ *
+ * This is a build-time convenience, never a second renderer. It reads what the
+ * composition declares; it does not decide anything.
+ *
+ * @module
+ */
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import path from 'node:path';
+
+import { REEL_ROOT, readFps } from './lib/paths.mjs';
+
+/** Where the CommonJS build lands, and is deleted from. Gitignored. */
+const BUILD = path.join(REEL_ROOT, '.tmp-plan');
+
+/** The committed output. */
+export const PLAN_JSON = path.join(REEL_ROOT, 'plan.generated.json');
+
+/**
+ * Compile and load `SCRIPT`, `buildRamp` and `capture`.
+ *
+ * @returns {{ SCRIPT: object[], buildRamp: Function, capture: Function, PIECES: object }}
+ */
+function load() {
+  rmSync(BUILD, { recursive: true, force: true });
+  mkdirSync(BUILD, { recursive: true });
+  writeFileSync(path.join(BUILD, 'package.json'), '{"type":"commonjs"}\n');
+
+  try {
+    execFileSync(
+      'npx',
+      [
+        'tsc',
+        'src/script.ts',
+        'src/ramp.ts',
+        'src/pieces/index.ts',
+        '--ignoreConfig',
+        '--module',
+        'commonjs',
+        '--target',
+        'es2022',
+        '--moduleResolution',
+        'bundler',
+        '--resolveJsonModule',
+        '--skipLibCheck',
+        '--jsx',
+        'react',
+        '--rootDir',
+        'src',
+        '--outDir',
+        '.tmp-plan',
+      ],
+      { cwd: REEL_ROOT, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  } catch (err) {
+    // A type error here is a type error in the composition, and `tsc` has
+    // already said exactly what it is. Reporting that, rather than a stack
+    // trace from this script, is the difference between "your script does not
+    // compile" and "the plan tool crashed".
+    const detail = `${err.stdout ?? ''}${err.stderr ?? ''}`.trim();
+    throw new Error(
+      `the composition does not compile, so the cut cannot be resolved:\n\n${detail}`,
+    );
+  }
+
+  const require = createRequire(path.join(BUILD, 'noop.cjs'));
+  return {
+    SCRIPT: require('./script.js').SCRIPT,
+    buildRamp: require('./ramp.js').buildRamp,
+    capture: require('./captures.js').capture,
+    PIECES: require('./pieces/index.js').PIECES,
+  };
+}
+
+/**
+ * Resolve the cut.
+ *
+ * Mirrors the layout `Chapter.tsx` and `Reel.tsx` perform - acts end to end,
+ * chapters end to end - but with the real per-act lengths, so the only thing
+ * restated is the ordering, not the arithmetic.
+ */
+function resolve({ SCRIPT, buildRamp, capture, PIECES }, fps) {
+  const scenes = [];
+  let reelCursor = 0;
+
+  for (const scene of SCRIPT) {
+    let cursor = 0;
+    const acts = [];
+
+    for (const [index, act] of scene.acts.entries()) {
+      const isPiece = act.kind === 'piece';
+      // The one formula that has to agree with `Chapter.tsx`'s `actKey`, and
+      // the reason `vo.ts` may stop carrying its own copy of it.
+      const key = `${isPiece ? `piece-${act.piece}` : act.capture}-${index}`;
+      const from = cursor;
+      const base = {
+        key,
+        index,
+        kind: isPiece ? 'piece' : 'film',
+        capture: isPiece ? act.from : act.capture,
+        from,
+        reelFrom: reelCursor + from,
+      };
+
+      if (isPiece) {
+        const frames = PIECES[act.piece].frames;
+        acts.push({ ...base, piece: act.piece, frames, beats: [] });
+        cursor += frames;
+        continue;
+      }
+
+      // A capture that has not been shot, or a plan naming a beat the footage
+      // does not carry, is reported rather than thrown: a half-shot reel is
+      // the normal working state and every other act still has a real answer.
+      let ramp;
+      try {
+        ramp = buildRamp(capture(act.capture), act.plan, fps);
+      } catch (err) {
+        acts.push({ ...base, label: act.label, frames: null, reason: err.message, beats: [] });
+        continue;
+      }
+
+      acts.push({
+        ...base,
+        label: act.label,
+        frames: ramp.durationInFrames,
+        beats: act.plan.map((entry) => {
+          const cue = ramp.cues[entry.beat];
+          return {
+            beat: entry.beat,
+            from: from + cue.from,
+            frames: cue.durationInFrames,
+            reelFrom: reelCursor + from + cue.from,
+          };
+        }),
+        marks: act.marks.map((mark) => ({
+          beat: mark.beat,
+          headline: mark.headline,
+          stage: mark.stage,
+          diagram: mark.diagram,
+        })),
+      });
+      cursor += ramp.durationInFrames;
+    }
+
+    scenes.push({ id: scene.id, title: scene.title, from: reelCursor, frames: cursor, acts });
+    reelCursor += cursor;
+  }
+
+  return scenes;
+}
+
+/** Read a numeric `export const NAME = <literal>;` out of a component. */
+function readConst(file, name) {
+  const source = readFileSync(path.join(REEL_ROOT, file), 'utf8');
+  const match = source.match(new RegExp(`${name}\\s*=\\s*(\\d+)\\s*;`));
+  return match ? Number(match[1]) : null;
+}
+
+function build() {
+  const fps = readFps();
+  let scenes;
+  try {
+    scenes = resolve(load(), fps);
+  } finally {
+    // Always, including on a compile failure. A stale build left behind is how
+    // a later run quietly reads yesterday's script.
+    rmSync(BUILD, { recursive: true, force: true });
+  }
+
+  const overture = readConst('src/comp/Overture.tsx', 'OVERTURE_FRAMES');
+  const premise = readConst('src/comp/PremiseCard.tsx', 'PREMISE_CARD_FRAMES');
+  const endCard = readConst('src/comp/EndCard.tsx', 'END_CARD_FRAMES');
+  const openingFrames = overture + premise;
+  const chaptersEnd = openingFrames + scenes.reduce((t, s) => t + s.frames, 0);
+
+  // The scenes were resolved with a cursor starting at 0; the reel's own clock
+  // starts after the opening title. Shifted once here rather than threaded
+  // through the resolver.
+  for (const scene of scenes) {
+    scene.from += openingFrames;
+    for (const act of scene.acts) {
+      act.reelFrom += openingFrames;
+      for (const beat of act.beats) beat.reelFrom += openingFrames;
+    }
+  }
+
+  return {
+    _generated: 'npm run reel:plan - do not edit',
+    fps,
+    openingFrames,
+    endCardFrames: endCard,
+    chaptersEnd,
+    frames: chaptersEnd + endCard,
+    scenes,
+  };
+}
+
+function main() {
+  const check = process.argv.includes('--check');
+  const plan = `${JSON.stringify(build(), null, 2)}\n`;
+
+  if (!check) {
+    writeFileSync(PLAN_JSON, plan);
+    console.log(`plan.generated.json: ${JSON.parse(plan).scenes.length} scenes written.`);
+    return;
+  }
+
+  if (!existsSync(PLAN_JSON)) {
+    console.error('plan.generated.json does not exist. Run: npm run reel:plan');
+    process.exit(1);
+  }
+  if (readFileSync(PLAN_JSON, 'utf8') !== plan) {
+    console.error('plan.generated.json is out of date. Run: npm run reel:plan');
+    process.exit(1);
+  }
+  console.log('plan is in sync');
+}
+
+try {
+  main();
+} catch (err) {
+  console.error(`reel:plan: ${err.message}`);
+  process.exit(1);
+}

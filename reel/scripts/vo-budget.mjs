@@ -17,10 +17,7 @@
  *
  * @module
  */
-import { readScript, actCaptureId } from './lib/parse-script.mjs';
-import { readPieceFrames } from './lib/pieces-frames.mjs';
-import { buildRampLite } from './lib/ramp-lite.mjs';
-import { readFps, readManifest } from './lib/paths.mjs';
+import { readCut } from './lib/cut.mjs';
 
 /** Comfortable spoken pace, in words per second. See the module doc. */
 const WORDS_PER_SECOND = 2.6;
@@ -30,59 +27,52 @@ const words = (secs) => Math.max(1, Math.round(secs * WORDS_PER_SECOND));
 const fmt = (secs) => `${secs.toFixed(2)}s`;
 
 function main() {
-  const fps = readFps();
-  const scenes = readScript();
-  const pieceFrames = readPieceFrames();
+  const cut = readCut();
+  const fps = cut.fps;
 
   let grandFrames = 0;
   let grandWords = 0;
   const unavailable = [];
 
-  for (const scene of scenes) {
+  for (const scene of cut.scenes) {
     console.log(`\n${scene.title} (${scene.id})`);
 
     for (const act of scene.acts) {
       if (act.kind === 'piece') {
-        const frames = pieceFrames[act.piece];
-        const secs = seconds(frames, fps);
-        grandFrames += frames;
+        const secs = seconds(act.frames, fps);
+        grandFrames += act.frames;
         grandWords += words(secs);
-        console.log(`  ${act.key}  [set piece: ${act.piece}, from ${act.from}]`);
+        console.log(`  ${act.key}  [set piece: ${act.piece}, from ${act.capture}]`);
         console.log(`    total  ${fmt(secs)}  ->  ~${words(secs)} words`);
         continue;
       }
 
-      const read = readManifest(act.capture);
-      if (!read.ok) {
-        unavailable.push(`${act.key} (${read.reason})`);
-        console.log(`  ${act.key}  [film: ${act.capture}]  -- SKIPPED: ${read.reason}`);
+      if (act.frames === null) {
+        unavailable.push(`${act.key} (${act.reason})`);
+        console.log(`  ${act.key}  [film: ${act.capture}]  -- SKIPPED: ${act.reason}`);
         continue;
       }
 
-      let ramp;
-      try {
-        ramp = buildRampLite(read.manifest, act.plan, fps);
-      } catch (err) {
-        unavailable.push(`${act.key} (${err.message})`);
-        console.log(`  ${act.key}  [film: ${act.capture}]  -- SKIPPED: ${err.message}`);
-        continue;
-      }
-      const totalSecs = seconds(ramp.durationInFrames, fps);
-      grandFrames += ramp.durationInFrames;
+      const totalSecs = seconds(act.frames, fps);
+      grandFrames += act.frames;
       grandWords += words(totalSecs);
 
-      console.log(`  ${act.key}  [film: ${actCaptureId(act)}]`);
-      for (const entry of act.plan) {
-        const cue = ramp.cues[entry.beat];
-        const beatSecs = seconds(cue.durationInFrames, fps);
+      console.log(`  ${act.key}  [film: ${act.capture}]`);
+      for (const beat of act.beats) {
+        const beatSecs = seconds(beat.frames, fps);
+        // Frames are printed act-local, the origin a narrator reads against:
+        // "twelve seconds into this act", never "13,076 frames into the reel".
+        const localFrom = beat.from - act.from;
         console.log(
-          `    ${entry.beat.padEnd(14)} frames ${String(cue.from).padStart(5)}-` +
-            `${String(cue.from + cue.durationInFrames).padEnd(5)}  ${fmt(beatSecs).padStart(7)}  ` +
+          `    ${beat.beat.padEnd(14)} frames ${String(localFrom).padStart(5)}-` +
+            `${String(localFrom + beat.frames).padEnd(5)}  ${fmt(beatSecs).padStart(7)}  ` +
             `->  ~${words(beatSecs)} words`,
         );
       }
-      console.log(`    ${'total'.padEnd(14)} frames ${' '.repeat(12)}  ${fmt(totalSecs).padStart(7)}  ` +
-        `->  ~${words(totalSecs)} words`);
+      console.log(
+        `    ${'total'.padEnd(14)} frames ${' '.repeat(12)}  ${fmt(totalSecs).padStart(7)}  ` +
+          `->  ~${words(totalSecs)} words`,
+      );
     }
   }
 

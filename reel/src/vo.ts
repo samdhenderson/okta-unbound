@@ -42,7 +42,7 @@
  * render-time default).
  */
 import { staticFile } from 'remotion';
-import type { Act } from './script';
+import { actKey } from './actKey';
 import { SCRIPT } from './script';
 import { VO } from './vo.generated';
 
@@ -50,21 +50,6 @@ import { VO } from './vo.generated';
 export interface VoEntry {
   file: string;
   seconds: number;
-}
-
-/**
- * `actKey(act, index)` from `src/comp/Chapter.tsx`, duplicated rather than
- * imported.
- *
- * `Chapter.tsx` needs `voClip`/`voMeta` (task 6, below) and this module needs
- * `Chapter.tsx`'s key formula to build `ACT_KEYS`; importing it the other way
- * would make the two modules import each other. The formula is one line and
- * has stayed one line since ADR-0053 introduced acts; if it ever changes, this
- * copy has to change with it, the same trade `scripts/lib/parse-script.mjs`
- * already makes for the build-time tooling's own copy.
- */
-function actKey(act: Act, index: number): string {
-  return `${act.kind === 'piece' ? `piece-${act.piece}` : act.capture}-${index}`;
 }
 
 /**

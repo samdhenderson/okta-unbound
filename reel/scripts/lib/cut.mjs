@@ -1,203 +1,93 @@
 /**
- * The resolved cut: every scene, act and beat with the frames it actually
- * occupies.
+ * The resolved cut, as the composition itself resolves it.
  *
- * `vo-budget.mjs` already rebuilt each act's ramp to price narration, and
- * `look.mjs` needs the same arithmetic to point a camera at an act. Rebuilding
- * it twice is how the third copy of a formula gets written, so it is built once
- * here and both read it.
+ * Every tool that needs to know where an act starts, how long a beat runs, or
+ * what the reel's total length is reads this. It is a thin reader over
+ * `plan.generated.json`, which `scripts/emit-plan.mjs` writes by running the
+ * real `SCRIPT` through the real `buildRamp`.
  *
- * ## Two frame origins, and why both are reported
+ * ## What this used to be
  *
- * An act's ramp counts from zero at the act's own first frame, which is what a
- * narration budget wants. A renderer wants neither that nor the reel's global
- * clock: it wants the frame to pass to `remotion still`, and the cheapest
- * composition to render an act from is that act's own chapter (`chapter-users`
- * is seconds; `reel` is minutes). So every entry carries:
+ * It used to rebuild the cut itself, from `parse-script.mjs` (which regexed
+ * `script.ts`), `ramp-lite.mjs` (which re-implemented `buildRamp` by hand) and
+ * `pieces-frames.mjs` (which regexed the `PIECES` table) - because `script.ts`
+ * imported React and could not be evaluated outside a bundler. Those three
+ * files are gone (ADR-0074 §5), and with them the standing risk that the
+ * narration budget was priced against arithmetic that had drifted from the
+ * arithmetic the film renders.
  *
- * - `from` / `frames` - chapter-local, the offset into `chapter-<scene.id>`.
- * - `reelFrom` - the same instant on the full `reel` composition's clock,
- *   including the opening title.
- *
- * Beats carry both origins too, for the same reason.
- *
- * ## What this mirrors, and the drift that implies
- *
- * The layout arithmetic here restates `actLengths` and `chapterLength` in
- * `src/comp/Chapter.tsx` and the `CHAPTERS` reduce in `src/comp/Reel.tsx`:
- * acts are laid end to end, chapters are laid end to end, and the opening
- * precedes them. That mirroring is a known cost, inherited from the build
- * scripts' inability to import TypeScript, and it is the thing the generated
- * plan is meant to retire. Until then it lives in exactly one file.
- *
- * The furniture around the chapters - the opening title and the end card - is
- * read out of the components that declare it rather than restated, on the same
- * "generated, not transcribed" principle as `readFps`.
+ * The frames reported here are now the frames the composition will draw,
+ * because they were produced by the code that draws them.
  *
  * @module
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { readScript } from './parse-script.mjs';
-import { readPieceFrames } from './pieces-frames.mjs';
-import { buildRampLite } from './ramp-lite.mjs';
-import { readFps, readManifest, REEL_ROOT } from './paths.mjs';
+import { REEL_ROOT } from './paths.mjs';
+
+const PLAN_JSON = path.join(REEL_ROOT, 'plan.generated.json');
+const SCRIPT_TS = path.join(REEL_ROOT, 'src/script.ts');
 
 /**
- * Read `export const NAME = <number>;` out of a source file.
+ * Read the plan, and say so loudly if the script has moved since it was
+ * written.
  *
- * Only a literal is accepted. A constant that becomes a computation stops
- * resolving here rather than resolving to something stale, which is the
- * failure mode worth having: `null` is visible, a wrong number is not.
- *
- * @param {string} file Repo-relative to `reel/`.
- * @param {string} name
- * @returns {number | null}
- */
-function readConst(file, name) {
-  try {
-    const source = readFileSync(path.join(REEL_ROOT, file), 'utf8');
-    const match = source.match(new RegExp(`${name}\\s*=\\s*(\\d+)\\s*;`));
-    return match ? Number(match[1]) : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The opening title's length.
- *
- * `Opening.tsx` declares this as `OVERTURE_FRAMES + PREMISE_CARD_FRAMES`, so
- * the sum is rebuilt from the two literals rather than transcribed - a number
- * typed here would be wrong the first time either card is retimed.
- *
- * Only the `reel` composition's clock depends on this. A chapter render does
- * not, which is why failing to read it is not fatal - `reelFrom` goes `null`
- * and the chapter-local numbers, the ones `look.mjs` uses by default, stay
- * exact.
- *
- * @returns {number | null}
- */
-function readOpeningFrames() {
-  const overture = readConst('src/comp/Overture.tsx', 'OVERTURE_FRAMES');
-  const premise = readConst('src/comp/PremiseCard.tsx', 'PREMISE_CARD_FRAMES');
-  return overture === null || premise === null ? null : overture + premise;
-}
-
-/**
- * The end card's length, read out of `src/comp/EndCard.tsx`.
- *
- * Nothing is laid out after it, so this only affects the reported length of
- * the `reel` composition itself - which is exactly what a contact sheet over
- * the whole film needs to be right about.
- *
- * @returns {number | null}
- */
-function readEndCardFrames() {
-  return readConst('src/comp/EndCard.tsx', 'END_CARD_FRAMES');
-}
-
-/**
- * Resolve the whole cut.
- *
- * An act whose capture has not been shot yet, or whose plan names a beat the
- * footage does not carry, is reported with `frames: null` and a `reason`
- * rather than throwing. A half-shot reel is the normal working state, and a
- * tool that refuses to describe *any* of it until *all* of it exists is
- * useless exactly when it is most needed.
+ * A generated file that has fallen behind its source is worse than no
+ * generated file, because everything downstream keeps working and quietly
+ * answers about the wrong cut. `reel:plan:check` is the gate; this is the
+ * courtesy warning for the working copy, where the gate has not run yet.
  *
  * @returns {{
  *   fps: number,
- *   openingFrames: number | null,
- *   endCardFrames: number | null,
- *   chaptersEnd: number | null,
- *   frames: number | null,
+ *   openingFrames: number,
+ *   endCardFrames: number,
+ *   chaptersEnd: number,
+ *   frames: number,
  *   scenes: Array<{
  *     id: string, title: string, from: number, frames: number,
  *     acts: Array<{
- *       key: string, kind: 'film' | 'piece', capture: string, piece?: string,
- *       from: number, frames: number | null, reelFrom: number | null,
- *       reason?: string,
- *       beats: Array<{ beat: string, from: number, frames: number, reelFrom: number | null }>
+ *       key: string, index: number, kind: 'film' | 'piece', capture: string,
+ *       piece?: string, label?: string, from: number, reelFrom: number,
+ *       frames: number | null, reason?: string,
+ *       beats: Array<{ beat: string, from: number, frames: number, reelFrom: number }>,
+ *       marks?: Array<{ beat: string, headline?: string, stage?: string, diagram?: string }>
  *     }>
  *   }>
  * }}
  */
 export function readCut() {
-  const fps = readFps();
-  const openingFrames = readOpeningFrames();
-  const pieceFrames = readPieceFrames();
-
-  let reelCursor = openingFrames;
-  const scenes = [];
-
-  for (const scene of readScript()) {
-    let chapterCursor = 0;
-    const acts = [];
-
-    for (const act of scene.acts) {
-      const at = chapterCursor;
-      const reelFrom = reelCursor === null ? null : reelCursor + at;
-      const base = {
-        key: act.key,
-        kind: act.kind === 'piece' ? 'piece' : 'film',
-        capture: act.kind === 'piece' ? act.from : act.capture,
-        from: at,
-        reelFrom,
-        beats: [],
-      };
-
-      if (act.kind === 'piece') {
-        const frames = pieceFrames[act.piece];
-        acts.push({ ...base, piece: act.piece, frames });
-        chapterCursor += frames;
-        continue;
-      }
-
-      const read = readManifest(act.capture);
-      if (!read.ok) {
-        acts.push({ ...base, frames: null, reason: read.reason });
-        continue;
-      }
-
-      let ramp;
-      try {
-        ramp = buildRampLite(read.manifest, act.plan, fps);
-      } catch (err) {
-        acts.push({ ...base, frames: null, reason: err.message });
-        continue;
-      }
-
-      acts.push({
-        ...base,
-        frames: ramp.durationInFrames,
-        beats: act.plan.map((entry) => {
-          const cue = ramp.cues[entry.beat];
-          return {
-            beat: entry.beat,
-            from: at + cue.from,
-            frames: cue.durationInFrames,
-            reelFrom: reelFrom === null ? null : reelFrom + cue.from,
-          };
-        }),
-      });
-      chapterCursor += ramp.durationInFrames;
-    }
-
-    scenes.push({
-      id: scene.id,
-      title: scene.title,
-      from: reelCursor,
-      frames: chapterCursor,
-      acts,
-    });
-    if (reelCursor !== null) reelCursor += chapterCursor;
+  let raw;
+  try {
+    raw = readFileSync(PLAN_JSON, 'utf8');
+  } catch {
+    throw new Error(`no plan.generated.json. Run: npm run reel:plan`);
   }
 
-  const endCardFrames = readEndCardFrames();
-  const frames = reelCursor === null || endCardFrames === null ? null : reelCursor + endCardFrames;
+  try {
+    if (statSync(SCRIPT_TS).mtimeMs > statSync(PLAN_JSON).mtimeMs) {
+      console.warn(
+        'warning: src/script.ts is newer than plan.generated.json. Run: npm run reel:plan',
+      );
+    }
+  } catch {
+    /* A missing script is somebody else's error to report. */
+  }
 
-  return { fps, openingFrames, endCardFrames, chaptersEnd: reelCursor, frames, scenes };
+  return JSON.parse(raw);
+}
+
+/**
+ * Every act in the cut, flattened, each carrying the scene that holds it.
+ *
+ * The narration gate walks acts and never cares which chapter an act is in
+ * except to name it in a message, which is exactly this shape.
+ *
+ * @param {ReturnType<typeof readCut>} cut
+ */
+export function readActs(cut = readCut()) {
+  return cut.scenes.flatMap((scene) =>
+    scene.acts.map((act) => ({ ...act, sceneId: scene.id, sceneTitle: scene.title })),
+  );
 }
 
 /**

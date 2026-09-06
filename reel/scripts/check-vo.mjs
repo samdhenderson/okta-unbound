@@ -34,10 +34,8 @@
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { readActs } from './lib/parse-script.mjs';
-import { readPieceFrames } from './lib/pieces-frames.mjs';
-import { buildRampLite } from './lib/ramp-lite.mjs';
-import { readFps, readManifest, VO_DIR, VO_GENERATED_TS, NARRATION_MD } from './lib/paths.mjs';
+import { readActs, readCut } from './lib/cut.mjs';
+import { VO_DIR, VO_GENERATED_TS, NARRATION_MD } from './lib/paths.mjs';
 
 /**
  * Acts that are deliberately silent. No narration is ever expected for them.
@@ -83,31 +81,32 @@ function readMeasured() {
   return { ok: true, entries };
 }
 
-/** An act's own runtime, in seconds: a film act's ramp total, or a piece's frame count. */
-function actSeconds(act, fps, pieceFrames) {
-  if (act.kind === 'piece') {
-    const frames = pieceFrames[act.piece];
-    if (frames === undefined) throw new Error(`piece "${act.piece}" is not in the registry`);
-    return frames / fps;
-  }
-  const read = readManifest(act.capture);
-  if (!read.ok) throw new Error(`"${act.capture}" ${read.reason}`);
-  return buildRampLite(read.manifest, act.plan, fps).durationInFrames / fps;
+/**
+ * An act's own runtime in seconds, off the generated plan.
+ *
+ * This used to rebuild the ramp here, from a hand-written port of
+ * `buildRamp`. It now reads the frames the composition will actually render
+ * (ADR-0074 5), so "the film does not wait for narration" is measured against
+ * the film rather than against a second opinion about it.
+ */
+function actSeconds(act, fps) {
+  if (act.frames === null) throw new Error(act.reason ?? 'no frames resolved for this act');
+  return act.frames / fps;
 }
 
 /* --- Checks ----------------------------------------------------------- */
 
-function checkActs(acts, measured, wavFiles) {
-  const fps = readFps();
-  const pieceFrames = readPieceFrames();
-
+function checkActs(acts, measured, wavFiles, fps) {
   for (const act of acts) {
     const hasWav = wavFiles.has(`${act.key}.wav`);
     const entry = measured.entries.get(act.key);
 
     if (!hasWav) {
       if (SILENT_ACTS.has(act.key)) continue;
-      report('bad', `${act.sceneId} / ${act.key}: no narration recorded (captures/vo/${act.key}.wav)`);
+      report(
+        'bad',
+        `${act.sceneId} / ${act.key}: no narration recorded (captures/vo/${act.key}.wav)`,
+      );
       continue;
     }
     if (SILENT_ACTS.has(act.key)) {
@@ -126,9 +125,12 @@ function checkActs(acts, measured, wavFiles) {
 
     let picture;
     try {
-      picture = actSeconds(act, fps, pieceFrames);
+      picture = actSeconds(act, fps);
     } catch (err) {
-      report('broken', `${act.sceneId} / ${act.key}: could not compute the act's own duration: ${err.message}`);
+      report(
+        'broken',
+        `${act.sceneId} / ${act.key}: could not compute the act's own duration: ${err.message}`,
+      );
       continue;
     }
     if (entry.seconds > picture) {
@@ -172,7 +174,10 @@ function checkNarrationDigits() {
     if (!trimmed.startsWith('>')) return;
     const spoken = trimmed.replace(FIGURE_REF, '');
     if (/\d/.test(spoken)) {
-      report('bad', `NARRATION.md:${i + 1}: a digit outside a \`figure:...\` reference: "${line.trim()}"`);
+      report(
+        'bad',
+        `NARRATION.md:${i + 1}: a digit outside a \`figure:...\` reference: "${line.trim()}"`,
+      );
       violations += 1;
     }
   });
@@ -184,7 +189,8 @@ function checkNarrationDigits() {
 function main() {
   console.log('Narration gate');
 
-  const acts = readActs();
+  const cut = readCut();
+  const acts = readActs(cut);
   const measured = readMeasured();
   if (!measured.ok) {
     report('broken', `cannot read measured narration: ${measured.reason}`);
@@ -199,7 +205,7 @@ function main() {
       /* captures/vo/ does not exist yet: zero files. */
     }
     const wavFiles = new Set(listing.filter((f) => f.endsWith('.wav')));
-    checkActs(acts, measured, wavFiles);
+    checkActs(acts, measured, wavFiles, cut.fps);
     checkDeadAudio(acts, wavFiles);
   }
 

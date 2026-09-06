@@ -43,6 +43,7 @@ import {
 import { SCRIPT, type Act, type FilmAct, type PieceAct, type Scene } from '../script';
 import { PIECES, piece } from '../pieces';
 import { DIAGRAMS, type DiagramId } from '../diagrams/registry';
+import { actKey } from '../actKey';
 import { Backdrop } from './Backdrop';
 import { TAB_DEFS } from '../../../src/sidepanel/tabs';
 import { FilmIndex } from './FilmIndex';
@@ -90,11 +91,6 @@ interface Cue {
  */
 export function actCapture(act: Act): CaptureId {
   return act.kind === 'piece' ? act.from : act.capture;
-}
-
-/** A stable key for an act within its chapter. Pieces have no capture to name. */
-function actKey(act: Act, index: number): string {
-  return `${act.kind === 'piece' ? `piece-${act.piece}` : act.capture}-${index}`;
 }
 
 /** How long each act runs, in order. The chapter's own layout, and the band's. */
