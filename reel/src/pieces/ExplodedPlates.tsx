@@ -80,45 +80,65 @@ import React from 'react';
 import { AbsoluteFill } from 'remotion';
 import { figure } from '../captures';
 import type { Manifest } from '../captures';
-import { FONT, FRAME, FRAMES, STAGE, TYPE } from '../theme';
+import { FONT, FRAME, STAGE, TYPE } from '../theme';
 import { Dock, Lift, LiftPlate, Recede, Split } from '../verbs';
+import { tempo } from '../tempo';
+import type { Cue } from '../tempo';
 import type { PieceProps } from './index';
 
+/* --- The choreography ----------------------------------------------------- */
+
 /**
- * How long B1 runs, as a literal.
+ * B1's cues, in order.
  *
- * 222 frames is 3.7s at 60fps, the budget `SCRIPT.md` gives the piece. **Stated
- * as a constant and never computed** - `Reel.tsx` resolves every act's length at
- * module scope, so a length derived from a manifest read or a figure lookup
- * (both of which throw by design) would take the whole bundle down rather than
- * the one composition that wanted it. See `pieces/index.ts`.
+ * This replaces eight absolute frame constants and a hand-typed total. The one
+ * that matters editorially is `split`'s `hold`: how long the two plates stay
+ * apart before they rejoin, which used to exist only as the difference between
+ * `CLOSE_AT` and `SPLIT_AT` and so could not be changed without recomputing
+ * four other numbers. `SCRIPT.md` gives the piece 3.7s and the hold below is
+ * the cut as it was already timed, converted rather than re-chosen.
+ *
+ * The bands are a second track. They ride on `split` via `with` so that
+ * lengthening the hold moves the plates' rejoin without dragging the bands'
+ * entrance along with it - they are timed against the split opening, not
+ * against how long it lasts.
  */
-export const EXPLODED_PLATES_FRAMES = 222;
+export const EXPLODED_PLATES_CUES = {
+  /** The whole card docks in from the panel's own edge. */
+  dock: { verb: 'dock' },
+  /** The card lifts: this is the object under discussion. */
+  lift: { verb: 'lift', gap: 12 },
+  /**
+   * The stack parts, and stays parted. The delta bar strikes in on its own,
+   * 14f in - `split`'s `deltaBar` part, not this sheet's business.
+   */
+  split: { verb: 'split', gap: 7, hold: 1.883 },
+  /** The plates rejoin over 12f, faster than they opened. */
+  rejoin: { frames: 12 },
+  /** The whole card recedes, landing its last frame on the piece's last frame. */
+  out: { verb: 'recede', gap: 4 },
 
-/* --- The beat sheet, in absolute frames ----------------------------------- */
+  /** The two bands slide out from behind the plates, 8f apart. */
+  bands: { with: 'split', gap: 26, frames: 30 },
+  /** The bands leave first, so the card is alone again when it rejoins. */
+  bandsOut: { with: 'bands', gap: 84, verb: 'recede' },
+} as const satisfies Record<string, Cue>;
 
-/** The whole card docks in from the panel's own edge. */
-const DOCK_AT = 0;
-/** The card lifts: this is the object under discussion. */
-const LIFT_AT = 34;
-/** The stack parts. The delta bar strikes in at `SPLIT_AT + 14` on its own. */
-const SPLIT_AT = 54;
-/** The two bands slide out from behind the plates, 8f apart. */
-const BAND_AT = 80;
+/** The piece's own pacing, before a script has a say. */
+const SHEET = tempo(EXPLODED_PLATES_CUES);
+
+/**
+ * How long B1 runs.
+ *
+ * Derived from {@link SHEET}, which is safe on this path in a way a manifest
+ * read would not be: `tempo()` is a total function over plain numbers and
+ * cannot throw, and `Reel.tsx` resolves every act's length at module scope. See
+ * `reel/tempo.ts`.
+ */
+export const EXPLODED_PLATES_FRAMES = SHEET.frames;
+
+/** Frames between the two bands' entrances. */
 const BAND_STEP = 8;
-/** The bands leave first, so the card is alone again when it rejoins. */
-const BAND_OUT = 164;
-/** The plates rejoin over 12f, per the split verb's own `close` doc. */
-const CLOSE_AT = 186;
-const CLOSE_OVER = 12;
-/** The whole card recedes, landing its last frame on the piece's last frame. */
-// Minus one, and the one matters. A piece of N frames renders 0 through N-1,
-// so a recede starting at `N - recede` completes on frame N, which is never
-// rendered: the last frame the film actually shows still has the object on it
-// at about 17 percent, and that ghost is composited over the first frame of
-// the footage the piece cuts back to. Found by rendering the last frame rather
-// than by reading the arithmetic.
-const RECEDE_AT = EXPLODED_PLATES_FRAMES - FRAMES.recede - 1;
 
 /* --- Geometry ------------------------------------------------------------- */
 
@@ -443,13 +463,14 @@ const Slot: React.FC<{ reserve: string; instead: string }> = ({ reserve, instead
  * from off-stage instead, which is a different sentence about where the words
  * came from.
  */
-const Band: React.FC<{ from: number; top: number; edge: 'up' | 'down'; text: string }> = ({
-  from,
-  top,
-  edge,
-  text,
-}) => (
-  <Recede from={BAND_OUT} style={{ position: 'absolute', left: PAD, top, width: CARD_W - PAD * 2 }}>
+const Band: React.FC<{
+  from: number;
+  out: number;
+  top: number;
+  edge: 'up' | 'down';
+  text: string;
+}> = ({ from, out, top, edge, text }) => (
+  <Recede from={out} style={{ position: 'absolute', left: PAD, top, width: CARD_W - PAD * 2 }}>
     <Dock from={from} edge={edge} distance={110} rule={false}>
       <div
         style={{
@@ -480,7 +501,9 @@ const Band: React.FC<{ from: number; top: number; edge: 'up' | 'down'; text: str
  *
  * `plot` is deliberately unused - see the module doc's "Where it is drawn".
  */
-export const ExplodedPlates: React.FC<PieceProps> = ({ manifest }) => {
+export const ExplodedPlates: React.FC<PieceProps> = ({ manifest, holds }) => {
+  // The act's overrides, or the piece's own pacing when the cut has no opinion.
+  const sheet = holds ? tempo(EXPLODED_PLATES_CUES, holds) : SHEET;
   const cause = readCause(manifest);
   const unit = cause.deltaChars === 1 ? 'char' : 'chars';
 
@@ -489,7 +512,7 @@ export const ExplodedPlates: React.FC<PieceProps> = ({ manifest }) => {
       {/* The dim the lift reads against. A sibling near the root, never inside
           `Lift` - see `verbs/Lift.tsx` for why a nested dim lights the wrong
           half of the frame. */}
-      <LiftPlate from={LIFT_AT} out={RECEDE_AT} />
+      <LiftPlate from={sheet.at.lift} out={sheet.at.out} />
 
       <div
         style={{
@@ -502,23 +525,29 @@ export const ExplodedPlates: React.FC<PieceProps> = ({ manifest }) => {
           transformOrigin: 'center center',
         }}
       >
-        <Band from={BAND_AT} top={0} edge="down" text="Unbound reveals the root cause." />
+        <Band
+          from={sheet.at.bands}
+          out={sheet.at.bandsOut}
+          top={0}
+          edge="down"
+          text="Unbound reveals the root cause."
+        />
 
         <Recede
-          from={RECEDE_AT}
+          from={sheet.at.out}
           style={{ position: 'absolute', left: 0, top: CARD_Y, width: CARD_W, zIndex: 1 }}
         >
           {/* No hairline: dock's accent rule sits 22px under the object, which
               is inside the space the bottom plate travels into. */}
-          <Dock from={DOCK_AT} rule={false}>
-            <Lift from={LIFT_AT}>
+          <Dock from={sheet.at.dock} rule={false}>
+            <Lift from={sheet.at.lift}>
               <Split
-                from={SPLIT_AT}
+                from={sheet.at.split}
                 axis="y"
                 gap={GAP}
                 tilt={TILT}
-                close={CLOSE_AT}
-                closeOver={CLOSE_OVER}
+                close={sheet.at.rejoin}
+                closeOver={sheet.end.rejoin - sheet.at.rejoin}
                 style={{ width: CARD_W }}
                 left={
                   <Plate half="top" label="The mapping rule requires">
@@ -609,7 +638,8 @@ export const ExplodedPlates: React.FC<PieceProps> = ({ manifest }) => {
         </Recede>
 
         <Band
-          from={BAND_AT + BAND_STEP}
+          from={sheet.at.bands + BAND_STEP}
+          out={sheet.at.bandsOut}
           top={GROUP_H - BAND_H}
           edge="up"
           text="An attribute typo broke the automated provisioning."

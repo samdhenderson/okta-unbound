@@ -133,6 +133,21 @@ export interface PieceAct {
   piece: PieceId;
   /** The footage whose figures this piece dramatises. None of its frames are played. */
   from: CaptureId;
+  /**
+   * Retune the piece's own pauses, in seconds, by cue name.
+   *
+   * A set piece states the pacing it was built at; this is where the cut gets
+   * to disagree with it, without opening the component. `{ split: 5 }` holds
+   * the exploded plates apart for five seconds before they rejoin, and every
+   * length after it - the act, the chapter, the film, and the act's narration
+   * budget - moves accordingly, because `reel:plan` replays the same
+   * arithmetic the piece does.
+   *
+   * The cue names are the piece's own; `reel/CUT.generated.md` lists the ones
+   * each piece exposes. A name that is not a cue is ignored rather than
+   * throwing, since a throw on the length path takes down the whole bundle.
+   */
+  holds?: Record<string, number>;
 }
 
 /**

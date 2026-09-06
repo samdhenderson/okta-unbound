@@ -31,8 +31,10 @@
 import type { FC } from 'react';
 import type { CaptureId, Manifest } from '../captures';
 import type { Rect } from '../layout';
+import type { Cue } from '../tempo';
+import { tempoFrames } from '../tempo';
 import { CoverageBars, COVERAGE_BARS_FRAMES } from './CoverageBars';
-import { ExplodedPlates, EXPLODED_PLATES_FRAMES } from './ExplodedPlates';
+import { ExplodedPlates, EXPLODED_PLATES_CUES, EXPLODED_PLATES_FRAMES } from './ExplodedPlates';
 import { Ledger, LEDGER_FRAMES } from './Ledger';
 import { Unpacking, UNPACKING_FRAMES } from './Unpacking';
 import { Placeholder, PLACEHOLDER_FRAMES } from './Placeholder';
@@ -56,13 +58,30 @@ export interface PieceProps {
    * measured.
    */
   manifest: Manifest;
+  /**
+   * Per-cue hold overrides in seconds, from the act that named this piece.
+   *
+   * A piece states the pacing it thinks is right and the cut gets to disagree,
+   * without either one opening the other's file. A piece with no tempo sheet
+   * ignores this; one that has a sheet resolves it with `tempo(CUES, holds)`.
+   */
+  holds?: Record<string, number>;
 }
 
 /** One entry in the registry: what to render, and how long it runs. */
 export interface Piece {
   component: FC<PieceProps>;
-  /** Frames. A literal from the piece's own module - see this file's module doc. */
+  /** Frames at the piece's own pacing - see this file's module doc. */
   frames: number;
+  /**
+   * The piece's tempo sheet, when it has one.
+   *
+   * Registered as well as used inside the component because the cut needs the
+   * piece's *length* before anything renders - `Reel.tsx` resolves every act's
+   * length at module scope - so it cannot ask the component what an act's hold
+   * overrides did to it. {@link pieceFrames} replays the same arithmetic here.
+   */
+  cues?: Record<string, Cue>;
   /**
    * Which footage the *preview* composition should read figures from, while no
    * act in the script names this piece yet.
@@ -84,7 +103,11 @@ export interface Piece {
 /** Every set piece the script may name. */
 export const PIECES = {
   /** B1, after the Users chapter's `cause` beat: the cause card, exploded. */
-  'exploded-plates': { component: ExplodedPlates, frames: EXPLODED_PLATES_FRAMES },
+  'exploded-plates': {
+    component: ExplodedPlates,
+    frames: EXPLODED_PLATES_FRAMES,
+    cues: EXPLODED_PLATES_CUES,
+  },
   ledger: { component: Ledger, frames: LEDGER_FRAMES },
   /** Reporting: the factor-coverage breakdown, ranked, with the unenrolled row called out. */
   'coverage-bars': {
@@ -107,4 +130,18 @@ export function piece(id: PieceId): Piece {
     throw new Error(`No set piece "${id}". Known: ${Object.keys(PIECES).join(', ')}`);
   }
   return found;
+}
+
+/**
+ * How long a piece runs for one act, given that act's hold overrides.
+ *
+ * Falls back to the registered length when the act has no opinion or the piece
+ * has no sheet, so a piece that was never converted behaves exactly as before.
+ * Total, like `tempo()` itself, because this sits on the module-scope length
+ * path - see this file's module doc.
+ */
+export function pieceFrames(id: PieceId, holds?: Record<string, number>): number {
+  const found = piece(id);
+  if (!holds || !found.cues) return found.frames;
+  return tempoFrames(found.cues, holds);
 }

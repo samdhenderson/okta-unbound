@@ -41,7 +41,7 @@ import {
   type StageName,
 } from '../layout';
 import { SCRIPT, type Act, type FilmAct, type PieceAct, type Scene } from '../script';
-import { PIECES, piece } from '../pieces';
+import { pieceFrames, piece } from '../pieces';
 import { DIAGRAMS, type DiagramId } from '../diagrams/registry';
 import { actKey } from '../actKey';
 import { Backdrop } from './Backdrop';
@@ -101,7 +101,7 @@ export function actLengths(scene: Scene): number[] {
         // builds `CHAPTERS` at module scope, so anything that can throw on this
         // path takes the whole bundle down instead of one composition. See
         // `pieces/index.ts`.
-        PIECES[act.piece].frames
+        pieceFrames(act.piece, act.holds)
       : buildRamp(capture(act.capture), act.plan, FRAME.fps).durationInFrames,
   );
 }
@@ -561,7 +561,8 @@ const ActPiece: React.FC<ActProps> = ({ chapter, index }) => {
     );
   }
   const set: PieceAct = act;
-  const { component: Piece, frames } = piece(set.piece);
+  const { component: Piece } = piece(set.piece);
+  const frames = pieceFrames(set.piece, set.holds);
 
   // The `focus` stage's plot: the rectangle a showcase gets when the panel has
   // left. A piece is the same situation with no footage underneath, so it draws
@@ -571,7 +572,13 @@ const ActPiece: React.FC<ActProps> = ({ chapter, index }) => {
   return (
     <AbsoluteFill style={{ fontFamily: INTER, color: STAGE.ink }}>
       <Backdrop focusX={plot.x + plot.width / 2} />
-      <Piece id={set.piece} frames={frames} plot={plot} manifest={capture(set.from)} />
+      <Piece
+        id={set.piece}
+        frames={frames}
+        plot={plot}
+        manifest={capture(set.from)}
+        holds={set.holds}
+      />
     </AbsoluteFill>
   );
 };
