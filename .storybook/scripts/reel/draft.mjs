@@ -50,7 +50,8 @@ const usage = `
 Render one chapter, cheap, to watch the motion.
 
   npm run reel:draft -- <chapter>              a whole chapter
-  npm run reel:draft -- <chapter> --at <key>   just that act's frames
+  npm run reel:draft -- <composition>          a preview: piece-*, card-*, seam...
+  npm run reel:draft -- --at <act-key>         just that act's frames
   npm run reel:draft -- --list                 what there is to render
 
 Options
@@ -100,7 +101,13 @@ async function main() {
   const cut = readCut();
 
   if (opts.list) {
-    console.log('Chapters');
+    console.log('Previews');
+    for (const [id, f] of Object.entries(cut.previews ?? {})) {
+      console.log(
+        `  ${id.padEnd(22)} ${String(f).padStart(5)} frames  (${(f / cut.fps).toFixed(1)}s)`,
+      );
+    }
+    console.log('\nChapters');
     for (const scene of cut.scenes) {
       console.log(
         `  ${scene.id.padEnd(10)} ${String(scene.frames).padStart(5)} frames  ` +
@@ -126,15 +133,35 @@ async function main() {
     name = opts.at;
   }
 
-  if (!sceneId) throw new Error('Name a chapter, or use --at <act-key>. --list shows both.');
-  sceneId = sceneId.replace(/^chapter-/, '');
-  const scene = cut.scenes.find((s) => s.id === sceneId);
-  if (!scene) {
-    throw new Error(
-      `No chapter "${sceneId}". The film has: ${cut.scenes.map((s) => s.id).join(', ')}`,
-    );
+  if (!sceneId) throw new Error('Name a chapter or composition, or use --at. --list shows both.');
+
+  // A preview composition - a set piece, a card - is not a chapter and has no
+  // act, so it never resolved here. That left the middle rung of the feedback
+  // loop missing for exactly the case building a set piece creates: the piece
+  // is registered, not yet cut into the film, and the only way to watch it
+  // move was to call `remotion render` by hand.
+  const previewFrames = cut.previews?.[sceneId];
+  let composition;
+  let frames;
+
+  if (previewFrames !== undefined) {
+    composition = sceneId;
+    frames = previewFrames;
+    name ??= sceneId;
+  } else {
+    const id = sceneId.replace(/^chapter-/, '');
+    const scene = cut.scenes.find((s) => s.id === id);
+    if (!scene) {
+      throw new Error(
+        `No chapter or composition "${sceneId}". Chapters: ` +
+          `${cut.scenes.map((s) => s.id).join(', ')}. ` +
+          `Previews: ${Object.keys(cut.previews ?? {}).join(', ')}`,
+      );
+    }
+    composition = `chapter-${scene.id}`;
+    frames = range ? range[1] - range[0] + 1 : scene.frames;
+    name ??= scene.id;
   }
-  name ??= scene.id;
 
   mkdirSync(DRAFTS, { recursive: true });
   const out = opts.out ? path.resolve(REPO, opts.out) : path.join(DRAFTS, `${name}.mp4`);
@@ -143,7 +170,7 @@ async function main() {
     'remotion',
     'render',
     'src/index.ts',
-    `chapter-${scene.id}`,
+    composition,
     out,
     '--image-format=jpeg',
     `--crf=${opts.crf}`,
@@ -152,9 +179,8 @@ async function main() {
   ];
   if (range) args.push(`--frames=${range[0]}-${range[1]}`);
 
-  const frames = range ? range[1] - range[0] + 1 : scene.frames;
   console.log(
-    `chapter-${scene.id}: ${frames} frames (${(frames / cut.fps).toFixed(1)}s) at ${opts.scale}x`,
+    `${composition}: ${frames} frames (${(frames / cut.fps).toFixed(1)}s) at ${opts.scale}x`,
   );
   await run(args);
   console.log(`\n${out}`);

@@ -29,8 +29,9 @@
  * the constant.
  */
 import type { FC } from 'react';
-import type { Manifest } from '../captures';
+import type { CaptureId, Manifest } from '../captures';
 import type { Rect } from '../layout';
+import { CoverageBars, COVERAGE_BARS_FRAMES } from './CoverageBars';
 import { ExplodedPlates, EXPLODED_PLATES_FRAMES } from './ExplodedPlates';
 import { Ledger, LEDGER_FRAMES } from './Ledger';
 import { Unpacking, UNPACKING_FRAMES } from './Unpacking';
@@ -62,6 +63,22 @@ export interface Piece {
   component: FC<PieceProps>;
   /** Frames. A literal from the piece's own module - see this file's module doc. */
   frames: number;
+  /**
+   * Which footage the *preview* composition should read figures from, while no
+   * act in the script names this piece yet.
+   *
+   * A preview takes its manifest from the first act that names the piece, and
+   * falls back to one shared capture when no act does. That fallback is fine
+   * for a piece whose figures happen to live in it and useless for one whose do
+   * not: `figure()` throws on an unread key, by design, so a piece built before
+   * it is cut into the film cannot be looked at at all - which is exactly the
+   * moment looking at it matters most.
+   *
+   * This says which capture the piece was built against, and it is a preview
+   * affordance only. `Chapter` renders a piece with the manifest its own act
+   * names, so the honesty rule is still enforced where it counts, by the act.
+   */
+  preview?: CaptureId;
 }
 
 /** Every set piece the script may name. */
@@ -69,6 +86,12 @@ export const PIECES = {
   /** B1, after the Users chapter's `cause` beat: the cause card, exploded. */
   'exploded-plates': { component: ExplodedPlates, frames: EXPLODED_PLATES_FRAMES },
   ledger: { component: Ledger, frames: LEDGER_FRAMES },
+  /** Reporting: the factor-coverage breakdown, ranked, with the unenrolled row called out. */
+  'coverage-bars': {
+    component: CoverageBars,
+    frames: COVERAGE_BARS_FRAMES,
+    preview: 'reporting',
+  },
   unpacking: { component: Unpacking, frames: UNPACKING_FRAMES },
   /** Still registered: the slots B2 and B3 will take are placeholders until they are built. */
   placeholder: { component: Placeholder, frames: PLACEHOLDER_FRAMES },

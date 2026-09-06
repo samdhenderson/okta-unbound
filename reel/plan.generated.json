@@ -5,6 +5,18 @@
   "endCardFrames": 150,
   "chaptersEnd": 22012,
   "frames": 22162,
+  "previews": {
+    "piece-exploded-plates": 222,
+    "piece-ledger": 240,
+    "piece-coverage-bars": 240,
+    "piece-unpacking": 270,
+    "piece-placeholder": 210,
+    "overture": 930,
+    "card-premise": 660,
+    "card-title": 216,
+    "seam": 60,
+    "panel-ink": 252
+  },
   "scenes": [
     {
       "id": "home",

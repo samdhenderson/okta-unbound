@@ -30,6 +30,21 @@ Registries are derived now — keep it that way; do not add a second list.
 Related: both hand-written piece previews passed `id="placeholder"`, copied from
 whichever was written first, so both handed a piece the wrong name for itself.
 
+## A new piece's preview renders an error page
+
+`Preview.tsx` takes a piece's manifest from the first act that names it, and a
+piece you have just built is named by no act. It then falls back to one shared
+capture, and `figure()` throws by design on a key that capture never read - so
+the preview is an error page precisely when you most need to look at it. Set
+`preview: '<capture-id>'` on the registry entry.
+
+## Copied helpers in the pieces
+
+`wash(hex, alpha)` is hand-copied into three pieces, each with a comment saying
+so; `CHROME_BOTTOM = 200` is declared separately in three; the `LABEL` style
+object is duplicated too. A shared `pieces/plate.ts` is the obvious missing
+thing and does not exist yet. Do not add a fourth copy without saying so.
+
 ## A frame check that never rendered what you changed
 
 The frame-identity check sampled three frames per act. A deliberate break in

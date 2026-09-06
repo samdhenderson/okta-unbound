@@ -55,7 +55,9 @@ npm run reel:look -- --list                 what exists: compositions + act keys
 npm run reel:look -- --at users-fix-3       ~15s  contact sheet of one act
 npm run reel:look -- --at users-fix-3 200   ~2s   one still, 200 frames into it
 npm run reel:look -- chapter-users 2663     ~2s   one still, by composition+frame
-npm run reel:draft -- --at piece-ledger-4   ~3s   that act as watchable video
+npm run reel:look -- piece-coverage-bars --sheet   a set piece, before it is cut in
+npm run reel:draft -- piece-coverage-bars    ~3s   any composition as video
+npm run reel:draft -- --at piece-ledger-4    ~3s   one act as video
 npm run reel                                mins  the delivery encode
 ```
 
@@ -75,7 +77,7 @@ a registered thing is immediately viewable in the studio.
 
 | To add…                               | Write                                                | Register in                                                        | Then                                                                       |
 | ------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| A set piece (full-frame, panel gone)  | `reel/src/pieces/<Name>.tsx` + a `*_FRAMES` literal  | `pieces/index.ts` → `PIECES`                                       | name it from an act: `{ kind: 'piece', piece: '<id>', from: '<capture>' }` |
+| A set piece (full-frame, panel gone)  | `reel/src/pieces/<Name>.tsx` + a `*_FRAMES` literal  | `pieces/index.ts` → `PIECES`, with `preview: '<capture>'`          | name it from an act: `{ kind: 'piece', piece: '<id>', from: '<capture>' }` |
 | A diagram (drawn beside the panel)    | a component + an adapter entry                       | `diagrams/registry.tsx` → `DIAGRAMS`                               | name it from a mark: `diagram: '<id>'`                                     |
 | A card (opening, seam, end furniture) | `reel/src/comp/<Name>.tsx` + a props-free `*Preview` | `comp/cards.ts` → `CARDS`                                          | placed by `Reel.tsx`/`Chapter.tsx`, never by the script                    |
 | A verb (reusable motion primitive)    | `reel/src/verbs/<Name>.tsx`                          | `verbs/useVerb.ts` → `VERBS`, budget in `verbs/ease.ts` → `FRAMES` | add a row to `comp/Verbs.tsx` by hand — that matrix is not derived         |

@@ -78,6 +78,7 @@ function load() {
         'src/script.ts',
         'src/ramp.ts',
         'src/pieces/index.ts',
+        'src/comp/cards.ts',
         '--ignoreConfig',
         '--module',
         'commonjs',
@@ -113,6 +114,7 @@ function load() {
     buildRamp: require('./ramp.js').buildRamp,
     capture: require('./captures.js').capture,
     PIECES: require('./pieces/index.js').PIECES,
+    CARDS: require('./comp/cards.js').CARDS,
   };
 }
 
@@ -204,8 +206,20 @@ function readConst(file, name) {
 function build() {
   const fps = readFps();
   let scenes;
+  let previews;
   try {
-    scenes = resolve(load(), fps);
+    const loaded = load();
+    scenes = resolve(loaded, fps);
+    // Every preview composition `Root.tsx` derives, with its length. The
+    // looking tools need this: a piece that is built but not yet cut into the
+    // film has no act to take a length from, and that is exactly when somebody
+    // is trying to look at it.
+    previews = {
+      ...Object.fromEntries(
+        Object.entries(loaded.PIECES).map(([id, piece]) => [`piece-${id}`, piece.frames]),
+      ),
+      ...Object.fromEntries(Object.entries(loaded.CARDS).map(([id, card]) => [id, card.frames])),
+    };
   } finally {
     // Always, including on a compile failure. A stale build left behind is how
     // a later run quietly reads yesterday's script.
@@ -236,6 +250,7 @@ function build() {
     endCardFrames: endCard,
     chaptersEnd,
     frames: chaptersEnd + endCard,
+    previews,
     scenes,
   };
 }

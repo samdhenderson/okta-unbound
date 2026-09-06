@@ -156,7 +156,8 @@ function list(cut) {
   console.log('Compositions');
   console.log('  reel, reel-delivery, verbs');
   console.log(`  ${cut.scenes.map((s) => `chapter-${s.id}`).join(', ')}`);
-  console.log('  piece-*, card-*, seam, overture, panel-ink  (see reel/src/Root.tsx)');
+  const previews = Object.keys(cut.previews ?? {});
+  if (previews.length > 0) console.log(`  ${previews.join(', ')}`);
   console.log('\nAct keys  (use with --at)');
   for (const scene of cut.scenes) {
     console.log(`  ${scene.title} (chapter-${scene.id})`);
@@ -261,10 +262,16 @@ function target(cut, opts, positional) {
 }
 
 /**
- * How long a composition runs, for the compositions the cut can answer for.
+ * How long a composition runs.
  *
- * `null` for everything else (the previews, `verbs`) - those carry their length
- * in their own module and are cheap enough to name a frame for by hand.
+ * Chapters and the reel come off the cut; every preview composition comes off
+ * the plan's `previews` map, which is derived from the `PIECES` and `CARDS`
+ * registries.
+ *
+ * Previews used to return `null` here, which broke the first command the skill
+ * tells you to run after building a set piece: `--sheet` on a brand-new piece
+ * refused, because a piece not yet cut into the film has no act to take a
+ * length from - exactly when somebody is trying to look at it.
  *
  * @returns {number | null}
  */
@@ -274,7 +281,7 @@ function compositionLength(cut, composition) {
     const scene = cut.scenes.find((s) => s.id === composition.slice('chapter-'.length));
     return scene ? scene.frames : null;
   }
-  return null;
+  return cut.previews?.[composition] ?? null;
 }
 
 /**

@@ -32,7 +32,7 @@ import { capture, type CaptureId } from '../captures';
 import { STAGES } from '../layout';
 import { SCRIPT } from '../script';
 import { STAGE } from '../theme';
-import { PIECES, type PieceId } from './index';
+import { PIECES, type Piece, type PieceId } from './index';
 
 /**
  * The capture a preview falls back to when no act names the piece.
@@ -42,6 +42,11 @@ import { PIECES, type PieceId } from './index';
  * today - one is scaffolding, the other is built but its slot was cut. They
  * are still worth looking at, so the preview borrows footage rather than
  * refusing to render.
+ *
+ * A piece may name its own footage instead, with `preview` on its registry
+ * entry, and should when its figures do not live in this capture: `figure()`
+ * throws on an unread key, so without that a piece built before it is cut into
+ * the film cannot be previewed at all.
  *
  * This is a preview affordance and nothing more. It never reaches the film:
  * `Chapter` renders a piece with the manifest its own `PieceAct.from` names,
@@ -64,7 +69,9 @@ export function previewCapture(id: PieceId): CaptureId {
       if (act.kind === 'piece' && act.piece === id) return act.from;
     }
   }
-  return FALLBACK_CAPTURE;
+  // Nothing in the cut names it yet. A piece that declared which footage it was
+  // built against gets that; only a piece that declared nothing falls back.
+  return (PIECES[id] as Piece).preview ?? FALLBACK_CAPTURE;
 }
 
 /**

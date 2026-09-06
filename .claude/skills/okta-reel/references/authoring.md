@@ -15,13 +15,31 @@ A full-frame synthetic composition that plays while the panel is gone.
    - Export the frame budget as a **literal**, never a computation — see the
      module doc on `pieces/index.ts` for why a throw on that path kills the
      whole bundle.
-   - It draws into `plot`; the backdrop is already behind it in the film.
+   - **It draws into the whole frame, not into `plot`.** `PieceProps.plot`
+     says "the rectangle to draw into" and only `Placeholder` actually uses it;
+     every real piece centres itself in the 1920x1080 frame, because a piece
+     plays with the panel gone and the two-zone geometry only exists while the
+     panel is on screen. Leave room at the bottom - the existing pieces each
+     declare their own `CHROME_BOTTOM = 200`.
+   - The backdrop is already behind it in the film.
 2. **Register** in `reel/src/pieces/index.ts`:
+
    ```ts
-   '<id>': { component: <Name>, frames: <NAME>_FRAMES },
+   '<id>': { component: <Name>, frames: <NAME>_FRAMES, preview: '<capture-id>' },
    ```
+
    The preview composition `piece-<id>` now exists automatically.
-3. **Look**: `npm run reel:look -- piece-<id> --sheet`
+
+   **Set `preview:` to the capture your figures come from.** A preview takes its
+   manifest from the first act naming the piece, and no act names a piece you
+   have just built. Without `preview:` it falls back to one shared capture,
+   `figure()` throws on a key that capture never read, and the preview renders
+   as an error page - at exactly the moment you need to look at it. It is a
+   preview affordance only: in the film, `Chapter` uses the act's own manifest,
+   so the honesty rule stays enforced by the act.
+
+3. **Look**: `npm run reel:look -- piece-<id> --sheet`, then
+   `npm run reel:draft -- piece-<id>` to watch it move.
 4. **Name it from an act** in `script.ts`, if it belongs in the film:
    ```ts
    { kind: 'piece', piece: '<id>', from: '<capture-id>' },
