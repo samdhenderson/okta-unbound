@@ -33,6 +33,8 @@
     "capture:check": "node .storybook/scripts/capture/check.mjs",
     "capture:check:fixture": "node .storybook/scripts/capture/check.fixture.mjs",
     "studio": "npm --prefix reel run studio",
+    "reel:look": "node .storybook/scripts/reel/look.mjs",
+    "reel:draft": "node .storybook/scripts/reel/draft.mjs",
     "reel": "npm --prefix reel run render",
     "reel:poster": "npm --prefix reel run still",
     "reel:theme": "node reel/scripts/sync-theme.mjs",
