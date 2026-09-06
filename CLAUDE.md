@@ -28,8 +28,13 @@ npm run build-storybook  # static docs site (components + Internals + Documentat
 npm run capture          # film the demo chapters that changed (ADR-0045)
 npm run capture:check    # judge the footage: settle, scroller, opening frame
 npm run studio           # Remotion studio - edit the reel with no re-shoot
+npm run reel:look        # see a frame or a contact sheet of an act (~2s) - start here
+npm run reel:draft       # render one chapter or act, cheap, to watch the motion
+npm run reel:plan        # regenerate plan.generated.json + CUT.generated.md
+npm run reel:identical   # prove a refactor did not move the picture
 npm run reel             # render clips/okta-unbound-reel.mp4
 npm run reel:vo:budget   # per-beat narration time budget, derived from the cut (ADR-0073)
+npm run reel:vo:targets  # rewrite NARRATION.md's Target: lines from the real cut
 npm run reel:vo:measure  # ffprobe captures/vo/ -> reel/src/vo.generated.ts
 npm run reel:vo:check    # narration gate: every act voiced, every line inside its budget
 ```
@@ -151,6 +156,9 @@ be reviewed with `security-logging-reviewer`.
 | Documenting code / TypeDoc / API comments      | `docs/development.md`                              | `docs-maintainer`           |
 | Writing / updating a spec or ADR               | `docs/README.md` + the affected doc                | `docs-maintainer`           |
 | Understanding the whole system                 | `docs/architecture.md`                             | —                           |
+| Changing the reel's cut, beats, or narration   | `okta-reel` skill                                  | `reel-cutter`               |
+| Building a reel piece, diagram, or verb        | `okta-reel` skill                                  | `reel-smith`                |
+| Filming or re-filming a demo chapter           | `okta-reel` skill                                  | —                           |
 | Unattended nightly maintenance run             | `SESSION.md`, `CONVENTIONS.md`                     | see `SESSION.md`'s roster   |
 | Fixing a named correctness bug (`DEBT.md`)     | the cited item's **Problem**/**Done when**         | `bugfix`                    |
 
