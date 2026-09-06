@@ -11,13 +11,9 @@ import React from 'react';
 import { AbsoluteFill, Composition } from 'remotion';
 import { SCRIPT } from './script';
 import { Chapter, chapterLength } from './comp/Chapter';
-import { LedgerPreview, LEDGER_FRAMES } from './pieces/Ledger';
-import { UnpackingPreview, UNPACKING_FRAMES } from './pieces/Unpacking';
-import { DrawnTitlePreview, DRAWN_TITLE_FRAMES } from './comp/TitleCard';
-import { PremiseCardPreview, PREMISE_CARD_FRAMES } from './comp/PremiseCard';
-import { SeamPreview } from './comp/Seam';
-import { OverturePreview, OVERTURE_FRAMES } from './comp/Overture';
-import { PanelInkPreview, PANEL_INK_FRAMES } from './comp/PanelInk';
+import { CARDS } from './comp/cards';
+import { PIECES } from './pieces';
+import { piecePreview, previewFrames } from './pieces/Preview';
 import { REEL_FRAMES, Reel } from './comp/Reel';
 import { Verbs, VERBS_FRAMES } from './comp/Verbs';
 import { FRAME } from './theme';
@@ -54,6 +50,16 @@ const Delivery: React.FC = () => (
   </AbsoluteFill>
 );
 
+/**
+ * The registries' keys, hoisted so the composition list below is a plain map.
+ *
+ * `Object.keys` widens to `string[]`, which would lose the id types that make
+ * `PIECES[id]` and `CARDS[id]` check; the assertion restores what the `as
+ * const satisfies` on each registry already guarantees.
+ */
+const PIECE_IDS = Object.keys(PIECES) as (keyof typeof PIECES)[];
+const CARD_IDS = Object.keys(CARDS) as (keyof typeof CARDS)[];
+
 export const Root: React.FC = () => (
   <>
     <Composition
@@ -81,27 +87,31 @@ export const Root: React.FC = () => (
       height={FRAME.height}
     />
     {/*
-      Preview compositions for work in flight. Registered ahead of the work so
-      six authors can build six files in parallel without racing on this one.
-      Each entry points at a props-free `*Preview` wrapper, because Remotion
-      serialises `defaultProps` to JSON and silently drops anything that is not.
+      A preview composition per set piece, derived from the registry rather
+      than listed here. This was a hand-kept list of tuples, and `PIECES` had
+      grown two entries past it: `exploded-plates` and `placeholder` were
+      registered and unpreviewable, which is to say the two pieces most likely
+      to be under construction were the two nobody could look at. Deriving is
+      the only version of this that cannot fall behind. (ADR-0074 3.)
     */}
-    {(
-      [
-        ['piece-ledger', LedgerPreview, LEDGER_FRAMES],
-        ['piece-unpacking', UnpackingPreview, UNPACKING_FRAMES],
-        ['card-title', DrawnTitlePreview, DRAWN_TITLE_FRAMES],
-        ['card-premise', PremiseCardPreview, PREMISE_CARD_FRAMES],
-        ['seam', SeamPreview, 60],
-        ['overture', OverturePreview, OVERTURE_FRAMES],
-        ['panel-ink', PanelInkPreview, PANEL_INK_FRAMES],
-      ] as const
-    ).map(([id, component, durationInFrames]) => (
+    {PIECE_IDS.map((id) => (
+      <Composition
+        key={`piece-${id}`}
+        id={`piece-${id}`}
+        component={piecePreview(id)}
+        durationInFrames={previewFrames(id)}
+        fps={FRAME.fps}
+        width={FRAME.width}
+        height={FRAME.height}
+      />
+    ))}
+    {/* The film's furniture, same shape, same reasoning. */}
+    {CARD_IDS.map((id) => (
       <Composition
         key={id}
         id={id}
-        component={component}
-        durationInFrames={durationInFrames}
+        component={CARDS[id].component}
+        durationInFrames={CARDS[id].frames}
         fps={FRAME.fps}
         width={FRAME.width}
         height={FRAME.height}

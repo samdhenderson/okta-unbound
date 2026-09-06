@@ -88,12 +88,11 @@
  */
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
-import { capture, figure, figureNumber } from '../captures';
+import { figure, figureNumber } from '../captures';
 import type { Manifest } from '../captures';
 import { FONT, FRAME, FRAMES, INTER, STAGE, TYPE } from '../theme';
 import { Count, Dock, Recede } from '../verbs';
 import { GRAPHITE, SketchBox, draw } from '../pencil';
-import { STAGES } from '../layout';
 import type { PieceProps } from './index';
 
 /**
@@ -595,23 +594,3 @@ export const Ledger: React.FC<PieceProps> = ({ manifest }) => {
     </AbsoluteFill>
   );
 };
-
-/**
- * Props-free wrapper so this can be a registered composition.
- *
- * The backdrop is drawn here rather than in `Ledger` itself: in the film the
- * chapter's own `Backdrop` is already behind the piece, and an opaque fill
- * inside the piece would paint over it. Standalone, there is nothing behind it
- * at all, and a receipt rendered on transparency is not what this looks like in
- * the cut.
- */
-export const LedgerPreview: React.FC = () => (
-  <AbsoluteFill style={{ background: STAGE.back }}>
-    <Ledger
-      id="placeholder"
-      frames={LEDGER_FRAMES}
-      plot={STAGES.focus.plot}
-      manifest={capture('users-fix')}
-    />
-  </AbsoluteFill>
-);

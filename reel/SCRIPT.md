@@ -5,6 +5,11 @@ has to be re-shot. **This is the working document.** Edit it; I fold the copy
 into `reel/src/script.ts` and the camera work into the walks under
 `.storybook/scripts/capture/walks/`.
 
+**For any number, read `CUT.generated.md` instead.** Runtimes, act keys, frame
+ranges and which diagram sits on which beat are generated from the composition
+by `npm run reel:plan`. This file is the intent behind the cut; that one is the
+cut. Where they disagree, this one is wrong.
+
 **Notation.**
 
 - **Camera** - what the walk actually drives in the panel. This is footage: a
@@ -32,13 +37,14 @@ into `reel/src/script.ts` and the camera work into the walks under
 **Two constraints.** No em dashes or en dashes on camera, and every claim has to
 be something the panel actually showed on film.
 
-Runtime as cut today: **~3:52** for the footage. The **~3:57** below was
-estimated when a set piece was still going to be a mark with a long hold, buying
-its seconds from footage already on screen. A piece is a peer act, so it adds
-its whole length: 222, 240 and 270 frames, 12.2s between the three. The opening
-adds the cold open's 5.5s and gives back a tenth on the title card, 414 frames
-rather than 420. The real total is whatever the current clips make it, and it is
-not written here because nothing has measured it.
+**No runtime is written in this file.** `CUT.generated.md` carries every one,
+derived from the composition by `npm run reel:plan`, and it is the only place to
+read a duration from. This paragraph used to state ~3:52 while
+`DESIGN-BRIEF.md` stated ~6:09 for the same film; both were typed by hand, both
+were guesses, and the real number is 6:09. Numbers a program can measure do not
+belong in prose. What belongs here is everything a program cannot derive: why a
+chapter is in this order, what a slide is arguing, and what still has to be
+re-shot.
 
 ---
 
@@ -205,7 +211,7 @@ inventing org history. Cut.
 
 ---
 
-## 1. Home (~24s)
+## 1. Home
 
 Panel on stage right throughout.
 
@@ -280,7 +286,7 @@ assertion survives. Name the beat in `plan` and it comes back with its words.
 
 ---
 
-## 2. Users (72s)
+## 2. Users
 
 Three acts on one tab. The band names each act beside the chapter counter.
 
@@ -454,7 +460,7 @@ reads the new count.
 
 ---
 
-## 3. Groups (16s)
+## 3. Groups
 
 **cascade** - _no slide, silent travel._
 **Camera:** the group list.
@@ -473,7 +479,7 @@ _Diagram: **94 members**._
 
 ---
 
-## 4. Apps (14s)
+## 4. Apps
 
 **open** - _no slide._
 **Camera:** Apps tab, reads the inventory counts.
@@ -490,7 +496,7 @@ _Diagram: **12 applications → 1 inactive**._
 
 ---
 
-## 5. Rules (23s)
+## 5. Rules
 
 **load** - _hold 2.8s._
 **Camera:** presses Load rules, reads the stats.
@@ -513,7 +519,7 @@ _Diagram: 9 rules, 8 active, 1 dormant, 0 conflicts._
 
 ---
 
-## 6. Attributes (31s)
+## 6. Attributes
 
 Kept as analysis, given a job: the facets are what a rule matches on, which is
 the same predicate that broke two chapters earlier.
@@ -556,7 +562,7 @@ Worth revisiting if the analysis should end somewhere more pointed.
 
 ---
 
-## 7. Reporting (32s)
+## 7. Reporting
 
 **open** - _hold 3.0s._
 **Camera:** opens `Engineering - All`, its membership card, reads the roster.

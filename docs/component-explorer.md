@@ -178,13 +178,19 @@ route each container to where it belongs:
   | `npm run capture:check:fixture` | Prove the guard can fail, by planting one defect per control       |
   | **`npm run studio`**            | **Remotion studio. Scrub, edit `reel/src/script.ts`, hot reload.** |
   | `npm run reel`                  | Render `clips/okta-unbound-reel.mp4`                               |
+  | `npm run reel:vo:budget`        | Per-beat narration time budget, derived from the cut               |
+  | `npm run reel:vo:measure`       | ffprobe `captures/vo/` into `reel/src/vo.generated.ts`             |
+  | `npm run reel:vo:check`         | The narration gate: every act voiced, every line inside its budget |
 
   `capture:check` distinguishes a bad take (exit 1) from **a detector that could not
   look** (exit 2) — a guard that cannot see what it is looking for reports a clean
   run over the exact defect it exists to catch, so its verdict is treated as
   meaningless rather than as a pass. It does not replace watching the reel end to
   end: a caption that narrates something the panel never showed is not mechanically
-  detectable, and that failure has shipped twice.
+  detectable, and that failure has shipped twice. Narration doubles that surface:
+  a spoken claim is exactly as unverifiable as a printed one, which is why
+  `reel:vo:check` enforces the rule it _can_ mechanise, that no digit is spoken
+  which is not a `figure()` read off a manifest (ADR-0073).
 
   **Where to change what.** Editorial decisions — chapter order, what a beat is played
   at, what the margin says, which figure a diagram enlarges — all live in
@@ -192,6 +198,13 @@ route each container to where it belongs:
   `.storybook/scripts/capture/selectors.mjs` and `drive.mjs`. The two never mix: a
   caption change must never require opening a browser, and a selector fix must never
   require re-rendering.
+
+  Narration is the **third** place a change can land, and the only one that cannot
+  be fixed from a keyboard: the script is `reel/NARRATION.md`, the audio is
+  `captures/vo/<act-key>.wav`, and re-cutting a beat shorter than its recorded line
+  fails `reel:vo:check` rather than quietly talking over the next act. Because the
+  cut leads and the voice follows (ADR-0073), a retime is free until it crosses a
+  line's measured duration, and then it costs a re-record.
 
 The `Introduction.mdx` landing page is titled **`Getting Started`** so it sorts
 as its own root rather than colliding with the `Overview/*` component group.

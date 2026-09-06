@@ -19,9 +19,17 @@
  * the beat means the caption follows.
  */
 import React, { useMemo } from 'react';
-import { AbsoluteFill, Series, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
+import {
+  AbsoluteFill,
+  Audio,
+  Series,
+  interpolate,
+  useCurrentFrame,
+  useVideoConfig,
+} from 'remotion';
 import { capture, clip, type CaptureId, type Manifest } from '../captures';
 import { buildRamp } from '../ramp';
+import { voClip } from '../vo';
 import {
   STAGES,
   WORKING_STAGE,
@@ -33,7 +41,9 @@ import {
   type StageName,
 } from '../layout';
 import { SCRIPT, type Act, type FilmAct, type PieceAct, type Scene } from '../script';
-import { PIECES, piece } from '../pieces';
+import { pieceFrames, piece } from '../pieces';
+import { DIAGRAMS, type DiagramId } from '../diagrams/registry';
+import { actKey } from '../actKey';
 import { Backdrop } from './Backdrop';
 import { TAB_DEFS } from '../../../src/sidepanel/tabs';
 import { FilmIndex } from './FilmIndex';
@@ -68,7 +78,7 @@ interface Cue {
   /** Did this mark move the camera? A diagram's lifetime ends at the next one that did. */
   movesCamera: boolean;
   lines: { kind: Line['kind']; text: string }[];
-  diagram?: (manifest: Manifest, plot: Rect, from: number) => React.ReactNode;
+  diagram?: DiagramId;
 }
 
 /**
@@ -83,11 +93,6 @@ export function actCapture(act: Act): CaptureId {
   return act.kind === 'piece' ? act.from : act.capture;
 }
 
-/** A stable key for an act within its chapter. Pieces have no capture to name. */
-function actKey(act: Act, index: number): string {
-  return `${act.kind === 'piece' ? `piece-${act.piece}` : act.capture}-${index}`;
-}
-
 /** How long each act runs, in order. The chapter's own layout, and the band's. */
 export function actLengths(scene: Scene): number[] {
   return scene.acts.map((act) =>
@@ -96,7 +101,7 @@ export function actLengths(scene: Scene): number[] {
         // builds `CHAPTERS` at module scope, so anything that can throw on this
         // path takes the whole bundle down instead of one composition. See
         // `pieces/index.ts`.
-        PIECES[act.piece].frames
+        pieceFrames(act.piece, act.holds)
       : buildRamp(capture(act.capture), act.plan, FRAME.fps).durationInFrames,
   );
 }
@@ -507,11 +512,23 @@ const ActFilm: React.FC<ActProps> = ({ chapter, index }) => {
         </div>
       )}
 
-      {drawn.map((entry) => (
-        <div key={`diagram-${entry.cue.from}`} style={{ opacity: entry.opacity }}>
-          {entry.cue.diagram?.(manifest, STAGES[entry.cue.stage].plot, entry.cue.from)}
-        </div>
-      ))}
+      {drawn.map((entry) => {
+        // Resolved here rather than in the cue, so a diagram is looked up on
+        // the frame it draws on. A component captured at cue-build time would
+        // be one more thing held across a re-render for no reason.
+        const Diagram = entry.cue.diagram ? DIAGRAMS[entry.cue.diagram] : undefined;
+        return (
+          <div key={`diagram-${entry.cue.from}`} style={{ opacity: entry.opacity }}>
+            {Diagram ? (
+              <Diagram
+                manifest={manifest}
+                plot={STAGES[entry.cue.stage].plot}
+                from={entry.cue.from}
+              />
+            ) : null}
+          </div>
+        );
+      })}
     </AbsoluteFill>
   );
 };
@@ -544,7 +561,8 @@ const ActPiece: React.FC<ActProps> = ({ chapter, index }) => {
     );
   }
   const set: PieceAct = act;
-  const { component: Piece, frames } = piece(set.piece);
+  const { component: Piece } = piece(set.piece);
+  const frames = pieceFrames(set.piece, set.holds);
 
   // The `focus` stage's plot: the rectangle a showcase gets when the panel has
   // left. A piece is the same situation with no footage underneath, so it draws
@@ -554,7 +572,13 @@ const ActPiece: React.FC<ActProps> = ({ chapter, index }) => {
   return (
     <AbsoluteFill style={{ fontFamily: INTER, color: STAGE.ink }}>
       <Backdrop focusX={plot.x + plot.width / 2} />
-      <Piece id={set.piece} frames={frames} plot={plot} manifest={capture(set.from)} />
+      <Piece
+        id={set.piece}
+        frames={frames}
+        plot={plot}
+        manifest={capture(set.from)}
+        holds={set.holds}
+      />
     </AbsoluteFill>
   );
 };
@@ -594,17 +618,34 @@ export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
   return (
     <AbsoluteFill style={{ fontFamily: INTER, color: STAGE.ink }}>
       <Series>
-        {scene.acts.map((act, index) => (
-          // Keyed off the piece id or the capture, never `act.capture` alone -
-          // a piece has none, so every piece act keyed as `undefined-N`.
-          <Series.Sequence key={actKey(act, index)} durationInFrames={lengths[index]!}>
-            {act.kind === 'piece' ? (
-              <ActPiece chapter={scene.id} index={index} />
-            ) : (
-              <ActFilm chapter={scene.id} index={index} />
-            )}
-          </Series.Sequence>
-        ))}
+        {scene.acts.map((act, index) => {
+          const key = actKey(act, index);
+          // `undefined` when the act's WAV has not been recorded yet - see
+          // `vo.ts`'s module doc on why that is a soft absence rather than a
+          // throw. Narration is mounted per act, here, rather than once at
+          // the film level beside `<Band/>`/`<SeamOverFilm/>` in `Reel.tsx`:
+          // a voiceover is scoped to the one act it was written for, and an
+          // act is exactly the unit `<Series.Sequence>` already times and
+          // trims for its footage, so giving the narration the same sequence
+          // costs nothing extra and keeps the two in lockstep automatically.
+          // The film-level slot beside the band and the seam is reserved for
+          // furniture that outlives a chapter boundary, which narration never
+          // does.
+          const src = voClip(key);
+          return (
+            // Keyed off the piece id or the capture, never `act.capture`
+            // alone - a piece has none, so every piece act keyed as
+            // `undefined-N`.
+            <Series.Sequence key={key} durationInFrames={lengths[index]!}>
+              {act.kind === 'piece' ? (
+                <ActPiece chapter={scene.id} index={index} />
+              ) : (
+                <ActFilm chapter={scene.id} index={index} />
+              )}
+              {src && <Audio src={src} />}
+            </Series.Sequence>
+          );
+        })}
       </Series>
       {rail && (
         <FilmIndex

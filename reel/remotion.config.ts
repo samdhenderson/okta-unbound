@@ -35,9 +35,3 @@ Config.setConcurrency(4);
 // failed with `Timeout (30000ms) exceeded rendering the component initially`.
 // The render scripts pass `--timeout=120000` rather than setting it here, so
 // the number is visible at the call site where somebody debugging will look.
-// The captures are silent. This stops Remotion *requiring* an audio track; it
-// does not stop ffmpeg writing one, so the `render` script also passes
-// `--muted`. Measured: with this alone the master still carried an empty AAC
-// stream, which some players surface as a muted-audio control on a film that
-// has no audio at all.
-Config.setEnforceAudioTrack(false);

@@ -19,10 +19,9 @@
  * for why that fails silently instead of throwing.
  */
 import React from 'react';
-import { interpolate, useCurrentFrame } from 'remotion';
+import { interpolate } from 'remotion';
 import { STAGE } from '../theme';
-import { FRAMES } from './ease';
-import { useVerb } from './useVerb';
+import { useVerb, useVerbPart } from './useVerb';
 
 interface ShadowRecipe {
   y: number;
@@ -73,7 +72,6 @@ export const Recede: React.FC<RecedeProps> = ({
   children,
 }) => {
   const t = useVerb('recede', from);
-  const frame = useCurrentFrame();
 
   const scale = interpolate(t, [0, 1], [1, 0.96]);
   const y = interpolate(t, [0, 1], [fromShadow.y, 2]);
@@ -82,12 +80,10 @@ export const Recede: React.FC<RecedeProps> = ({
   const color = collapsingColor(t, fromShadow.alpha, STAGE.rule);
   const boxShadow = `0 ${y}px ${blur}px ${spread}px ${color}`;
 
-  const opacity = interpolate(
-    frame,
-    [from + FRAMES.recede - FRAMES.recedeOpacityWindow, from + FRAMES.recede],
-    [1, 0],
-    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
-  );
+  // `recede`'s `opacity` part is the last 6f of the 19, so the window is the
+  // registry's rather than this file's subtraction. Inverted here because the
+  // part runs 0 to 1 and the fade runs the other way.
+  const opacity = 1 - useVerbPart('recede', 'opacity', from);
 
   return (
     <div style={{ transform: `scale(${scale})`, boxShadow, opacity, ...style }}>{children}</div>

@@ -183,21 +183,47 @@ export const workingSetRow = (page, section, name) =>
 export const orgSnapshotCard = (page) => page.getByRole('region', { name: 'This org' });
 
 /**
- * One finding row in the org card, by its label text — `Groups with no
- * members`, `Groups no rule fills`, `Deactivated applications`, `Push apps
- * pushing nothing`, `Paused group rules`.
+ * The Home card's two live findings, named once so a walk and this file cannot
+ * drift apart the way the three retired labels below did.
  *
- * **Not distinguishable by its own accessible name either**, and for the same
- * reason as {@link workingSetRow}: every finding's `StretchedButton` is named
- * `Open the filtered list`, identically, so this filters the row's `<li>` by
- * its label first. The number sits in a sibling span the button's
- * `aria-label` does not include, so nothing here needs to parse it out.
+ * `useOrgFigures.ts` used to speak in `Groups no rule fills`, `Groups with no
+ * members` and `Paused group rules` — all three gone. The card now renders
+ * exactly two rows: a rule-side one (`:218`) and a group-side one (`:232`).
+ */
+export const HOME_FINDING_PAUSED = 'Group rules paused';
+export const HOME_FINDING_UNFILLED = 'Groups with no members that no rule fills';
+
+/**
+ * One finding row in the org card, by its label text — {@link HOME_FINDING_PAUSED}
+ * or {@link HOME_FINDING_UNFILLED}.
+ *
+ * **Not matched by a fixed button name.** `Finding` in `OrgSnapshotCard.tsx`
+ * used to give every control row the identical name `Open the filtered list`;
+ * that name is gone, and the row's real accessible name is now
+ * `` `${label} — ${value}` `` (an em dash, U+2014 — written here as `—`
+ * inside the pattern rather than typed literally, since this repo bans the
+ * literal glyph from source prose and the escape says exactly what it matches).
+ * So the row is found by its own name, anchored at the start with
+ * {@link startsWith} the way {@link jumpResultRow} anchors on an entity name.
+ *
+ * **A zero or null finding has no button at all, by design.** `Finding`
+ * renders `ListRow as="li"` — no click target — whenever
+ * `subCount.value === null || subCount.value <= 0`; only a genuine positive
+ * count gets `as="button"`. So this selector finding nothing can mean the org
+ * is clean (or still reading) rather than that the selector broke — check
+ * {@link readOrgFinding} before assuming a stale name.
  */
 export const orgFinding = (page, label) =>
-  orgSnapshotCard(page)
-    .locator('li')
-    .filter({ hasText: label })
-    .getByRole('button', { name: 'Open the filtered list' });
+  orgSnapshotCard(page).getByRole('button', { name: new RegExp(`^${rx(label)} —`) });
+
+/**
+ * The finding's `<li>`, whichever state it is in — control, plain zero, or
+ * still reading. {@link orgFinding} only ever resolves the control form, so
+ * the readers below (which have to work in every state, not just the
+ * clickable one) scope off this instead.
+ */
+const orgFindingRow = (page, label) =>
+  orgSnapshotCard(page).locator('li').filter({ hasText: label });
 
 /**
  * The reports card's own scope.
@@ -253,20 +279,28 @@ export const reportRows = (page) =>
 /**
  * Read one org-card finding's number off the panel.
  *
- * The label and the figure are siblings inside the row rather than one string,
- * and the row's accessible name is the identical `Open the filtered list` on
- * every finding, so neither can be read from the name. The row's text is taken
- * whole and the integer pulled out of it.
+ * **Read the value span directly; do not parse the row's text.** This used to
+ * take the whole `<li>`'s `innerText()` and pull out the first integer, which
+ * was correct only by accident: `OrgSnapshotCard.tsx`'s note (`"of 412
+ * groups"`) now renders *before* the value span in DOM order, so that approach
+ * returned the collection's denominator as if it were the finding's own count
+ * — a "412 groups paused" bug that looked exactly like a working read. The
+ * value has its own `data-testid="org-finding-value"` for exactly this reason
+ * (`OrgSnapshotCard.tsx`), so this reads that node and nothing else.
  *
- * Returns `null` when the row shows no number. That is a real state, not a
- * failure: `FigureNumber` renders a placeholder for a `subCount` whose
- * collection has not resolved, and a chapter that quietly turned that into `0`
- * would put a finding on camera claiming an org is clean when the truth is that
+ * Returns `null` when the row shows no number — **not `0`**. Two placeholders
+ * render no digit at all: the reading state's `·` and the recessed `—` for a
+ * `subCount` whose collection has not resolved. Folding either into `0` would
+ * put a finding on camera claiming an org is clean when the truth is that
  * nobody has looked yet.
  */
 export async function readOrgFinding(page, label) {
-  const text = await orgSnapshotCard(page).locator('li').filter({ hasText: label }).innerText();
-  const match = text.replace(/,/g, '').match(/\d+/);
+  const value = await orgFindingRow(page, label)
+    .locator('[data-testid="org-finding-value"]')
+    .innerText();
+  const trimmed = value.trim();
+  if (trimmed === '·' || trimmed === '—') return null;
+  const match = trimmed.replace(/,/g, '').match(/\d+/);
   return match ? Number(match[0]) : null;
 }
 
@@ -287,16 +321,24 @@ export async function readOrgFinding(page, label) {
  * the note does not parse — quoting the raw text in both cases, the way every
  * other reader in this file reports what it actually saw.
  *
- * Reached through the finding's own label span (`id="org-finding-<key>"`,
- * set by `Finding` in `OrgSnapshotCard.tsx`) rather than the row's whole text,
- * because the row also carries the `FigureNumber` digits and the label prose,
- * and a regex over all three risks matching the wrong number.
+ * Reached through the note `<p>` itself (`id="org-finding-note-<key>"`, set by
+ * `Finding` in `OrgSnapshotCard.tsx`) rather than the row's whole text, because
+ * the row also carries the `FigureNumber` digits and the label prose, and a
+ * regex over all three risks matching the wrong number.
+ *
+ * **The id sits on the note, not on a label span beside it.** This used to walk
+ * `span[id^="org-finding-"]` and read that span's `nextElementSibling`, on the
+ * theory that the id marked the label and the note followed it. Neither half of
+ * that held: the id prefix is `org-finding-note-`, and it is set directly on
+ * the note `<p>` — there is no sibling to walk to. That query matched nothing,
+ * every read returned "no note yet", and a report that had in fact finished
+ * reading was reported as still loading.
  */
 export async function readOrgFindingTotal(page, label) {
-  const li = orgSnapshotCard(page).locator('li').filter({ hasText: label });
+  const li = orgFindingRow(page, label);
   const note = await li.evaluate((el) => {
-    const labelSpan = el.querySelector('span[id^="org-finding-"]');
-    return labelSpan?.nextElementSibling?.textContent ?? null;
+    const noteEl = el.querySelector('[id^="org-finding-note-"]');
+    return noteEl?.textContent ?? null;
   });
   if (note === null) {
     throw new Error(`readOrgFindingTotal: "${label}" has no note yet — the card is still reading`);
@@ -539,6 +581,43 @@ export const compositionSection = (page) =>
   page.getByRole('button', { name: startsWith('Composition') });
 
 /**
+ * The `Composition` `CollapsibleSection`'s own body, whichever tab
+ * (Attributes/MFA factors) is showing inside it.
+ *
+ * `CollapsibleSection` keeps its body mounted (not unmounted) while collapsed
+ * and links it to the header with `aria-controls`, so the body is the
+ * disclosure header's own next sibling in the DOM — the same xpath move
+ * {@link sortPill} makes off the `Sort by` label. Scoping through this rather
+ * than a bare `getByRole('button')` is what keeps {@link readMfaBreakdown} and
+ * {@link noFactorsRow} from also picking up `BreakdownDetailsModal`'s
+ * identically-shaped rows if that dialog happens to be open over the same rung.
+ */
+const compositionBody = (page) =>
+  compositionSection(page).locator('xpath=following-sibling::div[1]');
+
+/** The group detail rung, scoped the same way {@link USER_DETAIL} scopes the user rung. */
+const GROUP_DETAIL = '[data-testid="group-detail-view"]';
+
+/**
+ * A tab on the group detail rung: `Overview`, `Members`, `Access`, `Rules`,
+ * `Insights`.
+ *
+ * Scoped to the rung for the reason {@link userDetailTab} gives for its own tab
+ * strip: the icon rail is also `role="tab"`, so an unscoped lookup risks
+ * resolving to the rail's own Groups tab instead of the pane switch inside it.
+ *
+ * **Composition used to live on Members; it lives on Insights now.**
+ * `CompositionReports` (attribute facets + MFA factor breakdown) was the fifth
+ * control surface stacked above the Members tab's first row and has moved to
+ * this tab (`GroupDetailView.tsx`, `GroupInsightsPane.tsx`). A walk written
+ * against the old layout that goes looking for {@link compositionSection} or
+ * {@link compositionTab} while still on Members will find nothing — it has to
+ * `insightsTab(page).click()` first.
+ */
+export const insightsTab = (page) =>
+  page.locator(GROUP_DETAIL).getByRole('tab', { name: startsWith('Insights') });
+
+/**
  * The Filters disclosure.
  *
  * With Filters shut, the `Sort by` pills are in the DOM at a zero box. A sort
@@ -546,7 +625,93 @@ export const compositionSection = (page) =>
  */
 export const filtersSection = (page) => page.getByRole('button', { name: startsWith('Filters') });
 
+/**
+ * The Members tab's own "Filters" disclosure trigger (`FilterToggle`), which
+ * opens `MemberFilterDrawer` below the search field.
+ *
+ * A distinct export from {@link filtersSection} even though both resolve the
+ * same `getByRole('button', { name: startsWith('Filters') })` query: that one
+ * is the Rules rung's `Sort by` disclosure and this one is the Members roster's
+ * drawer, and the two never mount together — but naming them for the surface
+ * they actually open is what keeps a future walk from reasoning about the
+ * wrong one.
+ *
+ * `FilterToggle` states its active-filter count in words, not a bare digit
+ * (`Filters, 1 applied` once the first cut is live), so this matches the
+ * constant `Filters` prefix rather than the exact string.
+ */
+export const memberFilterToggle = (page) =>
+  page.getByRole('button', { name: startsWith('Filters') });
+
+/**
+ * A profile-attribute row inside the Members filter drawer's
+ * `AttributeFilterList` — the route into that attribute's full value picker.
+ *
+ * `ListRow`'s accessible name comes from its `ariaLabel` prop, not its visible
+ * text: `AttributeFilterList` sets it to the exact sentence
+ * `"<label>: choose a value to filter by"` so a reader knows what activating
+ * the row does before they take it. Matched in full because that sentence has
+ * no variable suffix to complicate it.
+ */
+export const attributeFilterRow = (page, label) =>
+  page.getByRole('button', { name: `${label}: choose a value to filter by`, exact: true });
+
+/**
+ * A value row inside the attribute value picker (`BreakdownDetailsModal` over
+ * `BreakdownReport`, toggle mode) that `attributeFilterRow` opens.
+ *
+ * **Scoped to the open dialog.** `BreakdownReport` renders the identical row
+ * shape wherever it is mounted — the Insights tab's read-only cards, this
+ * drawer's picker, and (in `navigate` mode) the old Composition surface this
+ * chapter no longer uses — so an unscoped lookup risks resolving off the
+ * dialog if more than one happens to be in the DOM.
+ *
+ * **Matched as a prefix, not the full name.** A toggle-mode row carries no
+ * `aria-label` of its own; its accessible name is just its visible text, the
+ * value's label immediately followed by its count and percentage with no
+ * separating space in the DOM (`readRosterCounts` documents the same
+ * no-space trap for the roster heading). `startsWith(label)` is what survives
+ * that without having to restate the count here.
+ */
+export const valuePickerRow = (page, label) =>
+  page.getByRole('dialog').getByRole('button', { name: startsWith(label) });
+
+/**
+ * The value picker's "Done" button.
+ *
+ * Closes `BreakdownDetailsModal` without discarding whatever filter was just
+ * toggled inside it — the modal only ever reads the live filter set back from
+ * `useMemberFilters`, it does not stage a draft that Done commits.
+ */
+export const valuePickerDone = (page) =>
+  page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true });
+
 /* --- MFA ----------------------------------------------------------------- */
+
+/**
+ * The Insights tab's "MFA coverage" `DetailSection`, scoped by its own heading.
+ *
+ * `MfaScanButton` (and the `BreakdownReport` rows it gates) is instantiated in
+ * **three** places now: {@link GroupMfaCoverageSection} on Insights, the
+ * `CompositionReports` MFA tab also on Insights, and `MemberFilterPanel` on
+ * Members. The last of those never mounts alongside the other two — Insights
+ * and Members are two branches of one `activeTab` switch in `GroupDetailView`,
+ * never both at once — but the first two do: `GroupInsightsPane` renders
+ * {@link GroupMfaCoverageSection} and `CompositionReports` in the same
+ * `space-y` stack, so with Composition's own MFA tab open, both scan buttons
+ * (and, mid/post-scan, both result reads) are on screen simultaneously. That
+ * is a real strict-mode hazard — `getByRole('button', {name: /^Run MFA
+ * scan/})` resolves two elements and Playwright refuses to click either.
+ *
+ * `GroupMfaCoverageSection`'s copy of the button is the one every MFA selector
+ * below scopes to, because it is the coverage chapter's actual subject (the
+ * scan is opt-in, wired here, not through Composition's redundant trigger) and
+ * because it needs no disclosure opened first — `CompositionReports` is a
+ * `CollapsibleSection` default closed, so its inert duplicate is often not
+ * even in the accessibility tree yet.
+ */
+const mfaCoverageSection = (page) =>
+  page.locator('section').filter({ has: page.getByRole('heading', { name: 'MFA coverage' }) });
 
 /**
  * The button that starts the real `scanGroupMfa`.
@@ -560,8 +725,12 @@ export const filtersSection = (page) => page.getByRole('button', { name: startsW
  * the scheduler's progress bar reports on work an administrator really waits
  * for. `MFA_AUTO_THRESHOLD` is 500, so at 94 members no confirmation modal
  * appears.
+ *
+ * Scoped to {@link mfaCoverageSection} — see that helper for the three-mount
+ * ambiguity this avoids.
  */
-export const mfaScanButton = (page) => page.getByRole('button', { name: /^Run MFA scan/ });
+export const mfaScanButton = (page) =>
+  mfaCoverageSection(page).getByRole('button', { name: /^Run MFA scan/ });
 
 /**
  * Read the MFA coverage breakdown the scan produced.
@@ -576,29 +745,45 @@ export const mfaScanButton = (page) => page.getByRole('button', { name: /^Run MF
  * cannot be told apart from `2` / `117%` by any regex over that string. The two
  * spans are read as separate nodes instead, which is unambiguous.
  *
+ * **Scoped to `CompositionReports`' MFA tab, and it has to be.** `BreakdownReport`
+ * is the shape a `.filter(Boolean)` over every button on the page — this used
+ * `page.getByRole('button')` unscoped, which was safe only while the Members tab
+ * held the sole copy of it. Now the same shape can render twice at once: the
+ * `Composition` panel's own MFA tab renders it on Insights, and
+ * `BreakdownDetailsModal` (the attribute "show all" dialog, same component,
+ * `navigate` intent) can be open over the same rung. `evaluateAll` never throws
+ * on more than one match the way a strict locator would, so this would not fail
+ * loudly — it would silently fold rows from whichever surface happened to be
+ * open into one array, which is worse. Scoping to `compositionBody` excludes
+ * `BreakdownDetailsModal` (a `Modal`, not a child of the Composition card) and
+ * `GroupMfaCoverageSection` (which never renders `BreakdownReport` at all — it
+ * shows one summary sentence, not per-factor rows).
+ *
  * @returns {Promise<Array<{ label: string, count: number, pct: number }>>}
  */
 export async function readMfaBreakdown(page) {
-  const rows = await page.getByRole('button').evaluateAll((els) =>
-    els
-      .map((el) => {
-        const labelSpan = el.querySelector('span[title]');
-        const line = labelSpan?.parentElement;
-        // The row is `<span title=label>…</span><span>count<span>pct%</span></span>`.
-        // Anything without that exact pair is some other button entirely.
-        if (!line || line.children.length !== 2) return null;
-        const countSpan = line.lastElementChild;
-        const pctSpan = countSpan.querySelector('span');
-        if (!pctSpan) return null;
-        const pct = Number.parseFloat(pctSpan.textContent ?? '');
-        const count = Number(
-          (countSpan.textContent ?? '').replace(pctSpan.textContent ?? '', '').replace(/,/g, ''),
-        );
-        if (!Number.isFinite(pct) || !Number.isFinite(count)) return null;
-        return { label: labelSpan.getAttribute('title') ?? '', count, pct };
-      })
-      .filter(Boolean),
-  );
+  const rows = await compositionBody(page)
+    .getByRole('button')
+    .evaluateAll((els) =>
+      els
+        .map((el) => {
+          const labelSpan = el.querySelector('span[title]');
+          const line = labelSpan?.parentElement;
+          // The row is `<span title=label>…</span><span>count<span>pct%</span></span>`.
+          // Anything without that exact pair is some other button entirely.
+          if (!line || line.children.length !== 2) return null;
+          const countSpan = line.lastElementChild;
+          const pctSpan = countSpan.querySelector('span');
+          if (!pctSpan) return null;
+          const pct = Number.parseFloat(pctSpan.textContent ?? '');
+          const count = Number(
+            (countSpan.textContent ?? '').replace(pctSpan.textContent ?? '', '').replace(/,/g, ''),
+          );
+          if (!Number.isFinite(pct) || !Number.isFinite(count)) return null;
+          return { label: labelSpan.getAttribute('title') ?? '', count, pct };
+        })
+        .filter(Boolean),
+    );
   if (rows.length === 0) {
     throw new Error('readMfaBreakdown: no breakdown rows on screen — did the scan finish?');
   }
@@ -608,27 +793,44 @@ export async function readMfaBreakdown(page) {
 /**
  * The scan button mid-flight, which is the panel confirming the click armed it.
  *
- * There is deliberately no matching `Rescan` selector for the other edge. Once
- * `mfaResults` lands, `CompositionReports` replaces the MFA tab's entire empty
- * state — button included — with the `BreakdownReport`, so the only `Rescan`
- * left on the page is inside the collapsed Filters disclosure at a zero box.
- * Waiting on it is a thirty-second timeout that reads exactly like a scan that
- * never finished. The completion signal is {@link noFactorsRow}.
+ * There is deliberately no matching `Rescan` selector for the other edge:
+ * `GroupMfaCoverageSection` (unlike the old Members-tab layout this replaced)
+ * keeps its trigger mounted in every state, so the button's own label already
+ * carries that edge — see {@link mfaScanButton}'s "Rescan" reasoning.
+ *
+ * Scoped to {@link mfaCoverageSection} for the same reason {@link mfaScanButton}
+ * is: `scanStatus` is one hook shared by `GroupMfaCoverageSection` and
+ * `CompositionReports`, so if the Composition MFA tab happens to be open before
+ * a scan has ever run, **both** panels read `scanStatus === 'scanning'` and
+ * both render a `Scanning…` button at once — an unscoped lookup here is a
+ * strict-mode throw waiting for exactly that layout.
  */
-export const mfaScanningButton = (page) => page.getByRole('button', { name: /^Scanning/ });
+export const mfaScanningButton = (page) =>
+  mfaCoverageSection(page).getByRole('button', { name: /^Scanning/ });
 
 /**
  * The breakdown row for members with no factors.
  *
  * Its **existence is the completion signal** for the scan: `CompositionReports`
- * swaps the whole scan block for the `BreakdownReport` the instant `mfaResults`
- * lands. The scan is a ~7 second wall clock (`SCAN_WALL_CLOCK_MS` in
- * `demo/api.ts`) that nothing awaits, so sequencing it by arithmetic once
+ * swaps its MFA tab's whole empty state for the `BreakdownReport` the instant
+ * `mfaResults` lands. The scan is a ~7 second wall clock (`SCAN_WALL_CLOCK_MS`
+ * in `demo/api.ts`) that nothing awaits, so sequencing it by arithmetic once
  * opened the following beat 39ms after it ended. Wait on this instead.
  *
  * The label is `No factors enrolled`. A guess at "No MFA" matched nothing.
+ *
+ * **Scoped to {@link compositionBody}, and do not confuse it with the decoy.**
+ * `MemberFilterPanel.tsx` renders a `FilterPill` whose visible text is the bare
+ * word `No factors` — no "enrolled", and it is a pill, not this row — but it
+ * never mounts alongside this selector's target: it lives on the Members tab,
+ * this lives on Insights, and `GroupDetailView`'s `activeTab` switch renders
+ * only one of the two panes at a time. The scope here exists for the *other*
+ * hazard, the one {@link readMfaBreakdown} documents: excluding
+ * `BreakdownDetailsModal`'s identically-labelled row if that dialog is open
+ * over the same rung.
  */
-export const noFactorsRow = (page) => page.getByRole('button', { name: /^No factors enrolled/ });
+export const noFactorsRow = (page) =>
+  compositionBody(page).getByRole('button', { name: /^No factors enrolled/ });
 
 /* --- Users and comparison ------------------------------------------------ */
 
@@ -821,8 +1023,19 @@ export async function readWorklistCause(page, heading) {
 
 /** How many groups a remedy group accounts for, off its own count chip. */
 export async function readWorklistGroupCount(page, heading) {
+  // `StableWidth` (`CauseWorklist.tsx`'s count badge) renders the reserved
+  // widest form as an `aria-hidden`, `invisible` (visibility:hidden) twin
+  // ahead of the live badge in the DOM, so this used to be a plain
+  // `getByText(...).first()` and it silently picked the hidden twin every
+  // time - `.innerText()` on a `visibility:hidden` element returns `''`
+  // (innerText is layout-aware; textContent would not have caught this),
+  // which parsed to `NaN` and made a real "1 group" read back as the guard's
+  // "accounts for no groups". `span:visible` is Playwright's own visibility
+  // check, the same one `waitFor(visible)` uses, so this reads the badge a
+  // viewer actually sees.
   const chip = worklistRemedy(page, heading)
-    .getByText(/^\d+ groups?$/)
+    .locator('span:visible')
+    .filter({ hasText: /^\d+ groups?$/ })
     .first();
   return Number(/(\d+)/.exec(await chip.innerText())?.[1]);
 }
@@ -1128,6 +1341,21 @@ export const ruleExpand = (page, name) =>
 export const ruleFilter = (page, label) => page.getByRole('button', { name: startsWith(label) });
 
 /**
+ * The Rules strip's `Stats` panel toggle.
+ *
+ * Behind **More**, and that is a property of the control rather than of the
+ * viewport: `RulesListActionBar` builds it with `panelAction`, which gives a
+ * closed panel `priority: 'tier'`, so the strip overflows it and the tier is
+ * `inert` until {@link moreActions} is pressed. A role query finds nothing
+ * before that, exactly as it does for {@link deactivateRule}.
+ *
+ * Named `Stats` closed and `Hide stats` open, so this matches the closed form
+ * only: pressing it when it already reads `Hide stats` would shut the panel the
+ * caller wanted.
+ */
+export const statsPanel = (page) => page.getByRole('button', { name: 'Stats', exact: true });
+
+/**
  * Read the `RulesStatsGrid` cards: `Total Rules`, `Active`, `Inactive`,
  * `Conflicts`.
  *
@@ -1220,6 +1448,181 @@ export const appRow = (page, name) =>
 /** The Apps tab's inventory toolbar lives above the list; its verb reads `Refresh`. */
 export const appsRefresh = (page) => page.getByRole('button', { name: /^Refresh/ });
 
+/* --- Export ---------------------------------------------------------------- */
+
+/**
+ * One descriptor card in the entity picker, by its display name — `Group
+ * Rules`, `Users`, `Applications`, `Report: App access no rule maintains`
+ * (`orgReports.ts:130`).
+ *
+ * **Not matched by the card's own accessible name.** `EntityPicker` wraps the
+ * whole card — icon, `<h2>` display name *and* the description paragraph — in
+ * one `role="button"`, so the computed name is both strings run together with
+ * no separator, the identical trap {@link reportDisclosure} documents for the
+ * Home reports card. A card is found by its heading instead, the same move
+ * {@link worklistRemedy} makes for a remedy group.
+ */
+export const exportEntityCard = (page, displayName) =>
+  page
+    .getByRole('button')
+    .filter({ has: page.getByRole('heading', { name: displayName, exact: true, level: 2 }) });
+
+/**
+ * The configure phase's `Preview` button — `tab.loadPreview`, a read-only call
+ * that populates {@link readExportPreviewRows}'s table.
+ *
+ * **Exact match, and it has to be.** The same row carries `Download CSV`
+ * (`tab.download`), which the capture runner has no handling for at all: it
+ * triggers a real file save, and a take that lands on it ends on a native save
+ * dialog with nothing after it. `Preview` and `Download CSV` share no
+ * substring, so even a loose {@link startsWith} match could not confuse the
+ * two — this is pinned exact anyway, on the same reasoning {@link ruleRow}
+ * gives for pinning its own heading match: a selector that is merely correct
+ * today is not the same thing as a selector an unrelated label change cannot
+ * quietly widen into the wrong button.
+ */
+export const exportPreviewButton = (page) =>
+  page.getByRole('button', { name: 'Preview', exact: true });
+
+/**
+ * The configure phase's "All exports" button, which returns to the entity
+ * picker without losing what has not been submitted (there is nothing to lose
+ * yet — the tab keeps no draft across a descriptor change).
+ */
+export const exportBackToPick = (page) =>
+  page.getByRole('button', { name: 'All exports', exact: true });
+
+/**
+ * The configure phase's own `<h2>` — the selected descriptor's display name.
+ *
+ * Unscoped, and safe to leave that way: `ExportTab.tsx` renders the picker and
+ * the configure phase from one ternary, never both, so the picker's own card
+ * headings (also `<h2>`, see {@link exportEntityCard}) are never mounted
+ * alongside this one.
+ */
+export const exportHeading = (page) => page.getByRole('heading', { level: 2 });
+
+/**
+ * Read the `ExportFilterBox`'s live match count as a number, or `null` while
+ * it is unknown.
+ *
+ * **Three states, and only one of them is a real zero.** `MatchCountLine`
+ * renders `Checking…` while the debounced probe is in flight, nothing at all
+ * before the first probe has run, `No matches` for a real empty result, and
+ * `N matching` (or `N+ matching`, once `hasMore`) otherwise. A naive
+ * `/\d+/` scrape would silently return `null` for `No matches` — no digit
+ * appears in that string — which is backwards from the {@link readOrgFinding}
+ * discipline this follows: a stated zero must read as `0`, not as "unknown".
+ * So this checks for the loading/blank states explicitly, and only then falls
+ * back to parsing a digit run.
+ *
+ * Reached through `data-testid="export-match-count"` (`ExportFilterBox.tsx`)
+ * because the blank state renders no element at all to query the role or text
+ * of — there is nothing there to distinguish "not probed yet" from "probing"
+ * without a stable anchor around both.
+ */
+export async function readExportMatchCount(page) {
+  const text = (await page.locator('[data-testid="export-match-count"]').innerText()).trim();
+  if (text === '' || /^Checking/.test(text)) return null;
+  if (/^No matches/.test(text)) return 0;
+  const match = text.replace(/,/g, '').match(/\d+/);
+  return match ? Number(match[0]) : null;
+}
+
+/**
+ * The `Columns` disclosure's own body, whichever group (Identity/Profile/Custom)
+ * a toggle lives in — the same `aria-controls`-sibling move {@link compositionBody}
+ * makes for the Composition panel, needed for the identical reason: `ColumnPicker`
+ * is a `CollapsibleSection`, mounted-but-collapsed rather than absent, so its
+ * chips exist in the DOM before anyone opens it.
+ */
+const exportColumnsBody = (page) =>
+  page
+    .getByRole('button', { name: startsWith('Columns') })
+    .locator('xpath=following-sibling::div[1]');
+
+/** One column toggle chip in the picker, by the column's own label. */
+export const exportColumnToggle = (page, label) =>
+  exportColumnsBody(page).getByRole('button', { name: label, exact: true });
+
+/**
+ * How many rows the preview table's body is showing.
+ *
+ * `ExportPreviewTable` is a raw `<table>`, not the shared `DataTable` (there is
+ * none), so this counts `tbody tr` directly rather than reaching for a role
+ * this markup does not carry.
+ */
+export async function readExportPreviewRows(page) {
+  return page.locator('table tbody tr').count();
+}
+
+/* --- API Explorer ---------------------------------------------------------- */
+
+/** The Explorer's request-path field, by its `aria-label` (`ApiExplorerTab.tsx`). */
+export const explorerPathInput = (page) => page.getByRole('textbox', { name: 'API path' });
+
+/** The Explorer's `Send` verb. `disabled` until a path is typed and a tab is connected. */
+export const explorerSend = (page) => page.getByRole('button', { name: 'Send', exact: true });
+
+/**
+ * A view tab on the response viewer: `Shape`, `Redacted`, `Raw`.
+ *
+ * Scoped through `JsonViewer`'s own tablist (`aria-label="Response view"`), and
+ * matched with {@link startsWith} rather than an exact name: `Redacted` carries
+ * a count badge once `redactedCount > 0` (`Redacted12`, no space), the same
+ * whitespace trap {@link userDetailTab} documents for its own badge counts.
+ */
+export const explorerViewTab = (page, name) =>
+  page.getByRole('tablist', { name: 'Response view' }).getByRole('tab', { name: startsWith(name) });
+
+/**
+ * Read the response status badge as a number, or `null` before a request has
+ * been sent.
+ *
+ * `ApiExplorerTab.tsx` renders `result.status ?? 'unknown'` inside the badge,
+ * and a network failure that never reached Okta is exactly the case with no
+ * numeric status to show — `'unknown'` is a real state, not a parsing gap, so
+ * this returns `null` for it rather than `0` or `NaN`. Reached through
+ * `data-testid="explorer-status-badge"` because the badge shares its component
+ * (and, before a request, its absence) with nothing else stable to anchor on
+ * — the plain `GET` badge beside it has no status to confuse this with, but it
+ * is also not this one.
+ */
+export async function readExplorerStatus(page) {
+  const text = (await page.locator('[data-testid="explorer-status-badge"]').innerText()).trim();
+  return /^\d+$/.test(text) ? Number(text) : null;
+}
+
+/* --- The ⌘K palette -------------------------------------------------------- */
+
+/**
+ * The ⌘K palette dialog.
+ *
+ * **There is nothing to click to open it.** `Explorer` (and `History`) are
+ * `railHidden` (`tabs.ts`, ADR-0063) — neither has a rail seat, so the palette
+ * is their only route and it opens from a real keydown
+ * (`useCommandPalette.ts:52`: `metaKey || ctrlKey` plus `k`, repeat-guarded),
+ * never from a button. A walk reaches this with
+ * `page.keyboard.press('Meta+k')`, not a click.
+ */
+export const palette = (page) => page.getByRole('dialog', { name: 'Jump to section' });
+
+/**
+ * The palette's own search field.
+ *
+ * `searchbox`, not `textbox`, and the difference is the whole selector.
+ * `TabJumpPalette` renders its `Input` as `type="search"`, whose implicit ARIA
+ * role is `searchbox`; a `textbox` query matches it not at all. That is not a
+ * near miss, it is zero elements, and it cost a take: the palette opened on
+ * camera and the walk then reported no field to type into.
+ *
+ * {@link jumpBarInput} looks like a counter-example and is not. Home's jump bar
+ * is `type="text"`, so `textbox` is right there and wrong here, which is
+ * exactly why this is worth a comment rather than a shared helper.
+ */
+export const paletteInput = (page) =>
+  palette(page).getByRole('searchbox', { name: 'Search sections' });
+
 /* --- Readiness ----------------------------------------------------------- */
 
 /**
@@ -1235,6 +1638,14 @@ export const appsRefresh = (page) => page.getByRole('button', { name: /^Refresh/
 export const READY = {
   /** Characters of text in the scroll root that mean "this rung has rendered". */
   contentChars: 400,
-  /** Per-chapter overrides, keyed by the anchor's Playwright selector. */
-  rules: 'text=Load Rules',
+  /*
+    Per-chapter overrides, keyed by chapter id.
+
+    Deliberately empty. `rules` used to live here as `text=Load Rules`, which
+    ADR-0069's auto-fetch retired: both Rules chapters now carry an explicit
+    `ready` in `chapters.mjs`, and `capture.mjs` prefers a chapter's own anchor
+    over this map. A stale entry here would therefore never fire, which is
+    exactly why it is worth deleting rather than leaving as a fallback nobody
+    reads.
+  */
 };

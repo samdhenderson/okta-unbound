@@ -78,8 +78,17 @@ const OUT = path.resolve(REPO, 'captures');
  * manifest carrying one extra key it no longer reads is not a reason to re-shoot
  * seven chapters. The rule this version guards is "old clip under new captions";
  * that is not what happened.
+ *
+ * 5 — the selector/chapter rig itself changed underneath every existing
+ *     manifest: the Home org-card selectors were rewritten against new
+ *     markup, `insightsTab` and the MFA-panel scoping moved with Composition
+ *     onto the group rung's Insights tab, the Rules chapters' `ready` anchor
+ *     changed, and `export`/`explorer` gained real chapters. None of that
+ *     shows up in a chapter's own fingerprint (walk + driver + demo org), so
+ *     without this bump every existing manifest would read `unchanged` and
+ *     the run would trust footage shot against selectors that no longer match.
  */
-const SCHEMA = 4;
+const SCHEMA = 5;
 
 /**
  * Rig files whose contents decide whether a chapter's clip is stale.

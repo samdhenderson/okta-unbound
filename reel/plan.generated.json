@@ -1,0 +1,714 @@
+{
+  "_generated": "npm run reel:plan - do not edit",
+  "fps": 60,
+  "openingFrames": 1590,
+  "endCardFrames": 150,
+  "chaptersEnd": 22439,
+  "frames": 22589,
+  "previews": {
+    "piece-exploded-plates": 649,
+    "piece-ledger": 240,
+    "piece-coverage-bars": 240,
+    "piece-unpacking": 270,
+    "piece-placeholder": 210,
+    "overture": 930,
+    "card-premise": 660,
+    "card-title": 216,
+    "seam": 60,
+    "panel-ink": 252
+  },
+  "scenes": [
+    {
+      "id": "home",
+      "title": "Home",
+      "from": 1590,
+      "frames": 1767,
+      "acts": [
+        {
+          "key": "home-0",
+          "index": 0,
+          "kind": "film",
+          "capture": "home",
+          "from": 0,
+          "reelFrom": 1590,
+          "frames": 1767,
+          "beats": [
+            {
+              "beat": "jump",
+              "from": 0,
+              "frames": 1001,
+              "reelFrom": 1590
+            },
+            {
+              "beat": "working-set",
+              "from": 1001,
+              "frames": 231,
+              "reelFrom": 2591
+            },
+            {
+              "beat": "findings",
+              "from": 1232,
+              "frames": 535,
+              "reelFrom": 2822
+            }
+          ],
+          "marks": [
+            {
+              "beat": "jump",
+              "headline": "Search your directory instantly.",
+              "stage": "home"
+            },
+            {
+              "beat": "jump"
+            },
+            {
+              "beat": "working-set",
+              "headline": "Resume your workflow without searching."
+            },
+            {
+              "beat": "findings",
+              "headline": "Spot actionable items right away."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "users",
+      "title": "Users",
+      "from": 3357,
+      "frames": 5209,
+      "acts": [
+        {
+          "key": "users-gap-0",
+          "index": 0,
+          "kind": "film",
+          "capture": "users-gap",
+          "from": 0,
+          "reelFrom": 3357,
+          "label": "The gap",
+          "frames": 754,
+          "beats": [
+            {
+              "beat": "arrive",
+              "from": 0,
+              "frames": 315,
+              "reelFrom": 3357
+            },
+            {
+              "beat": "gap",
+              "from": 315,
+              "frames": 439,
+              "reelFrom": 3672
+            }
+          ],
+          "marks": [
+            {
+              "beat": "arrive",
+              "headline": "A new hire files an access ticket.",
+              "stage": "home"
+            },
+            {
+              "beat": "gap"
+            }
+          ]
+        },
+        {
+          "key": "users-cause-1",
+          "index": 1,
+          "kind": "film",
+          "capture": "users-cause",
+          "from": 754,
+          "reelFrom": 4111,
+          "label": "The cause",
+          "frames": 1487,
+          "beats": [
+            {
+              "beat": "subject",
+              "from": 754,
+              "frames": 301,
+              "reelFrom": 4111
+            },
+            {
+              "beat": "against",
+              "from": 1055,
+              "frames": 302,
+              "reelFrom": 4412
+            },
+            {
+              "beat": "difference",
+              "from": 1357,
+              "frames": 235,
+              "reelFrom": 4714
+            },
+            {
+              "beat": "cause",
+              "from": 1592,
+              "frames": 649,
+              "reelFrom": 4949
+            }
+          ],
+          "marks": [
+            {
+              "beat": "subject",
+              "headline": "Benchmark against a working coworker.",
+              "stage": "home"
+            },
+            {
+              "beat": "difference"
+            },
+            {
+              "beat": "cause",
+              "headline": "Unbound reveals the root cause."
+            }
+          ]
+        },
+        {
+          "key": "piece-exploded-plates-2",
+          "index": 2,
+          "kind": "piece",
+          "capture": "users-cause",
+          "from": 2241,
+          "reelFrom": 5598,
+          "piece": "exploded-plates",
+          "frames": 649,
+          "cues": ["dock", "lift", "split", "rejoin", "out", "bands", "bandsOut"],
+          "holds": {
+            "split": 5,
+            "rejoin": 4
+          },
+          "beats": []
+        },
+        {
+          "key": "users-fix-3",
+          "index": 3,
+          "kind": "film",
+          "capture": "users-fix",
+          "from": 2890,
+          "reelFrom": 6247,
+          "label": "The fix",
+          "frames": 1271,
+          "beats": [
+            {
+              "beat": "open",
+              "from": 2890,
+              "frames": 277,
+              "reelFrom": 6247
+            },
+            {
+              "beat": "edit",
+              "from": 3167,
+              "frames": 346,
+              "reelFrom": 6524
+            },
+            {
+              "beat": "predict",
+              "from": 3513,
+              "frames": 648,
+              "reelFrom": 6870
+            }
+          ],
+          "marks": [
+            {
+              "beat": "open",
+              "headline": "Remediate directly from the investigation screen.",
+              "stage": "home"
+            },
+            {
+              "beat": "predict",
+              "headline": "Preview the blast radius before saving."
+            },
+            {
+              "beat": "predict"
+            }
+          ]
+        },
+        {
+          "key": "piece-ledger-4",
+          "index": 4,
+          "kind": "piece",
+          "capture": "users-fix",
+          "from": 4161,
+          "reelFrom": 7518,
+          "piece": "ledger",
+          "frames": 240,
+          "cues": [],
+          "beats": []
+        },
+        {
+          "key": "users-fix-5",
+          "index": 5,
+          "kind": "film",
+          "capture": "users-fix",
+          "from": 4401,
+          "reelFrom": 7758,
+          "label": "The fix",
+          "frames": 808,
+          "beats": [
+            {
+              "beat": "land",
+              "from": 4401,
+              "frames": 808,
+              "reelFrom": 7758
+            }
+          ],
+          "marks": [
+            {
+              "beat": "land",
+              "headline": "The automation triggers immediately."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "groups",
+      "title": "Groups",
+      "from": 8566,
+      "frames": 5834,
+      "acts": [
+        {
+          "key": "groups-0",
+          "index": 0,
+          "kind": "film",
+          "capture": "groups",
+          "from": 0,
+          "reelFrom": 8566,
+          "label": "The source",
+          "frames": 969,
+          "beats": [
+            {
+              "beat": "cascade",
+              "from": 0,
+              "frames": 93,
+              "reelFrom": 8566
+            },
+            {
+              "beat": "open-group",
+              "from": 93,
+              "frames": 248,
+              "reelFrom": 8659
+            },
+            {
+              "beat": "members",
+              "from": 341,
+              "frames": 628,
+              "reelFrom": 8907
+            }
+          ],
+          "marks": [
+            {
+              "beat": "cascade",
+              "stage": "home"
+            },
+            {
+              "beat": "members",
+              "headline": "Audit membership provenance instantly.",
+              "diagram": "roster-tally"
+            }
+          ]
+        },
+        {
+          "key": "attributes-1",
+          "index": 1,
+          "kind": "film",
+          "capture": "attributes",
+          "from": 969,
+          "reelFrom": 9535,
+          "label": "The match",
+          "frames": 2815,
+          "beats": [
+            {
+              "beat": "open",
+              "from": 969,
+              "frames": 301,
+              "reelFrom": 9535
+            },
+            {
+              "beat": "facets",
+              "from": 1270,
+              "frames": 772,
+              "reelFrom": 9836
+            },
+            {
+              "beat": "filter",
+              "from": 2042,
+              "frames": 326,
+              "reelFrom": 10608
+            },
+            {
+              "beat": "compose",
+              "from": 2368,
+              "frames": 999,
+              "reelFrom": 10934
+            },
+            {
+              "beat": "roster",
+              "from": 3367,
+              "frames": 417,
+              "reelFrom": 11933
+            }
+          ],
+          "marks": [
+            {
+              "beat": "open",
+              "headline": "Before you write a rule, see what you are matching on.",
+              "stage": "home"
+            },
+            {
+              "beat": "facets",
+              "headline": "Every attribute this group actually varies along.",
+              "stage": "focus",
+              "diagram": "facet-board"
+            },
+            {
+              "beat": "filter",
+              "stage": "home"
+            },
+            {
+              "beat": "compose",
+              "headline": "Stack two filters and you have the population a rule would match.",
+              "diagram": "filter-funnel"
+            },
+            {
+              "beat": "roster"
+            }
+          ]
+        },
+        {
+          "key": "reporting-2",
+          "index": 2,
+          "kind": "film",
+          "capture": "reporting",
+          "from": 3784,
+          "reelFrom": 12350,
+          "label": "The exposure",
+          "frames": 2050,
+          "beats": [
+            {
+              "beat": "open",
+              "from": 3784,
+              "frames": 301,
+              "reelFrom": 12350
+            },
+            {
+              "beat": "arm",
+              "from": 4085,
+              "frames": 721,
+              "reelFrom": 12651
+            },
+            {
+              "beat": "scan",
+              "from": 4806,
+              "frames": 131,
+              "reelFrom": 13372
+            },
+            {
+              "beat": "breakdown",
+              "from": 4937,
+              "frames": 295,
+              "reelFrom": 13503
+            },
+            {
+              "beat": "unenrolled",
+              "from": 5232,
+              "frames": 602,
+              "reelFrom": 13798
+            }
+          ],
+          "marks": [
+            {
+              "beat": "open",
+              "headline": "Deprecating SMS authentication. Who is exposed?",
+              "stage": "home"
+            },
+            {
+              "beat": "arm"
+            },
+            {
+              "beat": "breakdown",
+              "headline": "Map the exact authentication posture.",
+              "stage": "focus",
+              "diagram": "factor-ladder"
+            },
+            {
+              "beat": "unenrolled",
+              "headline": "Turn reports into actionable target lists.",
+              "stage": "home"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "apps",
+      "title": "Apps",
+      "from": 14400,
+      "frames": 833,
+      "acts": [
+        {
+          "key": "apps-0",
+          "index": 0,
+          "kind": "film",
+          "capture": "apps",
+          "from": 0,
+          "reelFrom": 14400,
+          "frames": 833,
+          "beats": [
+            {
+              "beat": "open",
+              "from": 0,
+              "frames": 89,
+              "reelFrom": 14400
+            },
+            {
+              "beat": "filter",
+              "from": 89,
+              "frames": 344,
+              "reelFrom": 14489
+            },
+            {
+              "beat": "sort",
+              "from": 433,
+              "frames": 400,
+              "reelFrom": 14833
+            }
+          ],
+          "marks": [
+            {
+              "beat": "open",
+              "stage": "home"
+            },
+            {
+              "beat": "filter",
+              "headline": "Identify the applications nobody switched back on.",
+              "diagram": "inactive-ratio"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rules",
+      "title": "Rules",
+      "from": 15233,
+      "frames": 3619,
+      "acts": [
+        {
+          "key": "rules-0",
+          "index": 0,
+          "kind": "film",
+          "capture": "rules",
+          "from": 0,
+          "reelFrom": 15233,
+          "label": "The inventory",
+          "frames": 1659,
+          "beats": [
+            {
+              "beat": "load",
+              "from": 0,
+              "frames": 572,
+              "reelFrom": 15233
+            },
+            {
+              "beat": "active",
+              "from": 572,
+              "frames": 331,
+              "reelFrom": 15805
+            },
+            {
+              "beat": "dormant",
+              "from": 903,
+              "frames": 756,
+              "reelFrom": 16136
+            }
+          ],
+          "marks": [
+            {
+              "beat": "load",
+              "headline": "Audit your automation logic directly.",
+              "stage": "home"
+            },
+            {
+              "beat": "dormant",
+              "headline": "Locate inactive logic cluttering the environment.",
+              "stage": "focus",
+              "diagram": "rule-board"
+            }
+          ]
+        },
+        {
+          "key": "rules-impact-1",
+          "index": 1,
+          "kind": "film",
+          "capture": "rules-impact",
+          "from": 1659,
+          "reelFrom": 16892,
+          "label": "The consequence",
+          "frames": 1960,
+          "beats": [
+            {
+              "beat": "open",
+              "from": 1659,
+              "frames": 216,
+              "reelFrom": 16892
+            },
+            {
+              "beat": "holds",
+              "from": 1875,
+              "frames": 758,
+              "reelFrom": 17108
+            },
+            {
+              "beat": "deactivate",
+              "from": 2633,
+              "frames": 986,
+              "reelFrom": 17866
+            }
+          ],
+          "marks": [
+            {
+              "beat": "open",
+              "headline": "Before you switch a rule off, find out what it is holding up.",
+              "stage": "home"
+            },
+            {
+              "beat": "holds",
+              "headline": "The panel counts the members no other rule explains.",
+              "diagram": "sole-ratio"
+            },
+            {
+              "beat": "deactivate",
+              "headline": "One number, two verbs, two different outcomes."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "export",
+      "title": "Export",
+      "from": 18852,
+      "frames": 1582,
+      "acts": [
+        {
+          "key": "export-0",
+          "index": 0,
+          "kind": "film",
+          "capture": "export",
+          "from": 0,
+          "reelFrom": 18852,
+          "frames": 1582,
+          "beats": [
+            {
+              "beat": "open",
+              "from": 0,
+              "frames": 218,
+              "reelFrom": 18852
+            },
+            {
+              "beat": "pick",
+              "from": 218,
+              "frames": 316,
+              "reelFrom": 19070
+            },
+            {
+              "beat": "columns",
+              "from": 534,
+              "frames": 389,
+              "reelFrom": 19386
+            },
+            {
+              "beat": "preview",
+              "from": 923,
+              "frames": 659,
+              "reelFrom": 19775
+            }
+          ],
+          "marks": [
+            {
+              "beat": "open",
+              "headline": "Hand a finding back as a file.",
+              "stage": "home"
+            },
+            {
+              "beat": "pick"
+            },
+            {
+              "beat": "columns",
+              "headline": "Nothing was fetched, so nothing has to be fetched again."
+            },
+            {
+              "beat": "preview",
+              "headline": "Zero requests between the finding and the download."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "explorer",
+      "title": "Explorer",
+      "from": 20434,
+      "frames": 2005,
+      "acts": [
+        {
+          "key": "explorer-0",
+          "index": 0,
+          "kind": "film",
+          "capture": "explorer",
+          "from": 0,
+          "reelFrom": 20434,
+          "frames": 2005,
+          "beats": [
+            {
+              "beat": "summon",
+              "from": 0,
+              "frames": 379,
+              "reelFrom": 20434
+            },
+            {
+              "beat": "request",
+              "from": 379,
+              "frames": 733,
+              "reelFrom": 20813
+            },
+            {
+              "beat": "shape",
+              "from": 1112,
+              "frames": 305,
+              "reelFrom": 21546
+            },
+            {
+              "beat": "values",
+              "from": 1417,
+              "frames": 588,
+              "reelFrom": 21851
+            }
+          ],
+          "marks": [
+            {
+              "beat": "summon",
+              "headline": "There is no rail icon for this tab.",
+              "stage": "home"
+            },
+            {
+              "beat": "request",
+              "headline": "Ask Okta a question directly, without leaving the panel."
+            },
+            {
+              "beat": "shape",
+              "headline": "The response opens on its shape, not its contents.",
+              "stage": "focus"
+            },
+            {
+              "beat": "values",
+              "headline": "Values are one click away, and redacted by default.",
+              "stage": "home"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

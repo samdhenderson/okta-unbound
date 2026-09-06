@@ -45,9 +45,20 @@ interface DemoResult {
   success: boolean;
   data?: unknown;
   error?: string;
+  /**
+   * The HTTP status the real transport reports alongside the body.
+   *
+   * Carried because the envelope claims to match the real one and, until this
+   * was added, did not: `useApiExplorer` reads `outcome.status` and the API
+   * Explorer renders it in a `Badge`, so a demo response with no status
+   * rendered the tab's status as the literal word `unknown`. That is a fixture
+   * gap wearing the costume of a product fault, and it is the sort that only
+   * shows up when something puts the surface on camera.
+   */
+  status?: number;
 }
 
-const ok = (data: unknown): DemoResult => ({ success: true, data });
+const ok = (data: unknown): DemoResult => ({ success: true, data, status: 200 });
 
 /** Narrow a raw demo group to the `OktaGroup` shape the panel's types use. */
 function asOktaGroup(id: string): OktaGroup | null {

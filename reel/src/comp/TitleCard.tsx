@@ -88,8 +88,10 @@ import { FRAME, INTER, STAGE, TYPE } from '../theme';
  * loudly against the script.
  *
  * About 1.6s of writing and 2.0s of hold. The hold is not padding - it is the
- * reading time a wordmark, a two-line claim and two privacy facts need when
- * there is no narration to carry them.
+ * reading time a wordmark, a two-line claim and two privacy facts need on
+ * their own. This card runs before any narration is confirmed to have
+ * landed, and the film still has to work muted (ADR-0073), so its length is
+ * set by the eye, not by the ear.
  */
 export const DRAWN_TITLE_FRAMES = 216;
 

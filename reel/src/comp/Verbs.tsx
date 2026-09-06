@@ -31,6 +31,7 @@ import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { STAGE, TYPE, FRAMES, INTER, COLOR } from '../theme';
 import { Dock, Lift, Count, Split, Fan, FanChild, Recede } from '../verbs';
+import type { VerbName } from '../verbs';
 import { SketchBox, Written, draw as pencilDraw } from '../pencil';
 
 /** Ten seconds at the film's 60fps - several loops of every row after the stagger settles. */
@@ -238,11 +239,22 @@ const Cell: React.FC<{
   </div>
 );
 
-/** One row: the verb's own label at left, three cells to its right. */
+/**
+ * One row: the verb's own label at left, three cells to its right.
+ *
+ * The row is addressed by **verb name**, not by a display string, and the
+ * heading is derived from it. That is what lets `check-verbs.mjs` assert this
+ * matrix covers every verb in the registry: a verb added to `VERBS` with no row
+ * here fails the gate instead of quietly going undemonstrated, which is how
+ * `exploded-plates` and `placeholder` once ended up with no preview at all.
+ *
+ * `draw` is admitted alongside the registry's names because it is the seventh
+ * verb and lives in `pencil/` by design - see `verbs/index.ts`.
+ */
 const Row: React.FC<{
-  name: string;
+  verb: VerbName | 'draw';
   cells: [React.ReactNode, React.ReactNode, React.ReactNode];
-}> = ({ name, cells }) => (
+}> = ({ verb, cells }) => (
   <div
     style={{
       display: 'grid',
@@ -252,7 +264,9 @@ const Row: React.FC<{
       minHeight: 100,
     }}
   >
-    <div style={{ fontSize: TYPE.claim, fontWeight: 700, color: STAGE.ink }}>{name}</div>
+    <div style={{ fontSize: TYPE.claim, fontWeight: 700, color: STAGE.ink }}>
+      {verb.toUpperCase()}
+    </div>
     {cells}
   </div>
 );
@@ -333,7 +347,7 @@ export const Verbs: React.FC = () => {
 
       <div style={{ padding: '14px 40px 0', display: 'flex', flexDirection: 'column', gap: 24 }}>
         <Row
-          name="DOCK"
+          verb="dock"
           cells={[
             <Cell key="c1" label={`${FRAMES.dockTotal}F`} labelGap={DOCK_LABEL_GAP}>
               <Dock from={dockFrom}>
@@ -354,7 +368,7 @@ export const Verbs: React.FC = () => {
         />
 
         <Row
-          name="LIFT"
+          verb="lift"
           cells={[
             <Cell key="c1" label={`${FRAMES.lift}F`}>
               <Lift from={liftFrom}>
@@ -375,7 +389,7 @@ export const Verbs: React.FC = () => {
         />
 
         <Row
-          name="COUNT"
+          verb="count"
           cells={[
             <Cell key="c1" label={`${FRAMES.countRoll}F ROLL, ${FRAMES.countAffirmSettle}F AFFIRM`}>
               <div
@@ -430,7 +444,7 @@ export const Verbs: React.FC = () => {
             than the travel. Centring each cell (`center`) gives both halves
             equal room on either side of the column instead. */}
         <Row
-          name="SPLIT"
+          verb="split"
           cells={[
             <Cell key="c1" label={`${FRAMES.split}F`} center>
               <Split
@@ -492,7 +506,7 @@ export const Verbs: React.FC = () => {
         />
 
         <Row
-          name="FAN"
+          verb="fan"
           cells={[
             <Cell key="c1" label={`${FRAMES.fanTotal}F, ${FRAMES.fanStagger}F APART`}>
               <Fan from={fanFrom} count={3} style={{ display: 'flex', gap: 10 }}>
@@ -525,7 +539,7 @@ export const Verbs: React.FC = () => {
         />
 
         <Row
-          name="RECEDE"
+          verb="recede"
           cells={[
             <Cell key="c1" label={`${FRAMES.recede}F`}>
               <Recede from={recedeFrom}>
@@ -546,7 +560,7 @@ export const Verbs: React.FC = () => {
         />
 
         <Row
-          name="DRAW"
+          verb="draw"
           cells={[
             <Cell key="c1" label={`${DRAW_BOX_FRAMES}F BOX, ${DRAW_TEXT_FRAMES}F LABEL`}>
               <svg width={210} height={100} viewBox="0 0 210 100">

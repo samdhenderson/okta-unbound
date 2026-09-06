@@ -42,7 +42,7 @@
  * This card is not an act. It has no `from`, so it reads its own manifests
  * directly, and it needs three of them:
  *
- * - `pausedRules` and `groupsTotal`'s neighbours `unruled` / `emptyGroups` from
+ * - `pausedRules` and `unfilled` / `groupsTotal` from
  *   **home**,
  * - `stats['Total Rules']` from **rules**,
  * - `typo` from **users-fix**.
@@ -356,8 +356,15 @@ export const PremiseCard: React.FC = () => {
   const pausedRules = figureCount(home, 'pausedRules');
   const totalRules = statNumber(rules, 'stats', 'Total Rules');
   const typo = figureString(fix, 'typo');
-  const unruled = figureCount(home, 'unruled');
-  const emptyGroups = figureCount(home, 'emptyGroups');
+  // One finding where there were two. `useOrgFigures` merged "Groups with no
+  // members" and "Groups no rule fills" into a single row, because either count
+  // alone overstates the problem: an empty group some rule fills is a cohort
+  // waiting for its first hire, and a filled group no rule maintains may be fed
+  // by SCIM, an IdP, Workflows or a person. What the card reports is the
+  // intersection, so plate 03 states it against the org's own size rather than
+  // splitting it back into the two halves the product stopped claiming.
+  const unfilled = figureCount(home, 'unfilled');
+  const groupsTotal = figureCount(home, 'groupsTotal');
 
   const ex = PLATE.x + COL.exhibit;
 
@@ -427,8 +434,8 @@ export const PremiseCard: React.FC = () => {
       claim: 'Legacy organization structures still driving access.',
       ink: (y) => (
         <g>
-          <Exhibit x={ex} y={y + 62} value={String(unruled)} unit="groups no rule fills" />
-          <Exhibit x={ex} y={y + 126} value={String(emptyGroups)} unit="with nobody in them" />
+          <Exhibit x={ex} y={y + 62} value={String(unfilled)} unit="groups no rule will fill" />
+          <Exhibit x={ex} y={y + 126} value={String(groupsTotal)} unit="groups in the org" />
         </g>
       ),
       pending: (y) => [

@@ -168,6 +168,7 @@ const FindingBody: React.FC<{
       </div>
 
       <span
+        data-testid="org-finding-value"
         className={`${NUMBER_SLOT} ${recessed ? 'text-neutral-400' : 'text-neutral-900'}`}
         // The em dash and the loading placeholder are shape, not content — the
         // note beside them is the sentence that carries the meaning.

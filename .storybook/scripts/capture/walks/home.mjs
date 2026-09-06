@@ -31,6 +31,8 @@
  * @module
  */
 import {
+  HOME_FINDING_PAUSED,
+  HOME_FINDING_UNFILLED,
   jumpBarInput,
   jumpResultRow,
   jumpResultRows,
@@ -47,9 +49,6 @@ import {
 /** The person the jump bar resolves by email — the film's hero, so Home hands off straight into the Users chapter. */
 const JUMP_EMAIL = 'priya.achterberg@example.com';
 const JUMP_NAME = 'Priya Achterberg';
-
-/** The finding whose "of N groups" note the unpacking set piece draws its denominator from. */
-const GROUPS_FINDING = 'Groups no rule fills';
 
 /** The finding the reports card opens. */
 const REPORT = 'App access no rule maintains';
@@ -96,23 +95,24 @@ export async function walk({ page, drive, beat }) {
   });
 
   await beat('findings', async () => {
-    await drive.scrollTo(orgFinding(page, GROUPS_FINDING));
+    // The card carries two rows now, not eight: `HOME_FINDING_UNFILLED` (a
+    // groups fact) and `HOME_FINDING_PAUSED` (a rules fact). Both are read and
+    // both are guarded — a card that narrates two findings has no room for one
+    // of them to be silently reading zero.
+    await drive.scrollTo(orgFinding(page, HOME_FINDING_UNFILLED));
     await drive.settle(900);
-    const unruled = await drive.read('unruled', () => readOrgFinding(page, GROUPS_FINDING));
-    const empty = await drive.read('emptyGroups', () =>
-      readOrgFinding(page, 'Groups with no members'),
+    const unfilled = await drive.read('unfilled', () =>
+      readOrgFinding(page, HOME_FINDING_UNFILLED),
     );
-    const paused = await drive.read('pausedRules', () =>
-      readOrgFinding(page, 'Paused group rules'),
-    );
+    const paused = await drive.read('pausedRules', () => readOrgFinding(page, HOME_FINDING_PAUSED));
 
-    // Every finding this chapter narrates has to be a finding. A card whose rows
-    // read zero argues the opposite of what it is for, and three of these read
-    // zero before the fixtures were changed for exactly this reason.
+    // Every finding this chapter narrates has to be a finding. A `null` means
+    // nobody has looked yet (the card is still reading); a `0` means the panel
+    // looked and found nothing, which is a fine state for the org to be in and
+    // a bad one for this chapter to film as if it were a problem.
     for (const [label, value] of [
-      [GROUPS_FINDING, unruled],
-      ['Groups with no members', empty],
-      ['Paused group rules', paused],
+      [HOME_FINDING_UNFILLED, unfilled],
+      [HOME_FINDING_PAUSED, paused],
     ]) {
       if (value === null) {
         throw new Error(`"${label}" has no number yet — the card is still reading`);
@@ -122,11 +122,14 @@ export async function walk({ page, drive, beat }) {
       }
     }
 
-    // The set piece B3 grid draws `unruled` out of `groupsTotal` cells, so the
+    // The set piece B3 grid draws `unfilled` out of `groupsTotal` cells, so the
     // denominator has to come off the same row while the camera is already
     // parked on it — see readOrgFindingTotal for why it is read from the
-    // finding's own note rather than the card's totals paragraph.
-    await drive.read('groupsTotal', () => readOrgFindingTotal(page, GROUPS_FINDING));
+    // finding's own note rather than the card's totals paragraph. Read off
+    // `HOME_FINDING_UNFILLED` rather than the paused-rules row because the
+    // denominator the grid needs is a count of *groups*, and the unfilled
+    // finding is the surviving row whose note states one.
+    await drive.read('groupsTotal', () => readOrgFindingTotal(page, HOME_FINDING_UNFILLED));
     await drive.settle(1000);
   });
 
