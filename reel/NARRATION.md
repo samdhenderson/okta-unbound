@@ -22,11 +22,14 @@ file states what to say and roughly how long the picture gives it, and
   act key is exactly the heading below (`home-0`, `users-gap-0`, ...): the
   same string `actKey()` in `src/comp/Chapter.tsx` computes for that act, so
   the file lands on the right `<Series.Sequence>` automatically.
-- **Target durations are `TBD` until you run the budget.** `npm run
-reel:vo:budget` derives them from `SCRIPT`'s current timing and the shoot's
-  own manifests, so a retime moves the number here rather than leaving it
-  stale. Fill the `Target:` line in by hand from that output; it is not
-  parsed back out of this file.
+- **Target durations are generated. Do not type one.** `npm run
+reel:vo:targets` rewrites every `Target:` line below from the cut the
+  composition will actually render. They used to be copied across by hand from
+  `npm run reel:vo:budget`, and by the time that stopped, four of the fifteen
+  had gone stale - `rules-0` was budgeted at 21.72s for an act that runs
+  27.65s, which is sixteen words of narration nobody knew they had. Run the
+  command after any retime. Only the `Target:` lines are touched; the spoken
+  `>` lines are yours.
 - Read to the target, not past it. `check-vo.mjs` fails a recording whose
   measured length runs long against the picture it is laid under. The film
   does not wait for narration; the narration has to fit the film.
@@ -124,7 +127,7 @@ provenance grouping is the only claim worth a line._
 
 ### attributes-1 (The match)
 
-Target: 42.37s (budget ~110 words)
+Target: 46.92s (budget ~122 words)
 
 > Before you write a rule keyed on an attribute, see what this group
 > actually varies along. Every dimension it has, discovered, not assumed.
@@ -138,7 +141,7 @@ Target: 42.37s (budget ~110 words)
 
 ### reporting-2 (The exposure)
 
-Target: 34.15s (budget ~89 words)
+Target: 34.17s (budget ~89 words)
 
 > Deprecating SMS raises one question you cannot answer by looking at the
 > group itself: who still depends on it.
@@ -166,7 +169,7 @@ toolbar's own count carries the rest._
 
 ### rules-0 (The inventory)
 
-Target: 21.72s (budget ~56 words)
+Target: 27.65s (budget ~72 words)
 
 > Automation logic deserves the same inspection as the access it grants.
 > This list loads the moment you arrive.
@@ -176,7 +179,7 @@ Target: 21.72s (budget ~56 words)
 
 ### rules-impact-1 (The consequence)
 
-Target: 32.62s (budget ~85 words)
+Target: 32.67s (budget ~85 words)
 
 > Before you switch a rule off, find out what happens to the people it
 > placed. This preview writes nothing. It only tells you.

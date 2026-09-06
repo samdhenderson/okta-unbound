@@ -7,7 +7,7 @@ chat with artifacts on). It is self-contained.
 
 ## The film
 
-A ~6:09 product film for **Okta Unbound**, a Chrome side-panel extension for
+A product film for **Okta Unbound**, a Chrome side-panel extension for
 Okta group and user administration, carrying Sam's own recorded narration over
 a picture that still has to work with the sound off. Its argument: an admin
 can diagnose and fix a real access problem without ever leaving the tab
@@ -35,10 +35,16 @@ undermining the real one.
 The film's whole credibility rests on the real captures being real. So:
 
 1. **Every number in a synthetic scene comes from the real capture.** The rig
-   already reads figures off the live panel during the shoot (94 members, 8 of 9
-   rules active, 16 with no second factor) and the composition fails to render
-   rather than print a figure nobody read. Synthetic components are dressed with
-   those same figures. They are stylised, never invented.
+   reads figures off the live panel during the shoot - a roster size, how many
+   rules are active, how many users have no second factor - and the composition
+   fails to render rather than print a figure nobody read. Synthetic components
+   are dressed with those same figures. They are stylised, never invented.
+
+   No example figures are printed in this brief, deliberately. Writing one down
+   makes it a number somebody can copy into a design, and the whole rule is that
+   a figure exists only because a capture measured it. `CUT.generated.md` names
+   which diagram reads which key; the values live in `captures/*.json`.
+
 2. **A synthetic component must never be mistakable for a screenshot.** It should
    be obviously _staged_: isolated on the dark backdrop, at 2 to 6 times product
    scale, exploded or partially assembled, without window chrome, without a
@@ -57,8 +63,8 @@ from captured figures. They are the primitive version of what you are being aske
 to design properly:
 
 - `Tally` - one figure, counted up, with a label.
-- `Ratio` - a before/after pair (12 applications, 1 inactive).
-- `Funnel` - a narrowing (94 members, 19 Staff Engineers, 17 of them Employees).
+- `Ratio` - a before/after pair (an inventory against the inactive part of it).
+- `Funnel` - a narrowing: a roster, then one filter, then a second stacked on it.
 - `FacetBoard` - a grid of attribute cards, each with its values and counts.
 - `FactorLadder` - ranked MFA coverage rows with one row highlighted.
 - `RuleBoard` - 9 rules, 8 active, 1 dormant, 0 conflicts.
