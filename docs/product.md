@@ -51,10 +51,13 @@ There is no backend and no telemetry, so these are task-shaped, not dashboards.
   tabs and a hand-read rule expression to one panel and under a minute.
 - **O2 — No blind writes.** Every mutating verb shows a preflight or predicted
   impact before it commits. This is an invariant, not a per-feature choice.
-- **O3 — Every answer is defensible.** No claim on screen without a named source,
-  or an explicit `unevaluable` / `likely-*` hedge. Already enforced in code by
-  ADR-0020, ADR-0031 and ADR-0036 — this is the moat. Anyone can list groups;
-  nobody else refuses to guess.
+- **O3 — Every answer is defensible.** No claim on screen without evidence behind
+  it. Where the evidence is missing or was deduced, the panel names the absence
+  and its reason rather than qualifying the claim: it **asserts or withholds, and
+  never hedges**. Enforced in code, and the evidence is carried in the type rather
+  than in the wording, so copy can be edited without moving a correctness gate.
+  See `claims.md` — this is the moat. Anyone can list groups; nobody else refuses
+  to guess.
 - **O4 — Zero trust cost.** Passes an enterprise extension review cold. See
   `security.md`. Already true; protect it.
 - **O5 — Sprawl reduction.** The only outcome measurable in-product: clutter

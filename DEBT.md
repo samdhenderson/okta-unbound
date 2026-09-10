@@ -1507,6 +1507,156 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
   The memo already makes that 403 cost one request per browser session, so the
   stall is bounded — but it needs an ADR-shaped argument, not a one-line change.
 
+### D-126 · The blast radius asserts a membership change it cannot compute
+
+- **Status:** open
+- **Category:** correctness
+- **Priority:** P1
+- **Size:** L
+- **Files:** `src/shared/membership/blastRadius.ts`,
+  `src/shared/membership/blastRadiusTypes.ts`, `src/shared/rulesCache.ts`,
+  `src/sidepanel/components/users/BlastRadiusReport.tsx`
+- **Verified:** 2026-09-09 — opened deliberately by the de-hedging pass; this
+  item is the record of what that pass put on the screen ahead of the engine.
+- **Problem:** `GroupEffectKind` used to be `likely-added` / `likely-removed`,
+  and the report carried a standing footnote naming the three reasons a
+  prediction could be wrong. Both are gone: the panel now tells an admin that
+  this profile edit **will** add and remove specific group memberships. The
+  three reasons did not go anywhere. (1) A `MembershipRule` carries no exclusion
+  list, and a cache-served `FormattedRule` drops `conditions.people` entirely,
+  so an exclusion is invisible to the engine and can only ever make it
+  **over**-predict. (2) `ruleEvaluator` is a client-side reimplementation of a
+  documented subset of Okta EL, not Okta EL. (3) Rule application is
+  asynchronous, so even a correct prediction describes a state Okta has not
+  reached. Withholding still works — `not-predicted` and the six
+  `WithheldReason` codes are intact, and `membership-attribution-deduced` was
+  hardened in the same pass — so the exposure is confined to predictions the
+  engine does make and states flat.
+- **Done when:** reason (1) is gone, which is the only one closable without
+  reimplementing Okta EL. `conditions.people` survives into the cached
+  `FormattedRule`, `removalEffect` and `additionEffect` consult it, and a
+  membership held by an excluded user is not predicted away. A test fixture
+  with an exclusion list proves the prediction changes — and fails before the
+  fix. Reasons (2) and (3) then need a product answer: either the panel says
+  the narrower true thing, or the prediction is verified against Okta before it
+  is asserted.
+- **Risk:** Medium. Widening the cached rule shape touches the rules cache and
+  every reader of `FormattedRule`; the engine itself is pure and well-tested, so
+  the change is additive rather than structural.
+
+### D-127 · A deduced rule attribution reads exactly like a proven one
+
+- **Status:** blocked:needs-human
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/shared/membership/sourceLine.ts`,
+  `src/sidepanel/components/users/membershipVerdict.ts`
+- **Verified:** 2026-09-09 — opened deliberately by the de-hedging pass.
+- **Problem:** `Likely added by rule:` became `Added by rule:`, and `Rule?`
+  became `Rule`. The proven caption is `Added by Rule:` — the two now differ
+  only by the case of one letter, which no reader will see. The evidence
+  distinction survives structurally (`classify()` carries `deduced`, the badge
+  variant is `warning` vs `success`, and the hover title still discloses that
+  not every condition could be evaluated), and the blast-radius gate reads the
+  predicate rather than the string, so nothing branches on the collision. But on
+  screen, a deduction and a verified fact are the same sentence.
+- **Done when:** Sam's call, and he has taken it: the feature is being refined
+  so a membership's rule attribution does not need proving, at which point the
+  two cases are genuinely identical and the near-identical captions become
+  correct rather than accidental. Until that lands, do **not** invent a visible
+  difference — it would be re-hedging under another name. If the refinement is
+  abandoned, this item reopens as a copy decision.
+- **Risk:** Low to change, high to change _wrongly_. The obvious fix — put a
+  qualifier back on the deduced caption — is the thing the de-hedging pass
+  deliberately removed.
+
+### D-128 · The request budget states an exact total it does not have
+
+- **Status:** open
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/activity/OperationRow.tsx`,
+  `src/sidepanel/components/activity/PipelineMeter.tsx`,
+  `src/shared/scheduler/plan.ts`
+- **Verified:** 2026-09-09 — opened deliberately by the de-hedging pass.
+- **Problem:** The activity row rendered `12 / ~50` and an accessible name
+  saying "at least 38 to come" whenever a leg's estimate was a floor; the meter
+  drew the planned segment hatched. All three are gone, so the row now reads
+  `12 / 50` flat. The floor did not go anywhere: `summary.approximate` is still
+  computed on `PlanSummary`, and any leg using `openingWalkEstimate()` or a
+  mid-walk `refinedWalkEstimate()` still yields `atLeast` — which is most
+  pagination walks. The denominator can still grow while the operation runs; it
+  simply no longer says so, so a `12 / 50` that becomes `12 / 90` looks like a
+  bug rather than a refinement.
+- **Done when:** either the walk's total is known before the row claims one, or
+  the row states the narrower fact it does have (pages walked, or spend with no
+  denominator) instead of a total it is still discovering. Reinstating the tilde
+  is not the answer.
+- **Risk:** Low. Confined to the activity surface; `plan.ts` already carries the
+  flag, so nothing needs re-plumbing.
+
+### D-129 · `atLeastFanOutEstimate` outlives its last production caller
+
+- **Status:** open
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/scheduler/planEstimate.ts`,
+  `src/shared/scheduler/planEstimate.test.ts`
+- **Verified:** 2026-09-09 — found while removing the `approximate` plan flag.
+- **Problem:** `useOktaApi/core.ts` was the only production caller. It now calls
+  `fanOutEstimate` unconditionally, leaving `atLeastFanOutEstimate` referenced
+  only by two cases in its own test file — which is exactly the shape `knip`
+  cannot see, since a co-located test counts as a consumer. Nothing is red.
+- **Done when:** the export and its two test cases are gone, with a PR note
+  saying the subject was deleted. The `atLeast` estimate **kind** must stay:
+  `openingWalkEstimate` and `refinedWalkEstimate` still produce it.
+- **Risk:** Low, provided the kind and the helper are not confused for each
+  other.
+
+### D-130 · Two row lists still hand-roll the separator the row primitive owns
+
+- **Status:** open
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/groups/CrossGroupSearch.tsx`,
+  `src/sidepanel/components/groups/GroupCollections.tsx`
+- **Verified:** 2026-09-09 — found while writing `docs/surfaces.md`, which had
+  to state the separator rule and check it held.
+- **Problem:** The house rule sanctions two separator patterns and bans
+  `border-b … last:border-b-0` for lists of rows. Four components still use it.
+  Two are legitimately outside the rule — `ExportPreviewTable` is a real
+  `<tbody>`, and `SearchDropdown` renders dropdown options — but these two are
+  genuine row lists and genuine violations. The docs previously stated the ban
+  flatly, so the exceptions were undocumented and the violations invisible.
+- **Done when:** both render through `ListRow` with one of the two sanctioned
+  separator patterns, and `docs/surfaces.md`'s scoping of the ban to row lists
+  still reads true.
+- **Risk:** Low. Visual-only, and both are covered by stories.
+
+### D-131 · Three comments describe a z-index ladder that no longer exists
+
+- **Status:** open
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/shared/ActionBar.tsx`,
+  `src/sidepanel/components/shared/Modal.tsx`
+- **Verified:** 2026-09-09 — found while writing `docs/page-shell.md` and
+  verifying the published custom properties.
+- **Problem:** `ActionBar` explains its `z-30` as "still below the tab rail
+  (`z-40`)", and `Modal`'s z-index ladder table lists a `TabNavigation` rail at
+  `z-40`. The rail carries no z-index at all any more and sits outside the
+  scroller — the same change that deleted `--rail-h`. Both comments describe a
+  stack that was dismantled. Harmless at runtime, actively misleading to the
+  next person debugging the dock merge.
+- **Done when:** both comments describe the real stack, and the `Modal` ladder
+  either drops the rail row or records that the rail no longer participates.
+- **Risk:** None. Comments only.
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
