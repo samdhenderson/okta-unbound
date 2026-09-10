@@ -74,7 +74,8 @@ const DigitColumn: React.FC<{
   roll: boolean;
   size: number;
   color: string;
-}> = ({ digit, colFrom, roll, size, color }) => {
+  rule: string;
+}> = ({ digit, colFrom, roll, size, color, rule }) => {
   const frame = useCurrentFrame();
   const cellHeight = size * 1.2;
 
@@ -114,8 +115,8 @@ const DigitColumn: React.FC<{
         fontSize: size,
         height: cellHeight,
         overflow: 'hidden',
-        borderTop: `1px solid ${STAGE.rule}`,
-        borderBottom: `1px solid ${STAGE.rule}`,
+        borderTop: `1px solid ${rule}`,
+        borderBottom: `1px solid ${rule}`,
       }}
     >
       <div
@@ -161,6 +162,18 @@ export interface CountProps {
   color?: string;
   /** `false` makes every column set in place instead of rolling. Default `true`. */
   roll?: boolean;
+  /**
+   * The hairlines that bound the odometer window, top and bottom.
+   *
+   * Defaults to `STAGE.rule`, which is the dark stage's own divider colour and
+   * correct everywhere the film uses this verb. On a light product surface that
+   * same hairline reads as two stray marks above and below the figure rather
+   * than as a window, so a caller drawing a count *inside* a rebuilt panel
+   * passes `'transparent'`. A prop rather than a fix because both readings are
+   * right in their own context: the window is legible on the stage and is noise
+   * on a card.
+   */
+  rule?: string;
   style?: React.CSSProperties;
 }
 
@@ -182,6 +195,7 @@ export const Count: React.FC<CountProps> = ({
   size = TYPE.figure,
   color = STAGE.ink,
   roll = true,
+  rule = STAGE.rule,
   style,
 }) => {
   // A NaN figure on screen is exactly the failure `captures.ts`'s
@@ -210,6 +224,7 @@ export const Count: React.FC<CountProps> = ({
               roll={roll}
               size={size}
               color={color}
+              rule={rule}
             />
           );
         }

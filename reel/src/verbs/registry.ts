@@ -156,6 +156,62 @@ export const VERBS = {
       opacity: { at: framesFor('travel') - 6, over: 6 },
     },
   },
+  /**
+   * snap: arrive hard, in a third of dock's time. 140ms `quick`, on `affirm`.
+   *
+   * The five verbs from here down were added for the store page advertisement
+   * (`src/ad/`), which has to land nine ideas in twenty seconds and cannot
+   * afford an arrival built to be read. They are registered here rather than
+   * in an ad-local table for the same reason the first six are: a verb with a
+   * budget nothing else can see is a number somebody will pick again by eye.
+   * The film may use them; it currently does not.
+   */
+  snap: {
+    frames: framesFor('quick'),
+    ease: 'affirm',
+    parts: {
+      /** Opacity 0 to 1 inside the first 4f, so it is legible before it settles. */
+      opacity: { at: 0, over: 4 },
+    },
+  },
+  /** stamp: type lands from oversize and out of focus. 220ms `move`, on `affirm`. */
+  stamp: {
+    frames: framesFor('move'),
+    ease: 'affirm',
+    parts: {
+      /** The flash at contact: the last 5f of the 13. */
+      impact: { at: 8, over: 5 },
+    },
+  },
+  /** wipe: a masked reveal travelling across the object. 220ms `move`. */
+  wipe: {
+    frames: framesFor('move'),
+    ease: 'entrance',
+    parts: {
+      /** The lit hairline riding the leading edge, for the whole travel. */
+      edge: { at: 0, over: 13 },
+    },
+  },
+  /** strike: a hairline shoots across the thing it is about. 140ms `quick`. */
+  strike: {
+    frames: framesFor('quick'),
+    ease: 'standard',
+    parts: {
+      /** The flare on arrival: the last 4f of the 8. */
+      flash: { at: 4, over: 4 },
+    },
+  },
+  /** pulse: one beat of emphasis, changing nothing. 220ms `move`, on `affirm`. */
+  pulse: {
+    frames: framesFor('move'),
+    ease: 'affirm',
+    parts: {
+      /** Out fast. */
+      expand: { at: 0, over: 6 },
+      /** Back slower, which is what makes it read as a beat. */
+      settle: { at: 6, over: 7 },
+    },
+  },
 } as const satisfies Record<string, Verb>;
 
 /** Every verb in the grammar, by name. */
