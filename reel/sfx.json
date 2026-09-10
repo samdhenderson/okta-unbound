@@ -1,0 +1,53 @@
+{
+  "note": "Sound effects for the advertisement, as ffmpeg synthesis recipes. Read by scripts/make-sfx.mjs, which renders each one to captures/sfx/<id>.wav and writes src/sfx.generated.ts. This file is the single declaration of what sounds exist: the generator reads it, and src/ad/sfx.ts names ids the generator wrote, so a sound cannot be cued in the cut without existing here. Every noise source carries an explicit seed. Without one ffmpeg seeds anoisesrc from the clock, so whoosh, swell and impact came out a different instance of noise on every regeneration: same character, different waveform, and a set of recipes that could not reproduce the file they had just produced. Measured, not assumed: two consecutive runs gave whoosh.wav two different checksums. Every recipe is synthesis from an oscillator or a noise source. Nothing here is sampled, licensed, or downloaded, which is the point: a store page ad that ships with a library sample carries a licence question forever, and one that ships with an ffmpeg command line carries none.",
+  "sounds": {
+    "drop": {
+      "why": "The cold open. A falling sine, quadratic in phase so the pitch actually descends rather than stepping, under a low pass so it is felt more than heard.",
+      "seconds": 1.1,
+      "input": "aevalsrc='0.9*sin(2*PI*(150*t - 58*t*t))':d=1.1:s=48000",
+      "filter": "lowpass=f=220,afade=t=in:st=0:d=0.03,afade=t=out:st=0.55:d=0.55,volume=0.75"
+    },
+    "whoosh": {
+      "why": "The panel arriving. Pink noise through a narrow band with hard fades: a burst of air, not a hiss.",
+      "seconds": 0.45,
+      "input": "anoisesrc=d=0.45:c=pink:a=0.7:r=48000:seed=1701",
+      "filter": "highpass=f=320,lowpass=f=5200,afade=t=in:st=0:d=0.1:curve=exp,afade=t=out:st=0.16:d=0.29,volume=0.5"
+    },
+    "click": {
+      "why": "A row landing. Short enough to read as a mechanism rather than a note.",
+      "seconds": 0.07,
+      "input": "sine=frequency=1500:duration=0.07:sample_rate=48000",
+      "filter": "afade=t=out:st=0.004:d=0.066:curve=exp,volume=0.28"
+    },
+    "tick": {
+      "why": "The lighter sibling, for staggers where a full click nine times would be a drum roll.",
+      "seconds": 0.05,
+      "input": "sine=frequency=2400:duration=0.05:sample_rate=48000",
+      "filter": "afade=t=out:st=0.003:d=0.047:curve=exp,volume=0.16"
+    },
+    "impact": {
+      "why": "A super landing. A brown noise transient over a 70Hz thump, mixed so the noise gives the edge and the sine gives the weight.",
+      "seconds": 0.3,
+      "inputs": [
+        "anoisesrc=d=0.3:c=brown:a=0.9:r=48000:seed=3517",
+        "aevalsrc='sin(2*PI*70*t)':d=0.3:s=48000"
+      ],
+      "complex": "[0:a]lowpass=f=1000,afade=t=out:st=0:d=0.22:curve=exp[n];[1:a]afade=t=out:st=0:d=0.3:curve=exp[s];[n][s]amix=inputs=2:weights=0.5 1,volume=0.6[a]"
+    },
+    "swell": {
+      "why": "A reveal. Noise rising into the cut rather than decaying away from it, which is what makes a wipe feel like it is bringing something in.",
+      "seconds": 0.55,
+      "input": "anoisesrc=d=0.55:c=pink:a=0.6:r=48000:seed=2803",
+      "filter": "highpass=f=500,lowpass=f=7000,afade=t=in:st=0:d=0.42:curve=exp,afade=t=out:st=0.44:d=0.11,volume=0.3"
+    },
+    "latch": {
+      "why": "A figure settling, or a save committing. Two tones a fourth apart, the second landing while the first is still ringing: the shape every confirmation sound in the world has, because it is the one that reads as done. The 90ms delay on the second tone extends the file past the sources own 0.34s, which is why the declared length is 0.43 and not 0.34.",
+      "seconds": 0.43,
+      "inputs": [
+        "sine=frequency=660:duration=0.34:sample_rate=48000",
+        "sine=frequency=880:duration=0.34:sample_rate=48000"
+      ],
+      "complex": "[0:a]afade=t=out:st=0.02:d=0.3:curve=exp[a1];[1:a]adelay=90|90,afade=t=out:st=0.12:d=0.22:curve=exp[a2];[a1][a2]amix=inputs=2:normalize=0,volume=0.22[a]"
+    }
+  }
+}
