@@ -15,9 +15,9 @@ const meta = {
       description: {
         component:
           'Tab bar (Overview / Groups / Apps / Attributes) for the comparison surface, with per-tab diff-count badges.\n\n' +
-          "Shared `Tabs` in its `segmented` variant: the Groups, Apps and Attributes tabs carry a pill badge showing the number of differing items, hidden when the count is 0 (`countDisplay: 'nonzero'`). Purely presentational — selection and diff counts are supplied by the parent.\n\n" +
-          'It used to be a hand-rolled `role="tablist"`, forked from that variant for its icons and its second row. The fork left the keyboard behind: no roving `tabindex`, no arrow keys. Both reasons for the fork are capabilities of the primitive now, so the strip is keyboard-navigable for free — see **KeyboardNavigation** below.\n\n' +
-          "The bar is a **two-column grid below 640px** (`Tabs`' `wrap`) and one equal-width row above it: four tabs of icon + label do not fit on one line in a 360px side panel, and the alternatives were truncating a label or dropping the glyphs.",
+          "Shared `Tabs` in its default `underline` variant: the Groups, Apps and Attributes tabs carry a pill badge showing the number of differing items, hidden when the count is 0 (`countDisplay: 'nonzero'`). Purely presentational — selection and diff counts are supplied by the parent.\n\n" +
+          'It used to be a hand-rolled `role="tablist"`, copied from the primitive for styling. The copy left the keyboard behind: no roving `tabindex`, no arrow keys. Using `Tabs` makes the strip keyboard-navigable for free — see **KeyboardNavigation** below.\n\n' +
+          'The four labels carry no glyphs, like every other section strip in the panel — which is also what lets all four sit on one line in a 360px side panel without truncating a label.',
       },
     },
   },
@@ -77,10 +77,11 @@ export const LargeDiffCounts: Story = {
 };
 
 /**
- * The compact side panel, which is what made the fourth tab a layout question:
- * four icon+label tabs need roughly 440px on one line and have about 330px, so
- * the bar wraps to two rows rather than truncating "Attributes" or dropping the
- * glyphs.
+ * The compact side panel, which is what makes the fourth tab a layout question.
+ * Measured here: the strip is 401px wide against 328px of track, so it scrolls —
+ * `underline` never truncates a label and never takes a second row. Dropping the
+ * glyphs bought back 88px of that; the three reserved two-digit badge slots
+ * account for most of what remains.
  */
 export const CompactPanel: Story = {
   args: { activeTab: 'attributes', groupDiff: 3, appDiff: 12, attributeDiff: 4 },

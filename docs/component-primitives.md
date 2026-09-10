@@ -84,25 +84,28 @@ exact hit.
 ## `Tabs`
 
 The accessible tab-bar primitive (`role="tablist"/"tab"`, roving `tabindex`, arrow-key nav) with
-three variants: `underline` (section nav), `segmented` (compact toggle) and `rail` (icon-first
-primary nav). **Never hand-roll a `role="tablist"`**: the ARIA attributes are the part that gets
+two variants: `underline` (section nav, the default) and `rail` (icon-first primary nav). A third,
+`segmented` — a pill in a grey tray — was **retired**: its three callers were all picking one of N
+views, which is what `underline` is for, and keeping a second look for the same job only invited
+strips that matched neither neighbour. **Never hand-roll a `role="tablist"`**: the ARIA attributes are the part that gets
 copied and the keyboard handling is the part that gets left behind — which is what
 `ComparisonTabBar` shipped, a strip a keyboard user could reach and then not move inside.
 
-Three additive capabilities keep a caller from forking it for styling, each a property of a tab
+Two additive capabilities keep a caller from forking it for styling, each a property of a tab
 rather than of one surface:
 
-| Capability             | What it is                                                                                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TabItem.icon`         | a glyph before the label, in **every** variant; only `rail` collapses the tab to it. Decorative outside `rail` — the visible label is the name    |
-| `TabItem.countDisplay` | `always` (default) badges a `0`, right for a count that states a **size**; `nonzero` suppresses it, for one that states a **finding**             |
-| `wrap`                 | a `segmented` strip takes a second row below `sm` (two equal columns, one equal-width row above). `underline`/`rail` scroll instead and ignore it |
+| Capability             | What it is                                                                                                                                     |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TabItem.icon`         | a glyph before the label, in **every** variant; only `rail` collapses the tab to it. Decorative outside `rail` — the visible label is the name |
+| `TabItem.countDisplay` | `always` (default) badges a `0`, right for a count that states a **size**; `nonzero` suppresses it, for one that states a **finding**          |
 
 `countDisplay: 'nonzero'` also holds the badge's slot open at two digits from first render
 (`StableWidth`), because such a count arrives with a fetch: three badges landing at once would
-otherwise shove three labels sideways in one frame (`D-053e`). `wrap` names no column count —
-`grid-flow-col` + `auto-cols-fr` above the breakpoint — so a strip that grows a tab needs no new
-class, and a `sm:grid-cols-${n}` would not survive Tailwind's static scan anyway.
+otherwise shove three labels sideways in one frame (`D-053e`). A strip too wide for its panel
+**scrolls**; it never wraps to a second row and never truncates a label. Dropping a strip's glyphs
+is the cheapest width back — worth 88px on the user-comparison strip's four tabs — but that strip
+still measures 401px against 328px of track at the 360px floor and scrolls there, because three
+reserved two-digit badge slots cost more than the glyphs did.
 
 The **`rail`** variant is what `TabNavigation` uses for the panel's top-level sections; which
 sections it draws, what it shows when you stand on one it does not, and how its indicator is
@@ -121,8 +124,8 @@ The rail's interaction states are read from Odyssey rather than invented. Active
 pattern and belongs to a vertical rail. The `--color-neutral-50` hover wash and the **inset** focus
 ring (`box-shadow: inset 0 0 0 2px` with `outline: none`, Odyssey's `theme.mixins.insetFocusRing`)
 are `SideNav`'s, identical across both Odyssey navigations, and deliberately _not_ the outset
-`ring-2` that `underline` and `segmented` use — which is why weight and focus classes live
-per-variant, not in `Tabs`' shared base. The `underline` variant keeps its `border-b`: there the
+`ring-2` that `underline` uses — which is why weight and focus classes live per-variant, not in
+`Tabs`' shared base. The `underline` variant keeps its `border-b`: there the
 rule is the indicator's own track.
 
 ## `Tooltip`

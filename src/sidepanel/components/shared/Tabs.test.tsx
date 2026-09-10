@@ -109,16 +109,10 @@ describe('Tabs', () => {
         tabs={[{ key: 'groups', label: 'Groups', icon: 'users' }]}
         activeKey="groups"
         onChange={vi.fn()}
-        variant="segmented"
+        variant="underline"
       />,
     );
     expect(screen.getByRole('tab', { name: 'Groups' })).toBeInTheDocument();
-  });
-
-  it('supports the segmented variant', () => {
-    render(<Tabs tabs={TABS} activeKey="account" onChange={vi.fn()} variant="segmented" />);
-    expect(screen.getByRole('tablist')).toBeInTheDocument();
-    expect(screen.getAllByRole('tab')).toHaveLength(3);
   });
 
   describe('rail variant', () => {

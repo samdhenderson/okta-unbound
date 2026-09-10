@@ -2,7 +2,7 @@
  * @module sidepanel/components/members/CompositionReports
  * @description Collapsible "Composition" panel: attribute distribution + MFA factor breakdown.
  *
- * One section with a segmented toggle between **Attributes** (one
+ * One section with a tab strip toggling between **Attributes** (one
  * {@link AttributeFacet} per discovered profile attribute) and **MFA factors**
  * (the scan's factor distribution). Both describe "what this group is made of",
  * so they share a home. Value clicks bubble up as member-list facet toggles;
@@ -107,7 +107,6 @@ const CompositionReports: React.FC<CompositionReportsProps> = ({
     <CollapsibleSection title="Composition" defaultOpen={false}>
       <div className="space-y-(--sp-rung)">
         <Tabs
-          variant="segmented"
           tabs={tabs}
           activeKey={tab}
           onChange={(key) => setTab(key as 'attributes' | 'mfa')}

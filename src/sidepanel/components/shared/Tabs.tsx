@@ -1,6 +1,6 @@
 /**
  * @module sidepanel/components/shared/Tabs
- * @description Accessible tab bar with `underline`, `segmented` and `rail` variants.
+ * @description Accessible tab bar with `underline` and `rail` variants.
  *
  * Renders the tab strip only — callers own the panels and toggle them on the
  * active key. Implements the ARIA tablist pattern (`role="tablist"`/`role="tab"`,
@@ -12,9 +12,7 @@
  *
  * A tab may carry an `icon` (rendered before its label in every variant) and a
  * `count` badge, whose zero can be suppressed for a count that reports a
- * *finding* rather than a size (`countDisplay`). A `segmented` strip that cannot
- * fit one line in a 360px panel takes a second row with `wrap` instead of
- * truncating a label or dropping its glyphs.
+ * *finding* rather than a size (`countDisplay`).
  *
  * The `rail` variant is the side panel's top-level navigation: inactive tabs are
  * icon-only and the active tab's label unfurls (`grid-template-columns: 0fr → 1fr`),
@@ -82,7 +80,7 @@ export interface TabItem {
 export type TabCountDisplay = 'always' | 'nonzero';
 
 /** Visual treatment for the tab strip. */
-export type TabsVariant = 'underline' | 'segmented' | 'rail';
+export type TabsVariant = 'underline' | 'rail';
 
 /** Props for {@link Tabs}. */
 interface TabsProps {
@@ -93,21 +91,10 @@ interface TabsProps {
   /** Invoked with the newly selected tab key. */
   onChange: (key: string) => void;
   /**
-   * `underline` (default) for section navigation; `segmented` for compact
-   * toggles; `rail` for icon-first primary navigation that must survive a narrow
-   * panel.
+   * `underline` (default) for section navigation; `rail` for icon-first primary
+   * navigation that must survive a narrow panel.
    */
   variant?: TabsVariant;
-  /**
-   * Let a `segmented` strip take a **second row** on a narrow panel: two equal
-   * columns below `sm`, one equal-width row above it. Ignored by `underline` and
-   * `rail`, which answer the same problem by scrolling.
-   *
-   * For a strip whose tabs cannot all fit one line in a 360px side panel. The
-   * alternatives there are truncating a label (which hides the word the tab is
-   * named for) or dropping the glyphs; a second row costs only height.
-   */
-  wrap?: boolean;
   /** Accessible label for the tablist (e.g. "User profile sections"). */
   ariaLabel?: string;
   /** Extra classes merged onto the tablist container. */
@@ -127,21 +114,7 @@ const HEADING_FONT = { fontFamily: 'var(--font-heading)' };
  * of the top-chrome slab now and `TabNavigation`'s `<nav>` carries the slab's single
  * closing rule; `underline` keeps its border, which is the indicator's own track.
  */
-const SEGMENTED_CHROME =
-  'items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 p-1';
-
-/**
- * `segmented` under `wrap`: two equal columns below `sm`, then back to one row of
- * equal-width columns. `grid-flow-col` + `auto-cols-fr` reproduces `flex` +
- * `flex-1` without naming a column count, so the strip does not need a new class
- * when it grows a tab (a `sm:grid-cols-${n}` would not survive Tailwind's static
- * scan anyway).
- */
-const SEGMENTED_WRAPPED_LAYOUT =
-  'grid grid-cols-2 sm:grid-cols-none sm:auto-cols-fr sm:grid-flow-col';
-
 const listClassesByVariant: Record<TabsVariant, string> = {
-  segmented: `flex ${SEGMENTED_CHROME}`,
   underline:
     'flex items-center gap-1 border-b border-neutral-200 overflow-x-auto overflow-y-hidden',
   rail:
@@ -153,15 +126,15 @@ const listClassesByVariant: Record<TabsVariant, string> = {
 };
 
 /**
- * Shared by every variant's tab button. Weight and focus are deliberately *not* here:
+ * Shared by both variants' tab buttons. Weight and focus are deliberately *not* here:
  * the rail follows Odyssey's navigation recipe (body weight inactive, bold active; an
- * inset ring), the other two the panel's own (uniform `font-semibold`; an outset
- * ring). Folding either in would make one override the other, and Tailwind class
- * order in a template string does not decide which wins.
+ * inset ring), `underline` the panel's own (uniform `font-semibold`; an outset ring).
+ * Folding either in would make one override the other, and Tailwind class order in a
+ * template string does not decide which wins.
  */
 const TAB_BASE = 'relative flex items-center text-xs focus-visible:outline-none';
 
-/** Focus treatment for the two non-rail variants: the panel's standard outset ring. */
+/** Focus treatment for `underline`: the panel's standard outset ring. */
 const RING_FOCUS = 'focus-visible:ring-2 focus-visible:ring-primary';
 
 /**
@@ -195,13 +168,11 @@ const Tabs: React.FC<TabsProps> = ({
   activeKey,
   onChange,
   variant = 'underline',
-  wrap = false,
   ariaLabel,
   className = '',
 }) => {
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
-  const isSegmented = variant === 'segmented';
   const isRail = variant === 'rail';
   const reducedMotion = useReducedMotion();
 
@@ -270,11 +241,7 @@ const Tabs: React.FC<TabsProps> = ({
       aria-label={ariaLabel}
       ref={isRail ? listRef : undefined}
       data-overflow={isRail ? edge : undefined}
-      className={`${
-        isSegmented && wrap
-          ? `${SEGMENTED_WRAPPED_LAYOUT} ${SEGMENTED_CHROME}`
-          : listClassesByVariant[variant]
-      } ${className}`}
+      className={`${listClassesByVariant[variant]} ${className}`}
     >
       {tabs.map((tab, index) => {
         const active = tab.key === activeKey;
@@ -293,30 +260,15 @@ const Tabs: React.FC<TabsProps> = ({
 
         const tabClasses = isRail
           ? railClasses
-          : isSegmented
-            ? // `press press-subtle` (both classes together — see `tailwind.css`) rather
-              // than a `transition-all`: a segmented tab stretches to fill its share of
-              // the strip, so it is a row-width target and takes the flatter of the two
-              // press scales. `.press` already transitions background, shadow and colour
-              // at `--dur-instant`, which is what the utility used to do here.
-              `${TAB_BASE} ${RING_FOCUS} press press-subtle flex-1 justify-center gap-1.5 rounded-md px-3 py-1.5 font-semibold ${
-                active
-                  ? 'bg-white text-neutral-900 shadow-sm'
-                  : 'text-neutral-600 hover:text-neutral-900'
-              }`
-            : `${TAB_BASE} ${RING_FOCUS} gap-1.5 whitespace-nowrap px-3 py-2.5 font-semibold border-b-2 transition-colors duration-(--dur-instant) ${
-                active
-                  ? 'text-primary border-primary'
-                  : 'text-neutral-600 border-transparent hover:text-neutral-900'
-              }`;
+          : `${TAB_BASE} ${RING_FOCUS} gap-1.5 whitespace-nowrap px-3 py-2.5 font-semibold border-b-2 transition-colors duration-(--dur-instant) ${
+              active
+                ? 'text-primary border-primary'
+                : 'text-neutral-600 border-transparent hover:text-neutral-900'
+            }`;
 
-        const badgeClasses = isSegmented
-          ? active
-            ? 'bg-primary text-white'
-            : 'bg-neutral-200 text-neutral-700'
-          : active
-            ? 'bg-primary-light text-primary-text'
-            : 'bg-neutral-100 text-neutral-600';
+        const badgeClasses = active
+          ? 'bg-primary-light text-primary-text'
+          : 'bg-neutral-100 text-neutral-600';
 
         // A `nonzero` count with nothing to report renders no pill — but the slot
         // stays, because such a count lands with a fetch and three badges arriving

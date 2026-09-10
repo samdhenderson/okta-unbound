@@ -92,7 +92,7 @@ const meta = {
       description: {
         component:
           'Collapsible "Composition" panel — what a group is made of.\n\n' +
-          'One section with a segmented toggle between **Attributes** (an ' +
+          'One section with a tab strip toggling between **Attributes** (an ' +
           '{@link AttributeFacet} per discovered profile attribute) and **MFA factors** ' +
           "(the scan's factor distribution). Above a threshold of attributes it adds a " +
           '"Find attribute…" filter input. Value clicks bubble up as member-list facet ' +
