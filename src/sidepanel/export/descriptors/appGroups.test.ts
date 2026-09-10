@@ -16,8 +16,11 @@ describe('appGroupsDescriptor', () => {
   });
 
   it('deep-links each row as a group', () => {
-    expect(appGroupsDescriptor.linkify?.entityType).toBe('group');
     expect(appGroupsDescriptor.linkify?.idColumnId).toBe('id');
+    expect(appGroupsDescriptor.linkify?.target({ id: '00gFAKE1' })).toEqual({
+      type: 'group',
+      id: '00gFAKE1',
+    });
   });
 
   it('accepts a minimal app-group row', () => {

@@ -53,10 +53,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertMessage, EmptyState, Input, LoadingSpinner, Modal } from './shared';
 import Icon, { type IconType } from './shared/Icon';
 import PaletteRow from './palette/PaletteRow';
-import { destinationLabel, KIND_ICON } from './home/jumpDestinations';
+import { destinationLabel, KIND_ICON, oktaAdminTargetFor } from './home/jumpDestinations';
 import { TAB_DEFS, type TabType } from '../tabs';
 import type { JumpKind, JumpMode, JumpResult } from '../hooks/useJumpResolver';
-import { oktaAdminEntityUrl, type OktaAdminEntityType } from '../../shared/utils/oktaUrl';
+import { oktaAdminEntityUrl } from '../../shared/utils/oktaUrl';
 
 /**
  * The order entity sections appear in, and the copy above each.
@@ -81,12 +81,6 @@ const SECTION_ORDER: ReadonlyArray<{ kind: JumpKind; heading: string }> = [
  * `rule` and `policy` are absent because the admin console has no single-entity
  * route for either.
  */
-const OKTA_LINK_TYPE: Partial<Record<JumpKind, OktaAdminEntityType>> = {
-  group: 'group',
-  user: 'user',
-  app: 'app',
-};
-
 /**
  * Where a section's rows came from, so the palette can say it in one word.
  *
@@ -440,14 +434,14 @@ const TabJumpPalette: React.FC<TabJumpPaletteProps> = ({
 
             const { row, heading } = entry;
             const reachable = canReach?.(row.kind) ?? false;
-            const linkType = OKTA_LINK_TYPE[row.kind];
+            const oktaTarget = oktaAdminTargetFor(row);
             // An unreachable kind's route is the Okta console, and that route is
             // the *whole row*, not a link tucked inside it: an `<a>` nested in
             // the row's `<button>` is a `nested-interactive` axe violation, and
             // a button that only wraps a working link is a control that does
             // nothing (ADR-0039). `home/JumpResultRow` makes the same call.
             const href =
-              !reachable && linkType ? oktaAdminEntityUrl(oktaOrigin, linkType, row.id) : null;
+              !reachable && oktaTarget ? oktaAdminEntityUrl(oktaOrigin, oktaTarget) : null;
             const mark = reachable ? `${destinationLabel(row.kind)} ›` : href ? 'Okta ↗' : null;
             const provenance = provenanceMark(sectionMeta?.[row.kind]);
 

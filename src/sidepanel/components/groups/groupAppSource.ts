@@ -78,6 +78,11 @@ export interface GroupAppRowModel {
   id: string;
   /** Display label. */
   label: string;
+  /**
+   * The app's Okta `name` — the app type key the Admin Console route is built
+   * from. Absent ⇒ the row's "Open in Okta" link is withheld.
+   */
+  name?: string;
   /** Okta lifecycle status, when the row reported one. Absent ⇒ no badge. */
   status?: string;
   /** Badge variant for {@link status}, from the shared app-status mapping. */
@@ -113,6 +118,7 @@ export function toGroupAppRows(
   return apps.map((app) => ({
     id: app.id,
     label: app.label,
+    name: app.name,
     status: app.status,
     statusVariant: appStatusVariant(app.status),
     signOnMode: app.signOnMode,

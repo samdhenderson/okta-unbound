@@ -26,7 +26,7 @@ export const groupMembershipsDescriptor: EntityExport<ExportUser> = {
   defaultQuery: { limit: 200 },
   schema: exportUserSchema,
   filter: { kind: 'none' },
-  linkify: { entityType: 'user', idColumnId: 'id' },
+  linkify: { idColumnId: 'id', target: (u) => ({ type: 'user', id: u.id }) },
   columnCatalog: userColumns,
 };
 

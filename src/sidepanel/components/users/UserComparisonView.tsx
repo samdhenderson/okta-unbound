@@ -277,8 +277,7 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                     return (
                       <OpenInOktaLink
                         oktaOrigin={oktaOrigin}
-                        entityType="group"
-                        entityId={groupId}
+                        target={{ type: 'group', id: groupId }}
                         label="Open group"
                       />
                     );

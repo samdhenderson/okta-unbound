@@ -129,7 +129,10 @@ const GroupAppRow: React.FC<GroupAppRowProps> = ({ row, expanded, onToggle, okta
 
               <div className="flex flex-wrap items-center gap-3">
                 <EntityLink type="app" id={row.id} name={row.label} />
-                <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="app" entityId={row.id} />
+                <OpenInOktaLink
+                  oktaOrigin={oktaOrigin}
+                  target={{ type: 'app', id: row.id, name: row.name }}
+                />
               </div>
             </div>
           </div>

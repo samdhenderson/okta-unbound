@@ -66,6 +66,14 @@ export interface AppSummary {
   id: string;
   /** Display label (falls back to the app name/key, then the id). */
   label: string;
+  /**
+   * The app's Okta `name` — the app *type* key (`oidc_client`, `salesforce`),
+   * which {@link AppSummary.label} hides behind the human label. Kept because
+   * the Admin Console's app route is `/admin/app/{name}/instance/{id}`, so a
+   * summary without it cannot produce an "Open in Okta" link. Absent when the
+   * org reported no name.
+   */
+  name?: string;
   /** Lifecycle status (e.g. `ACTIVE`), when present. */
   status?: string;
 }
@@ -96,6 +104,7 @@ export function createAppOperations(coreApi: CoreApi) {
       return apps.map((app) => ({
         id: app.id,
         label: app.label || app.name || app.id,
+        name: app.name,
         status: app.status,
       }));
     } catch {

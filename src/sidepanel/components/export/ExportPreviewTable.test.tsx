@@ -79,7 +79,10 @@ describe('ExportPreviewTable', () => {
         fetched={1}
         dropped={0}
         capped={false}
-        linkify={{ entityType: 'user', idColumnId: 'id' }}
+        linkify={{
+          idColumnId: 'id',
+          target: (row) => ({ type: 'user', id: (row as { id: string }).id }),
+        }}
         oktaOrigin="https://example.okta.com"
       />,
     );

@@ -64,8 +64,30 @@ export function oktaOriginOf(url: string | null | undefined): string | null {
   }
 }
 
-/** Entity kinds that have an Okta Admin Console deep link. */
-export type OktaAdminEntityType = 'group' | 'user' | 'app';
+/**
+ * What to deep-link to — and, by its members, the only entity kinds that have an
+ * Okta Admin Console deep link at all.
+ *
+ * A union rather than a `(type, id)` pair because the kinds do not take the same
+ * inputs: an app's Admin Console route is keyed by the app **type** — its Okta
+ * `name`, e.g. `oidc_client` or `salesforce` — as well as its instance id, and
+ * the id alone cannot produce a working URL. Modelling that in the type is what
+ * stops a caller from building an app link out of the id twice, which is the
+ * shape this replaced and which 404'd on every app in the org.
+ */
+export type OktaAdminTarget =
+  | { type: 'group'; id: string | null | undefined }
+  | { type: 'user'; id: string | null | undefined }
+  | {
+      type: 'app';
+      id: string | null | undefined;
+      /**
+       * The app's Okta `name` — the app type key, not its display label.
+       * Nullish when the org did not report one (`oktaAppListItemSchema` catches
+       * the field), in which case no link is built rather than a broken one.
+       */
+      name: string | null | undefined;
+    };
 
 /**
  * Build the Okta Admin Console deep link for a single entity.
@@ -75,25 +97,30 @@ export type OktaAdminEntityType = 'group' | 'user' | 'app';
  * affordance targets the same paths.
  *
  * @param origin - The Okta org origin (e.g. `https://acme.okta.com`), or nullish.
- * @param type - The entity kind to link to.
- * @param id - The entity's Okta id, or nullish.
- * @returns The absolute admin URL, or `null` when `origin` or `id` is missing.
+ * @param target - The entity to link to — see {@link OktaAdminTarget}.
+ * @returns The absolute admin URL, or `null` when any part of the target is
+ * missing. Withholding is deliberate: a link that cannot be built correctly is
+ * not rendered at all.
  *
  * @example
- * oktaAdminEntityUrl('https://acme.okta.com', 'user', '00u1'); // .../admin/user/profile/view/00u1
+ * oktaAdminEntityUrl('https://acme.okta.com', { type: 'user', id: '00u1' });
+ * // => .../admin/user/profile/view/00u1
+ * oktaAdminEntityUrl('https://acme.okta.com', { type: 'app', id: '0oa1', name: 'oidc_client' });
+ * // => .../admin/app/oidc_client/instance/0oa1
  */
 export function oktaAdminEntityUrl(
   origin: string | null | undefined,
-  type: OktaAdminEntityType,
-  id: string | null | undefined,
+  target: OktaAdminTarget,
 ): string | null {
-  if (!origin || !id) return null;
-  switch (type) {
+  if (!origin || !target.id) return null;
+  switch (target.type) {
     case 'group':
-      return `${origin}/admin/group/${id}`;
+      return `${origin}/admin/group/${target.id}`;
     case 'user':
-      return `${origin}/admin/user/profile/view/${id}`;
+      return `${origin}/admin/user/profile/view/${target.id}`;
     case 'app':
-      return `${origin}/admin/app/${id}/instance/${id}`;
+      // No app type key, no link. The Admin Console has no id-only app route, so
+      // the alternative is a URL that resolves to an error page.
+      return target.name ? `${origin}/admin/app/${target.name}/instance/${target.id}` : null;
   }
 }

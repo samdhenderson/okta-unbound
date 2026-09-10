@@ -228,7 +228,7 @@ const MemberRow: React.FC<MemberRowProps> = ({
                 />
               )}
 
-              <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="user" entityId={user.id} />
+              <OpenInOktaLink oktaOrigin={oktaOrigin} target={{ type: 'user', id: user.id }} />
             </div>
           </div>
         </div>

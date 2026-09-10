@@ -173,8 +173,8 @@ describe('userIdentity', () => {
 
   it('links to the user in the Admin Console', () => {
     expect(userIdentity(makeUser()).link).toEqual({
-      entityType: 'user',
-      entityId: '00uFAKE9z8y7x6w5v',
+      type: 'user',
+      id: '00uFAKE9z8y7x6w5v',
     });
   });
 });

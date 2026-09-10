@@ -36,7 +36,11 @@ describe('appUsersDescriptor', () => {
 
   it('deep-links each row as a user via the id column', () => {
     expect(appUsersDescriptor.filter).toEqual({ kind: 'none' });
-    expect(appUsersDescriptor.linkify).toEqual({ entityType: 'user', idColumnId: 'id' });
+    expect(appUsersDescriptor.linkify?.idColumnId).toBe('id');
+    expect(appUsersDescriptor.linkify?.target({ id: '00uFAKE1' })).toEqual({
+      type: 'user',
+      id: '00uFAKE1',
+    });
   });
 
   it('validates an app-user row carrying embedded credentials and surfaces userName', () => {

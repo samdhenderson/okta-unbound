@@ -103,7 +103,10 @@ const REPORT_SHAPE = {
   defaultQuery: {},
   schema: reportRowSchema,
   filter: { kind: 'none' },
-  linkify: { entityType: 'group', idColumnId: 'group-id' },
+  linkify: {
+    idColumnId: 'group-id',
+    target: (row: ReportRow) => ({ type: 'group', id: row.groupId }),
+  },
 } as const satisfies Partial<EntityExport<ReportRow>>;
 
 /** *Empty groups nothing fills* — every finding, not the first 25. */

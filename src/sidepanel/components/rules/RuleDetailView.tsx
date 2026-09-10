@@ -294,7 +294,7 @@ const RuleDetailView: React.FC<RuleDetailViewProps> = ({
         <DetailSection title="In Okta">
           {/*
             A real `<a>`, not an `OpenInOktaLink` and not a strip descriptor. Okta's Admin
-            Console has **no per-rule route** — `OktaAdminEntityType` is group / user / app
+            Console has **no per-rule route** — `OktaAdminTarget` is group / user / app
             — so the honest target is the org's rules list, and the copy says so rather
             than implying this opens the rule. See `ruleIdentity` for why the header's own
             link slot is left empty instead of pointed here.

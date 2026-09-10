@@ -25,7 +25,7 @@ export const usersDescriptor: EntityExport<ExportUser> = {
     placeholder: 'status eq "ACTIVE" and profile.department eq "Sales"',
     help: 'Optional Okta `search` expression (SCIM). Leave blank to export all users.',
   },
-  linkify: { entityType: 'user', idColumnId: 'id' },
+  linkify: { idColumnId: 'id', target: (u) => ({ type: 'user', id: u.id }) },
   columnCatalog: userColumns,
 };
 

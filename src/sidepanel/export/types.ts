@@ -13,7 +13,7 @@
  */
 
 import type { z } from 'zod';
-import type { OktaAdminEntityType } from '@/shared/utils/oktaUrl';
+import type { OktaAdminTarget } from '@/shared/utils/oktaUrl';
 import type { IconType } from '@/sidepanel/components/shared/Icon';
 import type { CountResolution } from '@/sidepanel/components/home/orgFigures';
 import type { OrgSnapshotView } from './snapshot';
@@ -182,11 +182,28 @@ export type EntityRowSource<Row> =
     };
 
 /** Deep-link configuration for turning a row into an "Open in Okta" link. */
-export interface IdLinkify {
-  /** Entity kind passed to {@link module:shared/utils/oktaUrl.oktaAdminEntityUrl}. */
-  entityType: OktaAdminEntityType;
-  /** The `columnCatalog` column id whose cell value is the link target id. */
+export interface IdLinkify<Row = unknown> {
+  /** The `columnCatalog` column id whose cell is rendered as the link. */
   idColumnId: string;
+  /**
+   * Build the deep-link target from the **raw row**, not from the projected
+   * cell.
+   *
+   * The row is the source because a target is not always one field: an app's
+   * Admin Console route is `/admin/app/{name}/instance/{id}`, and `name` is a
+   * second column the reader may well have disabled. Reading the row keeps the
+   * link working regardless of which columns are enabled, and keeps
+   * {@link IdLinkify.idColumnId} to its one job — saying which cell carries the
+   * link.
+   *
+   * Declared as a method (not an arrow property) for the same bivariance reason
+   * as {@link ExportColumn.accessor}: the registry is a heterogeneous collection
+   * of `EntityExport<unknown>`.
+   *
+   * @param row - The validated row.
+   * @returns The target, or `null` when this row has nothing to link to.
+   */
+  target(row: Row): OktaAdminTarget | null;
 }
 
 /**
@@ -233,7 +250,7 @@ export interface EntityExport<Row = unknown> {
   filter: FilterSupport;
 
   /** Optional deep-link column. */
-  linkify?: IdLinkify;
+  linkify?: IdLinkify<Row>;
 
   /**
    * Hard cap on total rows fetched, as a memory/runaway guard. The engine applies

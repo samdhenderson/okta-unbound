@@ -78,7 +78,7 @@ describe('getUserApps', () => {
       .fn()
       .mockResolvedValueOnce({
         success: true,
-        data: [{ id: 'a1', label: 'App One' }],
+        data: [{ id: 'a1', label: 'App One', name: 'app_one' }],
         headers: { link: '<https://example.okta.com/api/v1/apps?after=cur>; rel="next"' },
       })
       // Second page: one app uses `name` fallback, one falls back to its id; no next link.
@@ -94,9 +94,9 @@ describe('getUserApps', () => {
 
     expect(makeApiRequest).toHaveBeenCalledTimes(2);
     expect(apps).toEqual([
-      { id: 'a1', label: 'App One', isProfileSource: false },
-      { id: 'a2', label: 'App Two', isProfileSource: false },
-      { id: 'a3', label: 'a3', isProfileSource: false },
+      { id: 'a1', label: 'App One', name: 'app_one', isProfileSource: false },
+      { id: 'a2', label: 'App Two', name: 'App Two', isProfileSource: false },
+      { id: 'a3', label: 'a3', name: undefined, isProfileSource: false },
     ]);
     expect(complete).toBe(true);
   });

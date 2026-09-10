@@ -151,6 +151,12 @@ export interface AppSourceRow {
   id: string;
   /** Display label, as `getUserApps` resolved it (label → name → id). */
   label: string;
+  /**
+   * The app's Okta `name` — the app type key, distinct from {@link label}.
+   * The Admin Console route is `/admin/app/{name}/instance/{id}`, so absent
+   * here means the row's "Open in Okta" link is withheld, not broken.
+   */
+  name?: string;
   /** Which of the three things this row can say about its source. */
   state: AppSourceState;
   /** The filter bucket this row falls in — one per {@link AppSourceState}. */
@@ -273,6 +279,7 @@ function toRow(app: UserAppAssignment, byGroupId: Map<string, GroupMembership>):
   return {
     id: app.id,
     label: app.label,
+    name: app.name,
     state,
     bucket: copy.bucket,
     badgeLabel: copy.label,

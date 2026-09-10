@@ -51,10 +51,12 @@ describe('searchApps', () => {
     expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/apps?q=sales%20force&limit=20', {
       reason: 'Search apps by name',
     });
+    // `name` rides alongside `label`, undropped: it is the app *type* key the
+    // Admin Console route is built from, and the label cannot substitute for it.
     expect(result).toEqual([
-      { id: '0oaFAKE1', label: 'Salesforce', status: 'ACTIVE' },
-      { id: '0oaFAKE2', label: 'okta_org2org', status: 'INACTIVE' },
-      { id: '0oaFAKE3', label: '0oaFAKE3', status: undefined },
+      { id: '0oaFAKE1', label: 'Salesforce', name: 'salesforce', status: 'ACTIVE' },
+      { id: '0oaFAKE2', label: 'okta_org2org', name: 'okta_org2org', status: 'INACTIVE' },
+      { id: '0oaFAKE3', label: '0oaFAKE3', name: undefined, status: undefined },
     ]);
   });
 

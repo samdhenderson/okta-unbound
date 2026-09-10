@@ -32,7 +32,8 @@
  * this file from encoding a claim that went stale the moment `app` and `policy`
  * were wired.
  */
-import type { JumpKind } from '../../hooks/useJumpResolver';
+import type { JumpKind, JumpResult } from '../../hooks/useJumpResolver';
+import type { OktaAdminTarget } from '../../../shared/utils/oktaUrl';
 import type { EntityType } from '../../contexts/NavigationContext';
 import { TAB_DEFS, type TabType } from '../../tabs';
 import type { IconType } from '../shared/Icon';
@@ -112,4 +113,35 @@ export function destinationLabel(kind: JumpKind): string {
  */
 export function navigationTarget(kind: JumpKind): EntityType {
   return KIND_TO_ENTITY_TYPE[kind];
+}
+
+/**
+ * The Admin Console deep-link target for a resolved row, when one exists.
+ *
+ * Both palettes degrade an unreachable row to an Okta link rather than a control
+ * that only refuses (ADR-0039), and both used to keep their own kind → link-type
+ * table. One table is what stops the two from disagreeing — which they would
+ * have, because an app link needs a field neither table carried: the app *type*
+ * key (`JumpResult.appName`), without which `/admin/app/{name}/instance/{id}`
+ * cannot be built.
+ *
+ * `rule` and `policy` return `null`: the Admin Console has no single-entity
+ * route for either, and a fabricated one is worse than no link.
+ *
+ * @param result - The resolved row.
+ * @returns The target to hand {@link module:shared/utils/oktaUrl.oktaAdminEntityUrl},
+ * or `null` when the kind has no admin-console page.
+ */
+export function oktaAdminTargetFor(result: JumpResult): OktaAdminTarget | null {
+  switch (result.kind) {
+    case 'group':
+      return { type: 'group', id: result.id };
+    case 'user':
+      return { type: 'user', id: result.id };
+    case 'app':
+      return { type: 'app', id: result.id, name: result.appName };
+    case 'rule':
+    case 'policy':
+      return null;
+  }
 }

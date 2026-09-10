@@ -134,6 +134,6 @@ export function groupIdentity(group: GroupSummary): EntityIdentityDescriptor {
     name: group.name,
     badge: isAlarming ? typeMark : undefined,
     rows: [identityRow, counts, timestamps],
-    link: { entityType: 'group', entityId: group.id },
+    link: { type: 'group', id: group.id },
   };
 }

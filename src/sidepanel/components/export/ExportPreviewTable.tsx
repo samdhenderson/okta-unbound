@@ -113,10 +113,13 @@ const ExportPreviewTable: React.FC<ExportPreviewTableProps> = ({
               <tr key={rowIndex} className="border-b border-neutral-100 last:border-b-0">
                 {columns.map((column) => {
                   const value = projectCell(column, row);
-                  const href =
+                  // Built from `row`, never from `value`: an app link needs the
+                  // app type key as well as the id, and that column may be off.
+                  const target =
                     linkColumn && column.id === linkColumn.id && linkify
-                      ? oktaAdminEntityUrl(oktaOrigin, linkify.entityType, value)
+                      ? linkify.target(row)
                       : null;
+                  const href = target ? oktaAdminEntityUrl(oktaOrigin, target) : null;
                   return (
                     <td
                       key={column.id}

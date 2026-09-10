@@ -478,13 +478,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
         }
         actions={
           identity ? (
-            identity.link && (
-              <OpenInOktaLink
-                oktaOrigin={oktaOrigin}
-                entityType={identity.link.entityType}
-                entityId={identity.link.entityId}
-              />
-            )
+            identity.link && <OpenInOktaLink oktaOrigin={oktaOrigin} target={identity.link} />
           ) : searchMode === 'live' ? (
             <Button
               variant="primary"

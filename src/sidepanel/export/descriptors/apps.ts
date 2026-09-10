@@ -27,7 +27,11 @@ export const appsDescriptor: EntityExport<OktaAppListItem> = {
     help: 'Search apps by name/label (prefix match).',
     placeholder: 'salesforce',
   },
-  linkify: { entityType: 'app', idColumnId: 'id' },
+  // The target is built from the raw row, not the id cell: the Admin Console's
+  // app route is `/admin/app/{name}/instance/{id}`, and `name` is a column the
+  // reader can switch off. A row whose org reported no `name` links nowhere
+  // rather than to an error page.
+  linkify: { idColumnId: 'id', target: (a) => ({ type: 'app', id: a.id, name: a.name }) },
   columnCatalog: [
     { id: 'id', label: 'App ID', group: 'base', defaultEnabled: true, accessor: (a) => a.id },
     {
