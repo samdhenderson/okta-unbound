@@ -13,7 +13,7 @@
  */
 
 import type { RuleGroupContext } from '../ruleEvaluator';
-import type { GroupMembership } from '../types';
+import type { GroupMembership, OktaGroup } from '../types';
 
 /**
  * The user's memberships in the shape the evaluator matches `isMemberOf*`
@@ -30,4 +30,26 @@ export function groupContextOf(memberships: readonly GroupMembership[]): RuleGro
     id: membership.group.id,
     name: membership.group.profile.name,
   }));
+}
+
+/**
+ * The same mapping, over raw Okta groups rather than classified memberships.
+ *
+ * `analyzeMemberships` is handed the user's groups *before* it has classified
+ * them, so it has no `GroupMembership` to map — but it does hold the very list
+ * this context is made of, which is why every `isMemberOf*` clause it evaluated
+ * used to come back `group-membership-fn` unevaluable while the row's own
+ * disclosure, fed the same user's list one component away, answered the
+ * identical clause. One surface, two answers.
+ *
+ * @param groups - The user's **complete** group list, as returned by
+ *   `GET /api/v1/users/{id}/groups` with every `Link` page followed. The same
+ *   whole-set contract {@link groupContextOf} carries, and for the same reason:
+ *   `isMemberOf*` is two-valued over the list it is given, so a group missing
+ *   from here is not "unknown", it is a confident "they are not in it". Pass the
+ *   whole set or pass nothing.
+ * @returns The id/name pairs the evaluator reads.
+ */
+export function groupContextOfGroups(groups: readonly OktaGroup[]): RuleGroupContext {
+  return groups.map((group) => ({ id: group.id, name: group.profile.name }));
 }

@@ -57,6 +57,7 @@ import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
 import { getOrFetch, peek, setEntry, invalidate } from '../cache/entityCache';
 import { cacheKeys, RULE_INVENTORY_KEY } from '../cache/keys';
 import { analyzeMemberships, unclassifiedMemberships } from '../../shared/utils/membershipAnalysis';
+import { groupContextOfGroups } from '../../shared/membership/groupContext';
 import { createLogger } from '../../shared/utils/logger';
 import { useOktaApi } from './useOktaApi';
 import { getUserGroupsRequest } from './getUserGroupsRequest';
@@ -396,7 +397,18 @@ export function useUserMemberships({
               return unclassifiedMemberships(rawGroups);
             }
 
-            return analyzeMemberships(rawGroups, rules, user);
+            // `rawGroups` IS the user's complete group list — `getUserGroupsRequest`
+            // followed every `Link` page to build it, and the classifier is about
+            // to run over exactly these rows. Handing it back as the evaluator's
+            // group context is what lets an `isMemberOf*` rule, and a rule that
+            // excludes a group this user is in, produce a verdict instead of an
+            // unevaluable. Without it the row header fell back to the coarse
+            // substring scorer while the row's own disclosure — fed the same list
+            // by `GroupMembershipsList` one component away — answered the
+            // identical clause correctly.
+            return analyzeMemberships(rawGroups, rules, user, {
+              groups: groupContextOfGroups(rawGroups),
+            });
           },
           { force: options?.force },
         );

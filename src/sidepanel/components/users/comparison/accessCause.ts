@@ -29,7 +29,7 @@ import {
 import type { RuleGroupContext } from '../../../../shared/ruleEvaluator';
 import { groupContextOf } from '../../../../shared/membership/groupContext';
 import { conditionExpressionOf } from '../../../../shared/membership/ruleExpression';
-import { isDeducedAttribution } from '../../../../shared/utils/membershipAnalysis';
+import { isDeducedAttribution, isUserExcluded } from '../../../../shared/utils/membershipAnalysis';
 import type { GroupMembership, MembershipRule, OktaUser } from '../../../../shared/types';
 
 /**
@@ -228,17 +228,6 @@ function rulesTargeting(rules: readonly MembershipRule[], groupId: string): Memb
 }
 
 /**
- * Whether the user is on a rule's explicit exclusion list. Only a **raw** Okta
- * rule carries `conditions.people`; a cache-served `FormattedRule` drops it, so
- * this answers `false` there — the same known hole as
- * `membershipAnalysis.isUserExcludedFromRule`, which can only ever miss an
- * exclusion, never invent one.
- */
-function isUserExcludedFromRule(rule: MembershipRule, userId: string): boolean {
-  return (rule.conditions?.people?.users?.exclude || []).includes(userId);
-}
-
-/**
  * What one targeting rule says about the context user. `grants` is the
  * contradictory case — the rule matches a user who is not in the group — and is
  * deliberately *not* an answer: an attribute fix cannot be the remedy for a rule
@@ -290,7 +279,12 @@ function assessRule(
   contextUser: OktaUser,
   groupContext: RuleGroupContext | undefined,
 ): RuleAssessment {
-  if (isUserExcludedFromRule(rule, contextUser.id)) return { kind: 'excluded', rule };
+  // The shared predicate, not a local one. This module used to read only
+  // `conditions.people.users.exclude`, which a cache-served `FormattedRule`
+  // drops — so the comparison and the memberships pane could disagree about
+  // whether the same rule excludes the same person. It also covers the
+  // group-exclusion route, which nothing read at all.
+  if (isUserExcluded(rule, contextUser.id, groupContext)) return { kind: 'excluded', rule };
 
   const expression = conditionExpressionOf(rule);
   if (expression.trim() === '') return { kind: 'unknown', rule, reason: 'no-condition' };
@@ -331,9 +325,18 @@ function assessRule(
   return {
     kind: 'unknown',
     rule,
-    // "needs the user's group list" is a diagnosis; "a clause was unevaluable" is
-    // a shrug. Prefer the former whenever the rule contains one.
-    reason: summary.needsGroupContext > 0 ? 'needs-group-context' : 'unevaluable-clause',
+    // `needs-group-context` renders as "the rule depends on other group
+    // memberships, which this panel does not have" — a sentence that is only
+    // true when the panel really does not have them. This classifier is always
+    // handed the context user's complete list (see `classifyAccessCauses`), so
+    // claiming it on the strength of `needsGroupContext > 0` described a
+    // condition that had not happened; what actually survives a supplied list is
+    // `isMemberOfGroupNameRegex`, which is refused for its own reasons. So the
+    // diagnosis is only offered when the list genuinely is absent.
+    reason:
+      groupContext === undefined && summary.needsGroupContext > 0
+        ? 'needs-group-context'
+        : 'unevaluable-clause',
   };
 }
 

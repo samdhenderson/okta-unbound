@@ -106,3 +106,56 @@ describe('useUserMemberships when the rule inventory is unavailable', () => {
     expect(peek(['userMemberships', user.id])).not.toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// The list the hook was already holding
+// ---------------------------------------------------------------------------
+
+describe('useUserMemberships hands the classifier the whole group list', () => {
+  /** Two groups, which together are this user's complete membership set. */
+  const twoGroups = {
+    success: true,
+    count: 2,
+    data: [
+      {
+        group: { id: '00gFAKEeng', type: 'OKTA_GROUP', profile: { name: 'Engineering' } },
+        membershipType: 'UNKNOWN',
+        addedDate: undefined,
+      },
+      {
+        group: { id: '00gFAKEcon', type: 'OKTA_GROUP', profile: { name: 'Contractors' } },
+        membershipType: 'UNKNOWN',
+        addedDate: undefined,
+      },
+    ],
+  };
+
+  const feedingRule = {
+    id: '0prFAKEmember',
+    name: 'Engineering by membership',
+    status: 'ACTIVE',
+    groupIds: ['00gFAKEeng'],
+    conditionExpression: 'isMemberOfGroup("00gFAKEcon")',
+  };
+
+  it('proves an isMemberOf rule rather than deducing it', async () => {
+    vi.mocked(getUserGroupsRequest).mockResolvedValue(
+      twoGroups as unknown as Awaited<ReturnType<typeof getUserGroupsRequest>>,
+    );
+    vi.mocked(fetchGroupRulesRequest).mockResolvedValue({
+      success: true,
+      rules: [feedingRule],
+    } as unknown as Awaited<ReturnType<typeof fetchGroupRulesRequest>>);
+
+    const memberships = await load();
+    const engineering = memberships.find((m) => m.group.id === '00gFAKEeng');
+
+    // `rawGroups` is the same list this hook just fetched, and it is the list the
+    // clause needs. Before it was passed through, the rule came back unevaluable
+    // and the sole surviving candidate was labelled `inferred` — a deduction
+    // sitting next to a disclosure that answered the identical clause correctly.
+    expect(engineering?.membershipType).toBe('RULE_BASED');
+    expect(engineering?.attribution).toBe('exact');
+    expect(engineering?.rules.map((r) => r.id)).toEqual(['0prFAKEmember']);
+  });
+});
