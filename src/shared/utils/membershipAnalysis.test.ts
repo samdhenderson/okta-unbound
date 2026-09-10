@@ -366,7 +366,10 @@ describe('analyzeMemberships — condition evaluation', () => {
   });
 
   it('treats an unsupported operator as unevaluable, never as "does not match"', () => {
-    const unsupported = ruleWith('String.substring(user.department, 0, 3) == "Eng"', {
+    // `String.replaceFirst` is refused by design (its target is a regex in the
+    // language Okta's EL is built on). `String.substring` stood here until it was
+    // implemented, at which point this rule started genuinely matching.
+    const unsupported = ruleWith('String.replaceFirst(user.department, "E", "X") == "Xng"', {
       id: 'unsupported',
     });
     const [m] = analyzeMemberships([group()], [unsupported], engUser);

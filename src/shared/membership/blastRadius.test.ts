@@ -316,14 +316,16 @@ describe('an unevaluable sibling rule is never read as a no (ADR-0020)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. An absent attribute is a no-match, and a no-match is not an addition
+// 5. An absent attribute is undetermined, and undetermined is not an addition
 // ---------------------------------------------------------------------------
 
-describe('a rule that was already failing contributes nothing', () => {
-  it('reads an absent attribute as unchanged-no-match and emits no group effect', () => {
+describe('a rule the evaluator cannot settle contributes no group effect', () => {
+  it('reads an absent attribute as undetermined and emits no group effect', () => {
     // `user.costCenter` is not on the fixture at all, and the draft does not set
-    // it. The evaluator compares the absent value as a definitive no-match — the
-    // residual ADR-0020 documents — so the rule neither starts nor stops.
+    // it. The evaluator used to compare the absent value as a definitive
+    // no-match — the residual ADR-0020 documented — and now reports that it could
+    // not tell (D-114). Either way the rule neither starts nor stops, which is
+    // what this case is about: an unsettled rule must not become an addition.
     const costCentreRule = ruleOf({
       id: '0prFAKEcc',
       name: 'Cost centre feeder',
@@ -336,7 +338,9 @@ describe('a rule that was already failing contributes nothing', () => {
 
     expect(report.rules).toHaveLength(1);
     expect(report.rules[0]).toMatchObject({
-      transition: 'unchanged-no-match',
+      transition: 'undetermined',
+      beforeReason: 'attribute-absent',
+      afterReason: 'attribute-absent',
       // The draft touches `department`; this rule reads none of the drafted names.
       touchedAttributes: [],
     });

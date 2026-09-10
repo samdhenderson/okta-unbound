@@ -74,6 +74,26 @@ for (const [operator, precedence] of WORD_BINARY_OPERATORS) {
 }
 
 /**
+ * Okta's documentation names `NOT` alongside `AND` and `OR`, but only the binary
+ * word forms were ever registered — so `NOT isMemberOfGroup("00g…")` failed to
+ * parse and the whole rule came back `parse-error`, indistinguishable from an
+ * expression that was genuinely malformed. jsep's own boundary check keeps
+ * `user.notes` an attribute rather than a `not` applied to `es`.
+ */
+const WORD_UNARY_OPERATORS: readonly string[] = ['not', 'NOT'];
+
+for (const operator of WORD_UNARY_OPERATORS) {
+  jsep.addUnaryOp(operator);
+}
+
+/**
+ * Every unary operator this evaluator understands — logical negation, in its
+ * symbolic and word forms. Anything else (`-`, `+`, `~`) is not a group-rule
+ * condition and stays unevaluable.
+ */
+const NEGATION_OPERATORS: ReadonlySet<string> = new Set(['!', ...WORD_UNARY_OPERATORS]);
+
+/**
  * Hard cap on the expression length we will parse at all. Rule expressions are
  * untrusted input and both jsep's parser and this evaluator recurse; the cap
  * bounds the work an adversarial tenant value can cause. Real Okta group-rule
@@ -81,8 +101,22 @@ for (const [operator, precedence] of WORD_BINARY_OPERATORS) {
  */
 const MAX_EXPRESSION_LENGTH = 4096;
 
-/** A value an expression operand can resolve to. */
-type ExprValue = string | number | boolean | null;
+/** A scalar an expression operand can resolve to. */
+type ExprScalar = string | number | boolean | null;
+
+/**
+ * A value an expression operand can resolve to.
+ *
+ * Arrays are here because Okta states a group-rule condition may use "String,
+ * **Arrays**, and user expressions", and a multi-valued profile attribute is
+ * ordinary. Before they were modelled, `resolveMember` sent one through
+ * `String(raw)` — so `["a","b"]` became the string `"a,b"` and
+ * `user.roles == "a,b"` answered a confident `true`. A wrong answer, not a
+ * missing one. Arrays are deliberately **one level deep and scalar-valued**: a
+ * nested array is a shape Okta's rule surface does not produce and this module
+ * does not guess at.
+ */
+type ExprValue = ExprScalar | readonly ExprScalar[];
 
 /**
  * A value an expression operand can resolve to — the public alias of the
@@ -91,6 +125,11 @@ type ExprValue = string | number | boolean | null;
  * Values come from the user's Okta profile, so they are **PII**: rendering them
  * is fine (React escapes), logging them is not, and any export path must send
  * them through `csvUtils.escapeCSV`.
+ *
+ * A multi-valued attribute resolves to a **real array**, never to a joined
+ * string — see {@link ExprValue}. A surface rendering one must format it as a
+ * list rather than falling through to `String(value)`, which would print the
+ * same text a single comma-containing string prints.
  */
 export type RuleExprValue = ExprValue;
 
@@ -115,7 +154,11 @@ export type RuleExprValue = ExprValue;
  *   member access, a bare identifier, `this`, a regex literal, a `Compound`, …).
  * - `operand-type` — allow-listed grammar, but an operand's runtime type is
  *   outside what the operator or function accepts (`user.department > "A"`,
- *   `String.startsWith(user.employeeNumber, "4")`).
+ *   `String.startsWith(user.employeeNumber, "4")`, an object-valued attribute).
+ * - `attribute-absent` — `user.<attribute>` names something this user's profile
+ *   does not carry at all. Distinct from an attribute present and explicitly
+ *   `null`: only the second licenses a comparison. Collapsing them is what made
+ *   `user.status == "ACTIVE"` answer `no-match` for an entire org (D-114).
  * - `not-a-boolean` — fully resolved, but not to a boolean, so it is not a
  *   condition (`user.department`, `"Engineering"`).
  * - `walk-failed` — the walk threw (a pathologically nested expression can
@@ -132,6 +175,7 @@ export type RuleUnevaluableReason =
   | 'fn-arity'
   | 'unsupported-node'
   | 'operand-type'
+  | 'attribute-absent'
   | 'not-a-boolean'
   | 'walk-failed';
 
@@ -298,10 +342,20 @@ function asString(value: ExprValue | undefined): string | Unresolved {
   return typeof value === 'string' ? value : UNRESOLVED;
 }
 
+/** Narrow an operand to an integer, or give up. Index and length arguments are integral. */
+function asInteger(value: ExprValue | undefined): number | Unresolved {
+  return typeof value === 'number' && Number.isInteger(value) ? value : UNRESOLVED;
+}
+
+/** Narrow an operand to an array, or give up. The `Arrays.*` helpers are array-typed. */
+function asArray(value: ExprValue | undefined): readonly ExprScalar[] | Unresolved {
+  return Array.isArray(value) ? value : UNRESOLVED;
+}
+
 /** Apply `fn` to two string operands, giving up unless both really are strings. */
 function withTwoStrings(
   args: readonly ExprValue[],
-  fn: (a: string, b: string) => ExprValue,
+  fn: (a: string, b: string) => EvalResult,
 ): EvalResult {
   const first = asString(args[0]);
   const second = asString(args[1]);
@@ -310,20 +364,134 @@ function withTwoStrings(
 }
 
 /** Apply `fn` to a single string operand, giving up unless it really is a string. */
-function withOneString(args: readonly ExprValue[], fn: (a: string) => ExprValue): EvalResult {
+function withOneString(args: readonly ExprValue[], fn: (a: string) => EvalResult): EvalResult {
   const first = asString(args[0]);
   return isUnresolved(first) ? UNRESOLVED : fn(first);
+}
+
+/** Apply `fn` to a single array operand, giving up unless it really is an array. */
+function evaluateOverArray(
+  args: readonly ExprValue[],
+  fn: (items: readonly ExprScalar[]) => ExprValue,
+): EvalResult {
+  const items = asArray(args[0]);
+  return isUnresolved(items) ? UNRESOLVED : fn(items);
+}
+
+/**
+ * `Arrays.contains(array, value)` — strict membership, no coercion.
+ *
+ * Strict because the surrounding evaluator's equality is strict: `"1"` and `1`
+ * are different values everywhere else in this module, and a helper that
+ * quietly coerced would answer `true` where `==` answers `false`.
+ */
+function evaluateArraysContains(args: readonly ExprValue[]): EvalResult {
+  const items = asArray(args[0]);
+  if (isUnresolved(items)) return UNRESOLVED;
+  const needle = args[1];
+  // An array operand has no meaning as a *member* of another array here, and
+  // Okta's rule surface does not nest them — so decline rather than compare by
+  // reference, which would always be `false`.
+  if (Array.isArray(needle) || needle === undefined) return UNRESOLVED;
+  return items.some((item) => item === needle);
+}
+
+/** `String.join(separator, first, second)` — Okta's three-argument form. */
+function evaluateJoin(args: readonly ExprValue[]): EvalResult {
+  const separator = asString(args[0]);
+  const first = asString(args[1]);
+  const second = asString(args[2]);
+  if (isUnresolved(separator) || isUnresolved(first) || isUnresolved(second)) return UNRESOLVED;
+  return `${first}${separator}${second}`;
+}
+
+/** `String.replace(str, target, replacement)` — every occurrence, target literal. */
+function evaluateReplace(args: readonly ExprValue[]): EvalResult {
+  const source = asString(args[0]);
+  const target = asString(args[1]);
+  const replacement = asString(args[2]);
+  if (isUnresolved(source) || isUnresolved(target) || isUnresolved(replacement)) return UNRESOLVED;
+  // `replaceAll` with string arguments is literal — no pattern is compiled, so a
+  // tenant-authored target carries no backtracking risk. An empty target would
+  // splice the replacement between every character, which is not a substitution
+  // anyone writes a rule to mean.
+  if (target === '') return UNRESOLVED;
+  // `split`/`join` rather than `replaceAll`: the repo's TypeScript lib target
+  // predates it, and both are literal — no pattern is compiled either way.
+  return source.split(target).join(replacement);
+}
+
+/**
+ * `String.substring(str, startIndex, endIndex)`.
+ *
+ * **Out-of-range gives up rather than clamping.** Java's `substring` throws on a
+ * bad range, so there is no defined value to report; clamping would invent one,
+ * and the invented one feeds a comparison. Declining is the honest answer.
+ */
+function evaluateSubstring(args: readonly ExprValue[]): EvalResult {
+  const source = asString(args[0]);
+  const start = asInteger(args[1]);
+  const end = asInteger(args[2]);
+  if (isUnresolved(source) || isUnresolved(start) || isUnresolved(end)) return UNRESOLVED;
+  if (start < 0 || end > source.length || start > end) return UNRESOLVED;
+  return source.slice(start, end);
+}
+
+/**
+ * `String.substringAfter` / `String.substringBefore`, **for the found case only**.
+ *
+ * When the separator is absent the two functions disagree in the library Okta's
+ * expression language is built on — one yields the empty string, the other the
+ * whole input — and Okta does not publish which convention it follows. Rather
+ * than pick, the not-found case resolves to nothing: a true answer where the
+ * separator is present, and a named absence where it is not.
+ */
+function substringAfter(source: string, separator: string): ExprValue | Unresolved {
+  const at = source.indexOf(separator);
+  return at === -1 ? UNRESOLVED : source.slice(at + separator.length);
+}
+
+/** See {@link substringAfter} — same not-found reasoning, other side of the split. */
+function substringBefore(source: string, separator: string): ExprValue | Unresolved {
+  const at = source.indexOf(separator);
+  return at === -1 ? UNRESOLVED : source.slice(0, at);
 }
 
 /**
  * The Okta Expression Language functions this evaluator implements, keyed by
  * their fully-qualified name.
  *
- * Deliberately small: a function is listed only when its Okta semantics are
- * unambiguous, because an approximation would produce a confidently wrong
- * answer, which is strictly worse than reporting the expression as unevaluable.
- * Collection (`Arrays.*`) helpers are **not** available inside group-rule
- * conditions and are intentionally absent.
+ * A function is listed only when its Okta semantics are **unambiguous**, because
+ * an approximation produces a confidently wrong answer, which is strictly worse
+ * than reporting the expression unevaluable. That bar, not the size of the list,
+ * is what this map is defending.
+ *
+ * ## What is deliberately absent, and why
+ *
+ * - **`Time.*` and `Convert.*`** — Okta rejects both families inside a group-rule
+ *   condition outright, so implementing them would model a rule Okta will not run.
+ * - **`Instant` / `DateTime`** — the timezone the org evaluates in is not
+ *   something this panel can read, so every answer would be right or wrong by up
+ *   to a day depending on a fact we do not have. That is the definition of
+ *   ambiguous.
+ * - **`String.stringSwitch`** — its no-match behaviour is not pinned by Okta's
+ *   published description, and guessing between "empty string" and "null"
+ *   changes the verdict of the comparison it feeds.
+ * - **`String.replaceFirst`** — Java, which Okta's expression language is built
+ *   on, takes a **regular expression** as `replaceFirst`'s target. Implementing
+ *   it as a literal replace would be wrong for any rule that relies on that;
+ *   implementing it faithfully would compile a tenant-authored pattern, which is
+ *   the same catastrophic-backtracking lever `isMemberOfGroupNameRegex` is
+ *   refused over. Both roads are closed, so the function is not listed.
+ *   `String.replace` is safe by contrast: its target is a literal.
+ *
+ * ## `Arrays.*` is available, contrary to this map's former comment
+ *
+ * Okta's documentation states group-rule conditions allow "String, **Arrays**,
+ * and user expressions". This map previously asserted the opposite and listed
+ * none, so every rule over a multi-valued profile attribute was unevaluable.
+ * `Arrays.add` and `Arrays.flatten` remain absent: they *return* collections
+ * rather than answering anything, so no group-rule condition ends in one.
  */
 export const SUPPORTED_FUNCTIONS: ReadonlyMap<string, SupportedFunction> = new Map<
   string,
@@ -345,6 +513,31 @@ export const SUPPORTED_FUNCTIONS: ReadonlyMap<string, SupportedFunction> = new M
     { arity: 2, evaluate: (a) => withTwoStrings(a, (s, suffix) => s.endsWith(suffix)) },
   ],
   ['String.append', { arity: 2, evaluate: (a) => withTwoStrings(a, (s, suffix) => s + suffix) }],
+  ['String.join', { arity: 3, evaluate: (a) => evaluateJoin(a) }],
+  [
+    'String.removeSpaces',
+    { arity: 1, evaluate: (a) => withOneString(a, (s) => s.replace(/ /g, '')) },
+  ],
+  ['String.replace', { arity: 3, evaluate: (a) => evaluateReplace(a) }],
+  ['String.substring', { arity: 3, evaluate: (a) => evaluateSubstring(a) }],
+  [
+    'String.substringAfter',
+    { arity: 2, evaluate: (a) => withTwoStrings(a, (s, sep) => substringAfter(s, sep)) },
+  ],
+  [
+    'String.substringBefore',
+    { arity: 2, evaluate: (a) => withTwoStrings(a, (s, sep) => substringBefore(s, sep)) },
+  ],
+  ['Arrays.contains', { arity: 2, evaluate: (a) => evaluateArraysContains(a) }],
+  ['Arrays.size', { arity: 1, evaluate: (a) => evaluateOverArray(a, (items) => items.length) }],
+  [
+    'Arrays.isEmpty',
+    { arity: 1, evaluate: (a) => evaluateOverArray(a, (items) => items.length === 0) },
+  ],
+  [
+    'Arrays.toCsvString',
+    { arity: 1, evaluate: (a) => evaluateOverArray(a, (items) => items.join(',')) },
+  ],
 ]);
 
 /**
@@ -524,9 +717,17 @@ function parseExpression(expression: string): jsep.Expression | undefined {
 // Evaluation
 // ---------------------------------------------------------------------------
 
-/** Truthiness of a resolved value, propagating {@link UNRESOLVED}. */
+/**
+ * Truthiness of a resolved value, propagating {@link UNRESOLVED}.
+ *
+ * An **array is never a truth value** here. `Boolean([])` is `true` in
+ * JavaScript, so an empty multi-valued attribute standing alone in a conjunction
+ * would read as satisfied — a confident answer drawn from a language rule Okta
+ * does not share. It resolves to nothing instead.
+ */
 function truthiness(result: EvalResult): boolean | Unresolved {
-  return isUnresolved(result) ? UNRESOLVED : Boolean(result);
+  if (isUnresolved(result) || Array.isArray(result)) return UNRESOLVED;
+  return Boolean(result);
 }
 
 /**
@@ -550,9 +751,79 @@ function giveUpLogged(reason: RuleUnevaluableReason, options: EvaluationWalkOpti
 }
 
 /**
- * Read `user.<attribute>` off the user's profile. Only the single-level
- * `user.*` form is modelled; `app.*`, `session.*`, computed access and nested
- * paths are unresolvable.
+ * Top-level `OktaUser` fields a rule may reference as `user.<name>`.
+ *
+ * Okta's rule conditions do not distinguish "profile attribute" from "user
+ * property" in their syntax — `user.status` and `user.department` are written
+ * identically — but this extension's `OktaUser` does, keeping the first group
+ * beside `profile` rather than inside it. Reading only `profile` therefore made
+ * `user.status == "ACTIVE"` resolve `null == "ACTIVE"` → `false` for **every**
+ * user in the org: the evaluator stating with confidence that nobody matches a
+ * rule that in fact matches everybody (D-114).
+ *
+ * Listed explicitly rather than derived, so that adding a field to `OktaUser`
+ * that Okta does *not* expose to rule conditions cannot silently become
+ * addressable from a tenant-authored expression. `managedBy` and `credentials`
+ * are deliberately absent: they are objects, not scalars, and `credentials` in
+ * particular is adjacent to material that must never reach an expression.
+ */
+const USER_TOP_LEVEL_FIELDS: ReadonlySet<string> = new Set([
+  'id',
+  'status',
+  'created',
+  'activated',
+  'statusChanged',
+  'lastLogin',
+  'lastUpdated',
+  'passwordChanged',
+]);
+
+/**
+ * Narrow one raw attribute value to an operand, or decline.
+ *
+ * Three outcomes, and the distinction between the first two is the whole point:
+ * a scalar resolves; an array resolves as an array (never a joined string); an
+ * object resolves to nothing, because `String({})` is `"[object Object]"` and
+ * comparing *that* is a confident answer about a value nobody has read.
+ */
+function asOperand(raw: unknown, options: EvaluationWalkOptions): EvalResult {
+  if (raw === null) return null;
+  if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') return raw;
+  if (Array.isArray(raw)) {
+    const scalars: ExprScalar[] = [];
+    for (const item of raw) {
+      if (item === null) {
+        scalars.push(null);
+      } else if (
+        typeof item === 'string' ||
+        typeof item === 'number' ||
+        typeof item === 'boolean'
+      ) {
+        scalars.push(item);
+      } else {
+        // A nested array or object inside a multi-valued attribute is a shape
+        // this module does not model. Declining the whole array is right: a
+        // partial one would answer `Arrays.size` and `Arrays.contains` about a
+        // collection that is not the user's.
+        return giveUp('operand-type', options);
+      }
+    }
+    return scalars;
+  }
+  return giveUp('operand-type', options);
+}
+
+/**
+ * Read `user.<attribute>`, from the profile or from the user's own top-level
+ * fields. Only the single-level `user.*` form is modelled; `app.*`, `session.*`,
+ * computed access and nested paths are unresolvable.
+ *
+ * **An absent attribute is not `null`.** A profile that does not carry the name
+ * at all resolves to `attribute-absent` — the evaluator failing to understand
+ * the expression, which the module header says must never be reported as
+ * `no-match`. An attribute the profile *does* carry, explicitly set to `null`,
+ * still resolves to `null`: that is a value the org actually holds, and it
+ * licenses a comparison.
  */
 function resolveMember(node: jsep.MemberExpression, options: EvaluationWalkOptions): EvalResult {
   if (node.computed) return giveUp('unsupported-node', options);
@@ -560,10 +831,25 @@ function resolveMember(node: jsep.MemberExpression, options: EvaluationWalkOptio
   if (!isIdentifier(object) || object.name !== 'user') return giveUp('unsupported-node', options);
   if (!isIdentifier(property)) return giveUp('unsupported-node', options);
 
-  const raw = (options.user.profile as Record<string, unknown>)[property.name];
-  if (raw === undefined || raw === null) return null;
-  if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') return raw;
-  return String(raw);
+  const profile = options.user.profile as Record<string, unknown>;
+  // The profile wins over the top-level field of the same name. An org whose
+  // schema defines a custom `status` attribute means that one when it writes
+  // `user.status`, and Okta resolves the profile first for exactly that reason.
+  // `hasOwnProperty.call`, not `in`: a profile attribute is only what this user
+  // actually carries, and `in` would find inherited `toString` and answer about
+  // a function.
+  if (Object.prototype.hasOwnProperty.call(profile, property.name)) {
+    return asOperand(profile[property.name], options);
+  }
+  if (USER_TOP_LEVEL_FIELDS.has(property.name)) {
+    const raw = (options.user as unknown as Record<string, unknown>)[property.name];
+    // Present in the type but not on this response — `lastLogin` on a user who
+    // has never signed in, say. Absent is absent, whichever half it is missing
+    // from.
+    if (raw === undefined) return giveUp('attribute-absent', options);
+    return asOperand(raw, options);
+  }
+  return giveUp('attribute-absent', options);
 }
 
 /** Three-valued conjunction: `false` wins over unresolved, unresolved wins over `true`. */
@@ -618,6 +904,12 @@ function evaluateBinary(node: jsep.BinaryExpression, options: EvaluationWalkOpti
 
   // Comparison operators cannot answer anything about an unresolved operand.
   if (isUnresolved(left) || isUnresolved(right)) return UNRESOLVED;
+
+  // Nor about an array one. `===` on two arrays is reference equality, which is
+  // `false` for every pair this module can construct — a confident "these differ"
+  // about values that may well be identical. `Arrays.*` is how a collection is
+  // compared; `==` is not.
+  if (Array.isArray(left) || Array.isArray(right)) return giveUp('operand-type', options);
 
   // Strict, type-sensitive equality — matching Okta's case-sensitive comparison
   // and the behaviour this module has always had.
@@ -708,7 +1000,7 @@ function evaluateNode(node: jsep.Expression, options: EvaluationWalkOptions): Ev
   if (isCallExpression(node)) return evaluateCall(node, options);
   if (isBinaryExpression(node)) return evaluateBinary(node, options);
   if (isUnaryExpression(node)) {
-    if (node.operator !== '!') return giveUp('unsupported-node', options);
+    if (!NEGATION_OPERATORS.has(node.operator)) return giveUp('unsupported-node', options);
     const argument = truthiness(evaluateNode(node.argument, options));
     return isUnresolved(argument) ? UNRESOLVED : !argument;
   }
@@ -842,7 +1134,7 @@ function isSupportedNode(node: jsep.Expression, options: GrammarWalkOptions = {}
     return node.arguments.every((argument) => isSupportedNode(argument, options));
   }
   if (isUnaryExpression(node)) {
-    if (node.operator !== '!') return reject('unsupported-node', options);
+    if (!NEGATION_OPERATORS.has(node.operator)) return reject('unsupported-node', options);
     return isSupportedNode(node.argument, options);
   }
   if (isBinaryExpression(node)) {

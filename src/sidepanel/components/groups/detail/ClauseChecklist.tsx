@@ -186,6 +186,10 @@ const ClauseStatusChip: React.FC<{ presentation: StatusPresentation }> = ({ pres
  */
 function formatResolvedValue(value: RuleExprValue): string {
   if (value === null) return 'null';
+  // A multi-valued attribute prints as a list, never through `String(value)` —
+  // that would render `["a","b"]` as `a,b`, the same text the single string
+  // `"a,b"` prints, and the reader could not tell one fact from the other.
+  if (Array.isArray(value)) return `[${value.map(formatResolvedValue).join(', ')}]`;
   return typeof value === 'string' ? JSON.stringify(value) : String(value);
 }
 

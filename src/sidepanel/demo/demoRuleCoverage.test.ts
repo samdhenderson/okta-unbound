@@ -17,6 +17,13 @@
  *    selects **exactly** the members the predicate derived. A rule whose
  *    condition does not reproduce the membership is worse than a missing rule,
  *    because the evaluator will then confidently disagree with the fixture.
+ *
+ * Property 3 carried one written-down exception, `EVALUATOR_CANNOT_REPRODUCE`,
+ * for the VPN group: its predicate is `user.status == "ACTIVE"`, and the
+ * evaluator resolved `user.*` against the profile only, so `status` came back
+ * absent, absent came back `null`, and the rule confidently selected nobody in an
+ * org where it selects everybody (D-114). Both halves of that are fixed, the
+ * exception is gone, and the ordinary equality check below covers the group.
  */
 import { describe, expect, it } from 'vitest';
 import { tryEvaluateRuleExpression } from '../../shared/ruleEvaluator';
@@ -27,28 +34,6 @@ import { demoUsers } from './users';
 
 /** The groups allowed to be fed by a predicate no rule states. Named, not implied. */
 const EXPECTED_EXEMPT_ORDINALS: readonly number[] = [GROUP.everyone, GROUP.workdayAllWorkers];
-
-/**
- * The one declared rule `shared/ruleEvaluator` gets **wrong** — a known defect,
- * pinned here so it cannot spread or be forgotten.
- *
- * `user.status == "ACTIVE"` is the VPN group's predicate stated in Okta
- * Expression Language. The evaluator resolves `user.*` against the **profile**,
- * where `status` does not exist, and `resolveMember` maps a missing attribute to
- * `null` — so `null == "ACTIVE"` reduces to `false` and the rule confidently
- * answers `no-match` for every user in an org where the group holds every ACTIVE
- * one. "Attribute absent from this profile" and "attribute set to null" are not
- * the same claim, and only the second one licenses `no-match`; the first should
- * reach the evaluator's own `UNRESOLVED` path.
- *
- * That is a bug in `src/shared/ruleEvaluator.ts`, not in this fixture, and it
- * predates this suite — rule 1 has carried this expression since the demo org
- * was written. Fixing it is out of scope here (and out of this change's file
- * allowlist), so the wrongness is written down rather than smoothed over: the
- * test below asserts the exact broken shape, which means whoever fixes the
- * evaluator gets a red test telling them to delete this entry.
- */
-const EVALUATOR_CANNOT_REPRODUCE: readonly number[] = [GROUP.vpnUsers];
 
 const groupId = (ordinal: number): string => fakeId('00g', ordinal);
 
@@ -111,23 +96,6 @@ describe('the declared expression selects the derived membership', () => {
   for (const entry of declared) {
     const name = groupName(entry.ordinal);
     const expression = entry.expression ?? '';
-
-    if (EVALUATOR_CANNOT_REPRODUCE.includes(entry.ordinal)) {
-      it(`${name}'s rule is declared, and the evaluator still cannot reproduce it`, () => {
-        const derived = demoGroupMembers().get(groupId(entry.ordinal)) ?? [];
-        const matched = demoUsers.filter(
-          (user) => tryEvaluateRuleExpression(expression, user) === 'match',
-        );
-
-        // The group really is full, and the rule really does select nobody.
-        expect(derived.length).toBeGreaterThan(0);
-        expect(
-          matched.length,
-          `${name}'s rule now selects members; the ruleEvaluator defect is fixed, so delete this entry from EVALUATOR_CANNOT_REPRODUCE and let the equality check below cover it`,
-        ).toBe(0);
-      });
-      continue;
-    }
 
     it(`${name}'s rule evaluates to exactly its ${demoGroupMembers().get(groupId(entry.ordinal))?.length ?? 0} members`, () => {
       const derived = new Set(demoGroupMembers().get(groupId(entry.ordinal)) ?? []);
