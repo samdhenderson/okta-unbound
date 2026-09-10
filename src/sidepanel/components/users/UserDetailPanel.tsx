@@ -82,6 +82,12 @@ export interface UserDetailPanelProps {
   /** The selected user to render. */
   user: OktaUser;
   /** Okta origin used to build admin-console deep links; links are hidden when absent. */
+  /**
+   * The tab whose content script serves the Groups pane's group-name fallback.
+   * Absent, that pane still names every group the org snapshot holds; it simply
+   * cannot fetch the ones it does not.
+   */
+  targetTabId?: number | null;
   oktaOrigin?: string | null;
 
   /** Which pane is on screen. Lifted, because the header and the action strip read it too. */
@@ -164,6 +170,7 @@ export interface UserDetailPanelProps {
  */
 const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
   user,
+  targetTabId,
   oktaOrigin,
   pane,
   onPaneChange,
@@ -228,6 +235,8 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
           <GroupMembershipsList
             memberships={memberships}
             user={user}
+            targetTabId={targetTabId}
+            isActive={pane === 'groups'}
             isLoading={isLoadingMemberships}
             currentGroupId={currentGroupId}
             oktaOrigin={oktaOrigin}

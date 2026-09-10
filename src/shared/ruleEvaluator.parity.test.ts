@@ -67,6 +67,13 @@ const user: OktaUser = {
     headcount: 42,
     isContractor: true,
     roles: ['admin', 'dev'],
+    // Present and explicitly `null`, which is a different fact from absent and
+    // must stay reachable from the table: `user.andy == null` has to resolve to
+    // `null == null` for the word-boundary rows below to be testing the
+    // boundary rather than the absent-attribute path.
+    andy: null,
+    orbit: null,
+    notes: null,
   },
 };
 
@@ -138,19 +145,46 @@ const OUTCOME_CASES: readonly OutcomeCase[] = [
     expected: 'no-match',
   },
   {
-    name: 'missing attribute reads as null',
+    // An attribute this profile does not carry is the evaluator failing to
+    // understand the expression, not a value equal to `null`. Reading the two as
+    // one is what made `user.status == "ACTIVE"` answer `no-match` for a whole
+    // org (D-114); these three rows pinned that reading and now pin its replacement.
+    name: 'absent attribute is not null — it is unevaluable',
     expression: 'user.division == null',
+    expected: 'unevaluable',
+  },
+  {
+    name: 'absent attribute yields no verdict against a string either',
+    expression: 'user.division == "Platform"',
+    expected: 'unevaluable',
+  },
+  {
+    name: 'an attribute present and explicitly null still compares as null',
+    expression: 'user.andy == null',
     expected: 'match',
   },
   {
-    name: 'missing attribute is not equal to a string',
-    expression: 'user.division == "Platform"',
+    name: 'a top-level user field resolves off the user, not the profile',
+    expression: 'user.status == "ACTIVE"',
+    expected: 'match',
+  },
+  {
+    name: 'a top-level user field can answer no-match',
+    expression: 'user.status == "SUSPENDED"',
     expected: 'no-match',
   },
   {
-    name: 'non-scalar attribute is stringified rather than refused',
+    name: 'a user field outside the addressable set stays unevaluable',
+    expression: 'user.credentials == null',
+    expected: 'unevaluable',
+  },
+  {
+    // Was `match`, on the strength of `String(['admin','dev']) === 'admin,dev'`.
+    // An array is an array: `==` cannot compare one, and `Arrays.*` is how it is
+    // asked about.
+    name: 'a multi-valued attribute is not its joined string',
     expression: 'user.roles == "admin,dev"',
-    expected: 'match',
+    expected: 'unevaluable',
   },
 
   // --- symbolic operators ---------------------------------------------------
@@ -228,9 +262,23 @@ const OUTCOME_CASES: readonly OutcomeCase[] = [
   },
   {
     name: 'word-form operators do not swallow attributes that start with them',
-    // jsep's identifier boundary check keeps `andy`/`orbit` whole.
+    // jsep's identifier boundary check keeps `andy`/`orbit` whole. Both are
+    // present and null on the fixture, so a `match` here proves the boundary
+    // held rather than that both reads failed the same way.
     expression: 'user.andy == null and user.orbit == null',
     expected: 'match',
+  },
+  {
+    name: 'the NOT word form negates, and does not swallow an attribute',
+    // `NOT`/`not` are registered as unary operators; the same boundary check
+    // keeps `user.notes` an attribute rather than `not` applied to `es`.
+    expression: 'NOT user.isContractor == false and user.notes == null',
+    expected: 'match',
+  },
+  {
+    name: 'the lowercase not word form negates too',
+    expression: 'not user.isContractor',
+    expected: 'no-match',
   },
 
   // --- three-valued (Kleene) propagation ------------------------------------
@@ -336,6 +384,124 @@ const OUTCOME_CASES: readonly OutcomeCase[] = [
   {
     name: 'String.endsWith non-matching',
     expression: 'String.endsWith(user.email, "@other.example")',
+    expected: 'no-match',
+  },
+  {
+    name: 'String.join matching',
+    expression: 'String.join("-", user.firstName, user.lastName) == "Ada-Lovelace"',
+    expected: 'match',
+  },
+  {
+    name: 'String.join non-matching',
+    expression: 'String.join("-", user.firstName, user.lastName) == "Ada Lovelace"',
+    expected: 'no-match',
+  },
+  {
+    name: 'String.removeSpaces matching',
+    expression: 'String.removeSpaces(user.city) == "SanFrancisco"',
+    expected: 'match',
+  },
+  {
+    name: 'String.removeSpaces non-matching',
+    expression: 'String.removeSpaces(user.city) == "San Francisco"',
+    expected: 'no-match',
+  },
+  {
+    name: 'String.replace matching',
+    expression: 'String.replace(user.city, "San ", "") == "Francisco"',
+    expected: 'match',
+  },
+  {
+    name: 'String.replace non-matching',
+    expression: 'String.replace(user.city, "San ", "") == "San Francisco"',
+    expected: 'no-match',
+  },
+  {
+    name: 'String.substring matching',
+    expression: 'String.substring(user.email, 0, 4) == "user"',
+    expected: 'match',
+  },
+  {
+    name: 'String.substring non-matching',
+    expression: 'String.substring(user.email, 0, 4) == "USER"',
+    expected: 'no-match',
+  },
+  {
+    name: 'String.substring gives up on an out-of-range end rather than clamping',
+    expression: 'String.substring(user.firstName, 0, 99) == "Ada"',
+    expected: 'unevaluable',
+  },
+  {
+    name: 'String.substringAfter matching',
+    expression: 'String.substringAfter(user.email, "@") == "example.com"',
+    expected: 'match',
+  },
+  {
+    name: 'String.substringAfter non-matching',
+    expression: 'String.substringAfter(user.email, "@") == "other.example"',
+    expected: 'no-match',
+  },
+  {
+    name: 'String.substringAfter gives up when the separator is absent',
+    // Okta does not publish whether a missing separator yields the empty string
+    // or the whole input, and the two produce opposite verdicts.
+    expression: 'String.substringAfter(user.firstName, "@") == ""',
+    expected: 'unevaluable',
+  },
+  {
+    name: 'String.substringBefore matching',
+    expression: 'String.substringBefore(user.email, "@") == "user"',
+    expected: 'match',
+  },
+  {
+    name: 'String.substringBefore non-matching',
+    expression: 'String.substringBefore(user.email, "@") == "other"',
+    expected: 'no-match',
+  },
+  {
+    name: 'Arrays.contains matching',
+    expression: 'Arrays.contains(user.roles, "admin")',
+    expected: 'match',
+  },
+  {
+    name: 'Arrays.contains non-matching',
+    expression: 'Arrays.contains(user.roles, "auditor")',
+    expected: 'no-match',
+  },
+  {
+    name: 'Arrays.contains does not coerce its needle',
+    expression: 'Arrays.contains(user.roles, 1)',
+    expected: 'no-match',
+  },
+  {
+    name: 'Arrays.contains gives up on a non-array first argument',
+    expression: 'Arrays.contains(user.department, "Engineering")',
+    expected: 'unevaluable',
+  },
+  { name: 'Arrays.size matching', expression: 'Arrays.size(user.roles) == 2', expected: 'match' },
+  {
+    name: 'Arrays.size non-matching',
+    expression: 'Arrays.size(user.roles) == 3',
+    expected: 'no-match',
+  },
+  {
+    name: 'Arrays.isEmpty matching',
+    expression: 'Arrays.isEmpty(user.roles) == false',
+    expected: 'match',
+  },
+  {
+    name: 'Arrays.isEmpty non-matching',
+    expression: 'Arrays.isEmpty(user.roles) == true',
+    expected: 'no-match',
+  },
+  {
+    name: 'Arrays.toCsvString matching',
+    expression: 'Arrays.toCsvString(user.roles) == "admin,dev"',
+    expected: 'match',
+  },
+  {
+    name: 'Arrays.toCsvString non-matching',
+    expression: 'Arrays.toCsvString(user.roles) == "admin;dev"',
     expected: 'no-match',
   },
   {
@@ -446,13 +612,19 @@ const OUTCOME_CASES: readonly OutcomeCase[] = [
 
   // --- rejection reason: unknown-fn -----------------------------------------
   {
+    // `String.replaceFirst` takes a regular expression in the language Okta's EL
+    // is built on, so it is refused rather than approximated — see
+    // SUPPORTED_FUNCTIONS' note. It stands in for the String namespace's
+    // unknown-fn route now that `String.substring` is implemented.
     name: 'reason unknown-fn: String function outside the allow-list',
-    expression: 'String.substring(user.email, 0, 3) == "use"',
+    expression: 'String.replaceFirst(user.email, "user", "x") == "x@example.com"',
     expected: 'unevaluable',
   },
   {
-    name: 'reason unknown-fn: Arrays namespace is deliberately absent',
-    expression: 'Arrays.contains(user.roles, "admin")',
+    // `Arrays.flatten` returns a collection rather than answering anything, so
+    // no rule condition ends in one and it is not listed.
+    name: 'reason unknown-fn: an Arrays helper outside the allow-list',
+    expression: 'Arrays.flatten(user.roles) == "admin"',
     expected: 'unevaluable',
   },
   {
@@ -786,13 +958,18 @@ const GATE_CASES: readonly GateCase[] = [
   },
   {
     name: 'rejects an unknown String function',
-    expression: 'String.substring(user.email, 0, 3) == "use"',
+    expression: 'String.replaceFirst(user.email, "user", "x") == "x@example.com"',
     expected: false,
   },
   {
-    name: 'rejects the Arrays namespace',
-    expression: 'Arrays.contains(user.roles, "admin")',
+    name: 'rejects an Arrays helper outside the allow-list',
+    expression: 'Arrays.flatten(user.roles) == "admin"',
     expected: false,
+  },
+  {
+    name: 'accepts the Arrays helpers that are implemented',
+    expression: 'Arrays.contains(user.roles, "admin")',
+    expected: true,
   },
   { name: 'rejects a bare unknown callee', expression: 'now() == "x"', expected: false },
   {

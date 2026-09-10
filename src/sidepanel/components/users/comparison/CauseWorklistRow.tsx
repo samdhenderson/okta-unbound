@@ -186,8 +186,13 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({
  * space or an empty string stays visible. Mirrors `ClauseChecklist`'s formatting;
  * `null` prints as `null`, which is a different fact from "no value".
  */
-const formatResolvedValue = (value: RuleExprValue): string =>
-  typeof value === 'string' ? JSON.stringify(value) : String(value);
+const formatResolvedValue = (value: RuleExprValue): string => {
+  // Mirrors `ClauseChecklist`'s formatter, arrays included: a multi-valued
+  // attribute is a list, and printing it through `String(value)` would make it
+  // indistinguishable from a single comma-containing string.
+  if (Array.isArray(value)) return `[${value.map(formatResolvedValue).join(', ')}]`;
+  return typeof value === 'string' ? JSON.stringify(value) : String(value);
+};
 
 /**
  * A name for every group id this row can name, widest source first.

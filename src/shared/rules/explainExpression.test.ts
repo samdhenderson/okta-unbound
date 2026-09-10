@@ -27,6 +27,11 @@ const user: OktaUser = {
     city: 'San Francisco',
     headcount: 42,
     isContractor: true,
+    // Present and explicitly `null`, and a multi-valued attribute: both are
+    // states the absent-attribute and array rows below have to be contrasted
+    // against.
+    nullable: null,
+    roles: ['admin', 'dev'],
   },
 };
 
@@ -126,8 +131,12 @@ describe('clauses the grammar gate rejects', () => {
     },
     {
       name: 'a function outside the allow-list',
-      expression: 'String.substring(user.email, 0, 3) == "ada"',
-      expressionText: 'String.substring(user.email, 0, 3) == "ada"',
+      // `String.replaceFirst` takes a regular expression in the language Okta's
+      // EL is built on, so the evaluator refuses it rather than approximating it
+      // as a literal replace. `String.substring` used to stand here and is now
+      // implemented.
+      expression: 'String.replaceFirst(user.email, "a", "b") == "ada"',
+      expressionText: 'String.replaceFirst(user.email, "a", "b") == "ada"',
       reasonCode: 'unknown-fn',
     },
     {
@@ -277,10 +286,17 @@ describe('nesting, parentheses and negation', () => {
     expect(summary.result).toEqual({ outcome: 'match' });
   });
 
-  it('distinguishes an absent attribute (null) from nothing resolvable', () => {
+  it('distinguishes an attribute present-and-null from one that is absent', () => {
+    // Present and explicitly null is a value the org holds, so it compares.
+    const present = explainRuleExpression('user.nullable == null', user);
+    expect(present.clauses[0].resolvedValue).toBeNull();
+    expect(present.clauses[0].status).toBe('pass');
+
+    // Absent is the evaluator not understanding the expression, and it must not
+    // be dressed up as a satisfied `== null` (D-114).
     const absent = explainRuleExpression('user.costCenter == null', user);
-    expect(absent.clauses[0].resolvedValue).toBeNull();
-    expect(absent.clauses[0].status).toBe('pass');
+    expect(absent.clauses[0].status).toBe('not-evaluated');
+    expect(absent.clauses[0].reasonCode).toBe('attribute-absent');
 
     const nothing = explainRuleExpression('isMemberOfGroupName("Engineering")', user);
     expect(nothing.clauses[0].resolvedValue).toBeUndefined();
@@ -360,8 +376,12 @@ describe('expressions that never become clauses', () => {
 
 describe('bounded output', () => {
   it('caps clause rows and says so', () => {
+    // Attributes the fixture actually carries: the subject is truncation and the
+    // whole-expression verdict, and reading three absent attributes would make
+    // every clause `not-evaluated` and the verdict `unevaluable` for reasons
+    // that have nothing to do with the cap.
     const { clauses, summary } = explainRuleExpression(
-      'user.a == "1" && user.b == "2" && user.c == "3"',
+      'user.department == "1" && user.title == "2" && user.city == "3"',
       user,
       { maxClauses: 2 },
     );
@@ -398,8 +418,11 @@ describe('an unresolvable clause is never a failure', () => {
     'session.amr == "pwd"',
     'user["department"] == "Engineering"',
     'user.department + "x" == "Engineeringx"',
-    'String.substring(user.email, 0, 3) == "ada"',
+    'String.replaceFirst(user.email, "a", "b") == "ada"',
+    'Arrays.flatten(user.roles)',
     'Arrays.contains(user.department, "Eng")',
+    'user.costCenter == "1234"',
+    'user.roles == "admin,dev"',
     'String.startsWith(user.headcount, "4")',
     'user.department > "A"',
     'user.department',

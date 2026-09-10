@@ -67,7 +67,11 @@ import type {
   GroupMembership,
   MembershipAttribution,
 } from '../types';
-import { tryEvaluateRuleExpression, type RuleMatchOutcome } from '../ruleEvaluator';
+import {
+  tryEvaluateRuleExpression,
+  type RuleGroupContext,
+  type RuleMatchOutcome,
+} from '../ruleEvaluator';
 import { conditionExpressionOf } from '../membership/ruleExpression';
 import { createLogger } from './logger';
 
@@ -164,6 +168,63 @@ function isUserExcludedFromRule(rule: MembershipRule, userId: string): boolean {
 }
 
 /**
+ * Whether a rule excludes the user by **group** — `conditions.people.groups.exclude`.
+ *
+ * The sibling of {@link isUserExcludedFromRule}, and it had no reader at all:
+ * the field was typed on `RuleConditions` and consulted by nothing, so a user
+ * inside an excluded group was credited to the very rule that excludes them.
+ * Same two shapes for the same reason — a formatted rule carries
+ * {@link MembershipRule.excludedGroupIds}, a raw one carries `conditions`.
+ *
+ * **Answerable only with a group context.** Without the user's complete group
+ * list there is no way to tell "not in any excluded group" from "we do not know
+ * which groups they are in", and the second must not be reported as the first.
+ * So a caller with no context gets `false` — the rule is not *established* to
+ * exclude them — and the evaluation that follows is where the uncertainty is
+ * reported, exactly as before this function existed.
+ *
+ * @param rule - The rule, raw or formatted.
+ * @param groups - The user's complete group list, or `undefined`.
+ * @returns `true` when the user is in a group the rule excludes.
+ */
+function isUserExcludedByGroup(
+  rule: MembershipRule,
+  groups: RuleGroupContext | undefined,
+): boolean {
+  if (!groups || groups.length === 0) return false;
+  const excluded = [
+    ...(rule.excludedGroupIds ?? []),
+    ...(rule.conditions?.people?.groups?.exclude ?? []),
+  ];
+  if (excluded.length === 0) return false;
+  const excludedIds = new Set(excluded);
+  return groups.some((group) => excludedIds.has(group.id));
+}
+
+/**
+ * Either exclusion route: the rule names this user, or names a group they are in.
+ *
+ * Exported because the comparison's access-cause classifier asks the same
+ * question of the same rules, and kept its own copy that read only
+ * `conditions.people.users.exclude` — so every cache-served `FormattedRule`
+ * answered `false` there, which is precisely the defect D-048 removed from this
+ * module. Two implementations of "does this rule exclude them" is two answers.
+ *
+ * @param rule - The rule, raw or formatted.
+ * @param userId - The user being attributed.
+ * @param groups - The user's complete group list, or `undefined` when the caller
+ *   has none; the group route is then not answerable and is not claimed.
+ * @returns `true` when the rule is established to exclude this user.
+ */
+export function isUserExcluded(
+  rule: MembershipRule,
+  userId: string,
+  groups: RuleGroupContext | undefined,
+): boolean {
+  return isUserExcludedFromRule(rule, userId) || isUserExcludedByGroup(rule, groups);
+}
+
+/**
  * Legacy coarse scorer, used only for candidate rules whose conditions could not
  * be evaluated.
  *
@@ -247,6 +308,30 @@ export function unclassifiedMemberships(groups: OktaGroup[]): GroupMembership[] 
   }));
 }
 
+/** Options for {@link analyzeMemberships}. */
+export interface MembershipAnalysisOptions {
+  /**
+   * The user's **complete** group list, which turns every `isMemberOf*` clause
+   * and every group-based rule exclusion from an unevaluable shrug into a real
+   * verdict.
+   *
+   * ## Opt-in on purpose — never derived from the `groups` argument
+   *
+   * It would be tempting to build this from the `groups` this function is
+   * already given, and for the user-detail path that is exactly the right list.
+   * But `shared/membership/groupSource` and `shared/membership/memberSourceIndex`
+   * both call this function with a **one-group** array — they are classifying one
+   * member of one group, not a person's whole access — and deriving a context
+   * there would turn every other group that member belongs to into a confident
+   * "they are not in it". A wrong answer where there is currently an honest
+   * unevaluable.
+   *
+   * So the caller states it, and only a caller holding the whole set may. Omit it
+   * rather than passing a subset; see {@link RuleGroupContext}.
+   */
+  readonly groups?: RuleGroupContext;
+}
+
 /**
  * Classify each of a user's groups as `RULE_BASED` or `DIRECT`.
  *
@@ -254,8 +339,9 @@ export function unclassifiedMemberships(groups: OktaGroup[]): GroupMembership[] 
  * 1. `APP_GROUP`s are always application-managed → `RULE_BASED`, no rule,
  *    `attribution: 'exact'`.
  * 2. A group with no targeting ACTIVE rule → `DIRECT` (`exact`).
- * 3. A user excluded from EVERY targeting ACTIVE rule, yet still in the group →
- *    `DIRECT` (`exact`) — they were added manually despite the rules.
+ * 3. A user excluded from EVERY targeting ACTIVE rule — by name, or by being in
+ *    a group the rule excludes — yet still in the group → `DIRECT` (`exact`);
+ *    they were added manually despite the rules.
  * 4. The user satisfies one or more non-excluding ACTIVE rules' conditions →
  *    `RULE_BASED` (`exact`), attributed to **all** of them. Two rules really can
  *    both put the same user in the same group; reporting only the first would be
@@ -273,6 +359,8 @@ export function unclassifiedMemberships(groups: OktaGroup[]): GroupMembership[] 
  * @param groups - The user's groups (raw Okta group objects).
  * @param rules - Candidate group rules to attribute memberships to.
  * @param user - The user whose memberships are being analysed.
+ * @param options - See {@link MembershipAnalysisOptions}. Supplying `groups` is
+ *   what lets an `isMemberOf*` rule be answered rather than deferred.
  * @returns One {@link GroupMembership} per input group, annotated with the
  *   evidence behind its classification and (when rule-based) the attributed
  *   rules.
@@ -281,6 +369,7 @@ export function analyzeMemberships(
   groups: OktaGroup[],
   rules: MembershipRule[],
   user: OktaUser,
+  options: MembershipAnalysisOptions = {},
 ): GroupMembership[] {
   log.debug('Analyzing memberships for user:', user.id);
   log.debug(
@@ -291,7 +380,7 @@ export function analyzeMemberships(
   );
   log.debug('Total groups:', groups.length);
 
-  return groups.map((group) => ({ group, ...classify(group, rules, user) }));
+  return groups.map((group) => ({ group, ...classify(group, rules, user, options.groups) }));
 }
 
 /**
@@ -302,7 +391,12 @@ export function analyzeMemberships(
  * Logging here is reason codes and identifiers only — never condition text,
  * group names, or resolved profile values.
  */
-function classify(group: OktaGroup, rules: MembershipRule[], user: OktaUser): Classification {
+function classify(
+  group: OktaGroup,
+  rules: MembershipRule[],
+  user: OktaUser,
+  groupContext: RuleGroupContext | undefined,
+): Classification {
   // 1. APP_GROUPs are always managed by the application (rule-based), and no
   //    *group rule* explains them, so there is nothing to attribute.
   if (group.type === 'APP_GROUP') {
@@ -326,7 +420,7 @@ function classify(group: OktaGroup, rules: MembershipRule[], user: OktaUser): Cl
   }
 
   // 3. Excluded from every targeting rule but still in the group = manual add.
-  const candidates = targetingRules.filter((rule) => !isUserExcludedFromRule(rule, user.id));
+  const candidates = targetingRules.filter((rule) => !isUserExcluded(rule, user.id, groupContext));
 
   if (candidates.length === 0) {
     log.debug(`Group ${group.id}: DIRECT (user excluded from all ${targetingRules.length} rules)`);
@@ -345,7 +439,7 @@ function classify(group: OktaGroup, rules: MembershipRule[], user: OktaUser): Cl
   // confidently wrong answer.
   const outcomes = candidates.map((rule): [MembershipRule, RuleMatchOutcome] => [
     rule,
-    tryEvaluateRuleExpression(conditionExpressionOf(rule), user),
+    tryEvaluateRuleExpression(conditionExpressionOf(rule), user, groupContext),
   ]);
 
   // 4. Every rule the user provably satisfies — not just the first one found.

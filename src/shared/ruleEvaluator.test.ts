@@ -57,6 +57,10 @@ describe('tryEvaluateRuleExpression', () => {
       title: 'Developer',
       city: 'San Francisco',
       employeeNumber: 42,
+      // Present and explicitly `null`. The absent/null distinction is the whole
+      // subject of two tests below, so the fixture has to carry both states —
+      // `division` and `costCenter` are deliberately NOT here.
+      nullable: null,
     },
   } as unknown as OktaUser;
 
@@ -113,10 +117,19 @@ describe('tryEvaluateRuleExpression', () => {
       ).toBe('match');
     });
 
-    it('returns match for an absent attribute compared against null', () => {
-      // Distinct from the no-match row below: an absent attribute reads as null,
-      // so `== null` is a satisfied condition, not an unresolvable one.
-      expect(tryEvaluateRuleExpression('user.division == null', user)).toBe('match');
+    it('returns match for an attribute present and explicitly null', () => {
+      // The counterpart of the absent-attribute case below, and the reason the
+      // two must not be one branch: a value the org actually holds licenses a
+      // comparison, and `null == null` is a satisfied condition.
+      expect(tryEvaluateRuleExpression('user.nullable == null', user)).toBe('match');
+    });
+
+    it('resolves a top-level user field, not just the profile', () => {
+      // `user.status` is an ordinary thing to write in a rule, and it lives on
+      // the user rather than in `profile`. Reading only `profile` made this
+      // `null == "ACTIVE"` → a confident `no-match` for every user in the org
+      // (D-114).
+      expect(tryEvaluateRuleExpression('user.status == "ACTIVE"', user)).toBe('match');
     });
   });
 
@@ -134,8 +147,8 @@ describe('tryEvaluateRuleExpression', () => {
       ).toBe('no-match');
     });
 
-    it('returns no-match when an attribute is absent (null) rather than guessing', () => {
-      expect(tryEvaluateRuleExpression('user.costCenter == "1234"', user)).toBe('no-match');
+    it('returns no-match for an unsatisfied top-level user field', () => {
+      expect(tryEvaluateRuleExpression('user.status == "SUSPENDED"', user)).toBe('no-match');
     });
 
     it('returns no-match for an unsatisfied String function', () => {
@@ -193,11 +206,21 @@ describe('tryEvaluateRuleExpression', () => {
       expect(tryEvaluateRuleExpression('app.clientId == "x"', user)).toBe('unevaluable');
     });
 
+    it('is unevaluable for an attribute the profile does not carry', () => {
+      // Not `no-match`. The evaluator did not understand the expression; it did
+      // not establish that the user fails it (D-114).
+      expect(tryEvaluateRuleExpression('user.costCenter == "1234"', user)).toBe('unevaluable');
+      expect(tryEvaluateRuleExpression('user.division == null', user)).toBe('unevaluable');
+    });
+
     it('is unevaluable for a function outside the allow-list', () => {
-      expect(tryEvaluateRuleExpression('String.substring(user.email, 0, 3) == "ada"', user)).toBe(
-        'unevaluable',
-      );
-      expect(tryEvaluateRuleExpression('Arrays.contains(user.department, "Eng")', user)).toBe(
+      // `String.replaceFirst` takes a regex in the language Okta's EL is built
+      // on, so it is refused rather than approximated; `Arrays.flatten` returns a
+      // collection rather than answering anything.
+      expect(
+        tryEvaluateRuleExpression('String.replaceFirst(user.email, "a", "b") == "x"', user),
+      ).toBe('unevaluable');
+      expect(tryEvaluateRuleExpression('Arrays.flatten(user.roles) == "Eng"', user)).toBe(
         'unevaluable',
       );
       expect(tryEvaluateRuleExpression('Time.now() == "x"', user)).toBe('unevaluable');
@@ -263,7 +286,7 @@ describe('the grammar gate, over whole expressions', () => {
     // The substring-scan gate this replaced returned true here, letting the
     // evaluator throw internally and report a misleading `false`.
     expect(gateAccepts('user.department + "x" == "y"')).toBe(false);
-    expect(gateAccepts('String.substring(user.email, 0, 3) == "ada"')).toBe(false);
+    expect(gateAccepts('String.replaceFirst(user.email, "a", "b") == "x"')).toBe(false);
   });
 
   it('rejects unparseable and empty input', () => {
@@ -295,6 +318,11 @@ describe('supported subset', () => {
       employeeNumber: 42,
       active: true,
       roles: ['admin', 'dev'],
+      // An object-valued attribute, so the refusal to read `[object Object]` has
+      // something real to refuse, and an attribute whose name begins with a word
+      // operator, for the boundary check.
+      manager: { id: '00uFAKEMANAGER' },
+      notes: null,
     },
   } as unknown as OktaUser;
 
@@ -330,8 +358,33 @@ describe('supported subset', () => {
     expect(tryEvaluateRuleExpression('!user.active', user)).toBe('no-match');
   });
 
-  it('stringifies a non-scalar profile value rather than failing', () => {
-    expect(tryEvaluateRuleExpression('user.roles == "admin,dev"', user)).toBe('match');
+  it('refuses to compare a multi-valued attribute to its joined string', () => {
+    // This used to answer `match`, on the strength of `String(['admin','dev'])`.
+    // A rule author writing `== "admin,dev"` is not asking about the array, and
+    // an org where the joined form coincides would have been told the wrong
+    // thing with confidence.
+    expect(tryEvaluateRuleExpression('user.roles == "admin,dev"', user)).toBe('unevaluable');
+  });
+
+  it('answers a multi-valued attribute through the Arrays helpers instead', () => {
+    expect(tryEvaluateRuleExpression('Arrays.contains(user.roles, "admin")', user)).toBe('match');
+    expect(tryEvaluateRuleExpression('Arrays.contains(user.roles, "auditor")', user)).toBe(
+      'no-match',
+    );
+    expect(tryEvaluateRuleExpression('Arrays.size(user.roles) == 2', user)).toBe('match');
+  });
+
+  it('refuses an object-valued attribute rather than reading [object Object]', () => {
+    expect(tryEvaluateRuleExpression('user.manager == "[object Object]"', user)).toBe(
+      'unevaluable',
+    );
+  });
+
+  it('negates with the NOT word form as well as with !', () => {
+    expect(tryEvaluateRuleExpression('NOT user.active', user)).toBe('no-match');
+    expect(tryEvaluateRuleExpression('not user.active', user)).toBe('no-match');
+    // The identifier boundary check keeps an attribute starting with `not` whole.
+    expect(tryEvaluateRuleExpression('user.notes == null', user)).toBe('match');
   });
 
   // The Kleene core, observed through `evaluateRuleNode` — the same walk the
@@ -513,6 +566,9 @@ describe('tryEvaluateRuleExpressionDetailed', () => {
       department: 'Engineering',
       city: 'San Francisco',
       employeeNumber: 42,
+      // A multi-valued attribute, so the `operand-type` row below is refusing an
+      // array rather than reporting one that is simply absent.
+      roles: ['admin', 'dev'],
     },
   } as unknown as OktaUser;
 
@@ -568,7 +624,10 @@ describe('tryEvaluateRuleExpressionDetailed', () => {
     { expression: 'user.department ==', reasonCode: 'parse-error' },
     { expression: 'user.department + "x" == "Engineeringx"', reasonCode: 'unsupported-operator' },
     { expression: 'isMemberOfGroupName("Eng")', reasonCode: 'group-membership-fn' },
-    { expression: 'Arrays.contains(user.department, "Eng")', reasonCode: 'unknown-fn' },
+    { expression: 'Arrays.flatten(user.roles)', reasonCode: 'unknown-fn' },
+    { expression: 'Arrays.contains(user.department, "Eng")', reasonCode: 'operand-type' },
+    { expression: 'user.costCenter == "1234"', reasonCode: 'attribute-absent' },
+    { expression: 'user.roles == "admin,dev"', reasonCode: 'operand-type' },
     { expression: 'String.startsWith(user.firstName)', reasonCode: 'fn-arity' },
     { expression: 'app.clientId == "x"', reasonCode: 'unsupported-node' },
     { expression: 'user["department"] == "Engineering"', reasonCode: 'unsupported-node' },

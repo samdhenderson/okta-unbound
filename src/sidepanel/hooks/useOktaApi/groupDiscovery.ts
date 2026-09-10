@@ -6,7 +6,7 @@
 import type { CoreApi } from './core';
 import type { OktaGroup, OktaGroupRule, FormattedRule } from '../../../shared/types';
 import { RulesCache } from '../../../shared/rulesCache';
-import { detectConflicts, formatRuleForDisplay } from '../../../shared/ruleUtils';
+import { formatRulesWithGroupIndex, loadCachedGroupIndex } from '../fetchGroupRulesRequest';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import { oktaGroupRuleSchema } from '../../../shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
@@ -17,10 +17,13 @@ const log = createLogger('useOktaApi');
  * Build read-only group discovery/search operations.
  *
  * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @param oktaOrigin - The connected org's origin, scoping the snapshot read that
+ *   names the groups a rule references. Absent, the rules still load and their
+ *   target groups simply label as ids.
  * @returns Group listing, member-count, org-wide + per-group rules, search, and
  * by-id lookups.
  */
-export function createGroupDiscoveryOperations(coreApi: CoreApi) {
+export function createGroupDiscoveryOperations(coreApi: CoreApi, oktaOrigin?: string | null) {
   /**
    * List every group, following `Link` pagination (200 per page, `expand=stats`).
    *
@@ -133,8 +136,14 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
       });
     }
 
-    const conflicts = detectConflicts(rawRules);
-    const rules = rawRules.map((rule) => formatRuleForDisplay(rule, undefined, conflicts));
+    // Formatted against the org snapshot, exactly as `fetchGroupRulesRequest`
+    // does — because both write the same `RulesCache`, and this path used to
+    // bank a names-less payload that then served the Rules tab for the whole
+    // five-minute TTL: target groups as raw ids, and `missingGroupIds` absent so
+    // a rule pointing at a deleted group raised no warning at all. Whichever
+    // fetch ran first decided which of the two the admin saw.
+    const groupIndex = await loadCachedGroupIndex(oktaOrigin);
+    const { rules, conflicts } = formatRulesWithGroupIndex(rawRules, groupIndex);
     await RulesCache.set(
       rules,
       rawRules,

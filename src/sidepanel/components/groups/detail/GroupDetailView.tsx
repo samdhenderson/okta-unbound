@@ -66,7 +66,7 @@
  * logic even though the modal's mutation state lives in a separate hook
  * instance from the roster it writes into.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import GroupOverviewPane from './GroupOverviewPane';
 import GroupMembersSection from './GroupMembersSection';
 import GroupAccessSection from './GroupAccessSection';
@@ -84,6 +84,8 @@ import { useGroupSource } from '../../../hooks/useGroupSource';
 import { useOktaApi } from '../../../hooks/useOktaApi';
 import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
+import { useGroupNameResolver } from '../../../hooks/useGroupNameResolver';
+import { extractReferencedGroupIds } from '../../../../shared/rules/groupRuleIndex';
 import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
 import { useGroupComparison } from '../../../hooks/useGroupComparison';
 import { useMemberMfaScan } from '../../../hooks/useMemberMfaScan';
@@ -236,6 +238,36 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   const source = useGroupSource(targetTabId ?? undefined);
   const references = useGroupRuleReferences(group.id, targetTabId ?? undefined, isActive);
   const accessGrants = useGroupAccessGrants(group.id, targetTabId ?? undefined, isActive);
+
+  /*
+    Names for the group ids inside the rule conditions this rung prints. The
+    rules reaching this view come from `groupDiscovery.fetchAndCacheAllGroupRules`,
+    which formats with `formatRuleForDisplay` and therefore never populates
+    `allGroupNamesMap` — so the section's own resolver was always `undefined` and
+    every referenced group read as a raw id. This is where the names actually
+    come from.
+  */
+  const rulesOnScreen = useMemo(
+    () => [...source.feedingRules, ...references.rules],
+    [source.feedingRules, references.rules],
+  );
+  const { resolveGroupName: resolveRuleGroupName, request: requestGroupNames } =
+    useGroupNameResolver({ targetTabId, oktaOrigin, enabled: isActive });
+
+  const referencedGroupIds = useMemo(
+    () => [
+      ...new Set(
+        rulesOnScreen.flatMap((rule) =>
+          extractReferencedGroupIds(rule.conditionExpression || rule.condition),
+        ),
+      ),
+    ],
+    [rulesOnScreen],
+  );
+
+  useEffect(() => {
+    if (referencedGroupIds.length > 0) requestGroupNames(referencedGroupIds);
+  }, [referencedGroupIds, requestGroupNames]);
   // `resummarize` keeps the membership-source meter honest after a write. The
   // cache invalidation that rides every membership write fixes the *next* read;
   // the meter above this section is React state, so without this it would keep
@@ -507,6 +539,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                   referencingStatus={references.status}
                   referencingError={references.error}
                   onNavigateToRule={onNavigateToRule}
+                  resolveGroupName={resolveRuleGroupName}
                 />
               </div>
             )}

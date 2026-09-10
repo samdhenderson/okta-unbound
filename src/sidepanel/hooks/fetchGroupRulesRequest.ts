@@ -207,50 +207,17 @@ export async function fetchGroupRulesRequest(
     const groupIndex = resolveGroupNames
       ? await loadCachedGroupIndex(origin)
       : { nameById: new Map<string, string>(), idsHeld: new Set<string>(), complete: false };
-    const groupNameMap = groupIndex.nameById;
 
-    // 3. Detect conflicts between active rules (O(n²), active-only).
-    const conflicts = detectConflicts(rules);
-
-    // 4. Format each rule for display, layering on the resolved group names.
-    //    Target ids with no group behind them are stamped on here too — a set
-    //    difference over rows already in hand, suppressed wholesale unless the
-    //    group walk finished (D-061). `findRulesWithMissingTargets` owns the
-    //    gate; this is only the projection onto its input shape.
-    const missingTargetsByRule = new Map<string, string[]>(
-      findRulesWithMissingTargets(
-        rules.map((rule) => ({
-          id: rule.id,
-          name: rule.name,
-          groupIds: rule.actions?.assignUserToGroups?.groupIds ?? [],
-        })),
-        groupIndex.idsHeld,
-        groupIndex.complete,
-      ).map((finding) => [finding.id, finding.missingGroupIds]),
+    // 3+4. Detect conflicts, then format each rule against the snapshot's index.
+    //      Both steps live in `formatRulesWithGroupIndex` so the other org-wide
+    //      rules fetch — `groupDiscovery.fetchAndCacheAllGroupRules`, which writes
+    //      the same `RulesCache` — produces the same shape rather than a
+    //      names-less one (C4).
+    const { rules: formattedRules, conflicts } = formatRulesWithGroupIndex(
+      rules,
+      groupIndex,
+      currentGroupId,
     );
-
-    const formattedRules: FormattedRule[] = rules.map((rule) => {
-      const base = formatRuleForDisplay(rule, currentGroupId, conflicts);
-      const groupNames = base.groupIds.map((id) => groupNameMap.get(id) || id);
-      // Stamped whenever the question could be *asked*, so `[]` (asked, clean)
-      // stays distinguishable from `undefined` (never asked). A surface that
-      // could not tell them apart would have to treat a half-read inventory as
-      // a clean bill of health.
-      const missingGroupIds = groupIndex.complete
-        ? (missingTargetsByRule.get(rule.id) ?? [])
-        : undefined;
-
-      // Map of ALL referenced group ids (targets + condition) → resolved names.
-      const allGroupNamesMap: Record<string, string> = {};
-      new Set(groupIdsReferencedBy(rule)).forEach((id) => {
-        const name = groupNameMap.get(id);
-        if (name) allGroupNamesMap[id] = name;
-      });
-
-      return missingGroupIds
-        ? { ...base, groupNames, allGroupNamesMap, missingGroupIds }
-        : { ...base, groupNames, allGroupNamesMap };
-    });
 
     const activeCount = rules.filter((r) => r.status === 'ACTIVE').length;
     const stats: RuleStats = {
@@ -269,4 +236,73 @@ export async function fetchGroupRulesRequest(
       error: error instanceof Error ? error.message : 'Failed to fetch rules',
     };
   }
+}
+
+/**
+ * Turn raw Okta rules into display rules, layering on everything the org snapshot
+ * knows about the groups they reference.
+ *
+ * Extracted so the two org-wide rules fetches cannot disagree.
+ * {@link fetchGroupRulesRequest} and `groupDiscovery.fetchAndCacheAllGroupRules`
+ * both write the same `RulesCache`, but the latter formatted with a bare
+ * `formatRuleForDisplay` — which sets no `groupNames`, no `allGroupNamesMap` and
+ * no `missingGroupIds`. Whichever of the two happened to run first won the
+ * five-minute TTL, so the Rules tab showed target groups as names or as raw ids
+ * depending on which surface the admin had opened, and a rule pointing at a
+ * deleted group raised its warning on one path and stayed silent on the other.
+ *
+ * @param rules - Validated raw rules, in Okta's shape.
+ * @param groupIndex - The snapshot's id→name index; see {@link CachedGroupIndex}.
+ *   An empty one is legitimate and simply yields ids as their own labels.
+ * @param currentGroupId - Marks `affectsCurrentGroup`; omit off a group rung.
+ * @returns The display rules and the conflicts detected across them.
+ */
+export function formatRulesWithGroupIndex(
+  rules: readonly OktaGroupRule[],
+  groupIndex: CachedGroupIndex,
+  currentGroupId?: string,
+): { rules: FormattedRule[]; conflicts: RuleConflict[] } {
+  const groupNameMap = groupIndex.nameById;
+  const conflicts = detectConflicts(rules as OktaGroupRule[]);
+
+  // Target ids with no group behind them are stamped on here — a set difference
+  // over rows already in hand, suppressed wholesale unless the group walk
+  // finished (D-061). `findRulesWithMissingTargets` owns the gate; this is only
+  // the projection onto its input shape.
+  const missingTargetsByRule = new Map<string, string[]>(
+    findRulesWithMissingTargets(
+      rules.map((rule) => ({
+        id: rule.id,
+        name: rule.name,
+        groupIds: rule.actions?.assignUserToGroups?.groupIds ?? [],
+      })),
+      groupIndex.idsHeld,
+      groupIndex.complete,
+    ).map((finding) => [finding.id, finding.missingGroupIds]),
+  );
+
+  const formatted = rules.map((rule) => {
+    const base = formatRuleForDisplay(rule, currentGroupId, conflicts);
+    const groupNames = base.groupIds.map((id) => groupNameMap.get(id) || id);
+    // Stamped whenever the question could be *asked*, so `[]` (asked, clean)
+    // stays distinguishable from `undefined` (never asked). A surface that could
+    // not tell them apart would have to treat a half-read inventory as a clean
+    // bill of health.
+    const missingGroupIds = groupIndex.complete
+      ? (missingTargetsByRule.get(rule.id) ?? [])
+      : undefined;
+
+    // Map of ALL referenced group ids (targets + condition) → resolved names.
+    const allGroupNamesMap: Record<string, string> = {};
+    new Set(groupIdsReferencedBy(rule)).forEach((id) => {
+      const name = groupNameMap.get(id);
+      if (name) allGroupNamesMap[id] = name;
+    });
+
+    return missingGroupIds
+      ? { ...base, groupNames, allGroupNamesMap, missingGroupIds }
+      : { ...base, groupNames, allGroupNamesMap };
+  });
+
+  return { rules: formatted, conflicts };
 }

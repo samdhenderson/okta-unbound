@@ -47,6 +47,7 @@ import CurrentGroupRuleRelations from './rules/CurrentGroupRuleRelations';
 import RuleConsolidationModal from './RuleConsolidationModal';
 import type { FormattedRule, GroupRuleStatus, OktaGroupRule } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
+import { extractReferencedGroupIds } from '../../shared/rules/groupRuleIndex';
 import { findMergeableRuleGroups, type MergeableRuleGroup } from '../../shared/rules/consolidation';
 import { sortRules, type RuleSortMode } from '../../shared/rules/similarity';
 import { countCurrentGroupRuleRelations } from '../../shared/rules/currentGroupRelations';
@@ -59,6 +60,7 @@ import { useRulesData } from '../hooks/useRulesData';
 import { useRuleLifecycle } from '../hooks/useRuleLifecycle';
 import { useRuleConsolidation } from '../hooks/useRuleConsolidation';
 import { useViewStack } from '../hooks/useViewStack';
+import { useGroupNameResolver } from '../hooks/useGroupNameResolver';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import type { RuleImpactInput } from '../hooks/useOktaApi/ruleImpact';
 import { TabStateManager, saveRulesTabState } from '../../shared/tabState/tabStateManager';
@@ -461,6 +463,32 @@ const RulesTab: React.FC<RulesTabProps> = ({
     : null;
 
   /*
+    Names the groups the open rule's condition points at. A condition that says
+    `isMemberOfGroup("00g…")` is about a group the reader is not looking at, so
+    nothing on this rung already holds its name — which is why this rung, alone
+    of the four that print condition text, needs the resolver's fetch rung to be
+    able to name anything at all. Bounded to the one rule on screen.
+  */
+  const { resolveGroupName: resolveRuleGroupName, request: requestGroupNames } =
+    useGroupNameResolver({ targetTabId, oktaOrigin, enabled: isActive });
+
+  const referencedGroupIds = React.useMemo(
+    () =>
+      openRule
+        ? [
+            ...new Set(
+              extractReferencedGroupIds(openRule.conditionExpression || openRule.condition),
+            ),
+          ]
+        : [],
+    [openRule],
+  );
+
+  useEffect(() => {
+    if (referencedGroupIds.length > 0) requestGroupNames(referencedGroupIds);
+  }, [referencedGroupIds, requestGroupNames]);
+
+  /*
     The header's identity, built by a pure per-entity function beside its entity
     (ADR-0032 §2). Its presence is also what every branch in the header below switches
     on — one test for "am I on the detail rung", rather than four.
@@ -729,6 +757,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
             onConfirmActivate={handleConfirmActivate}
             onRequestDeactivate={() => handleRequestDeactivate(openRule.id)}
             onAddTargetGroup={() => consolidation.openAddTarget(openRule)}
+            resolveGroupName={resolveRuleGroupName}
             sticky={isActive}
           />
         </div>

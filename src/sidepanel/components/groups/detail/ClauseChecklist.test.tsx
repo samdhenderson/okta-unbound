@@ -15,6 +15,10 @@ const user: OktaUser = {
     title: 'Intern',
     // A custom profile attribute whose value really is null (not merely absent).
     projectCode: null,
+    // The OR-grouping case below is about how alternatives are rendered, not
+    // about attribute presence — so the attributes it reads are on the fixture.
+    employeeType: 'CONTRACTOR',
+    countryCode: 'IE',
   },
 };
 

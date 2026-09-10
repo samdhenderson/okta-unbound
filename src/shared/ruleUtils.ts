@@ -59,7 +59,32 @@ export function expressionText(rule: OktaGroupRule): string {
  * @returns The excluded user ids, possibly empty.
  */
 function excludedUserIdsOf(rule: OktaGroupRule): string[] {
-  const value: unknown = rule.conditions?.people?.users?.exclude;
+  return stringIdsOf(rule.conditions?.people?.users?.exclude);
+}
+
+/**
+ * The group ids a rule excludes — `conditions.people.groups.exclude`.
+ *
+ * The twin of {@link excludedUserIdsOf}, and it had no formatted carrier at all
+ * until now: the field was typed on `RuleConditions` and read by nothing, so a
+ * user inside an excluded group was still credited to the rule that excludes
+ * them. Same defensive read, same reason (D-048's twin).
+ *
+ * @param rule - The rule whose exclusion list to read.
+ * @returns The excluded group ids, possibly empty.
+ */
+function excludedGroupIdsOf(rule: OktaGroupRule): string[] {
+  return stringIdsOf(rule.conditions?.people?.groups?.exclude);
+}
+
+/**
+ * Narrow an untrusted `exclude` list to the ids that really are strings.
+ *
+ * A non-array, or an array holding anything else, degrades to the rows that *are*
+ * strings — never a throw out of the caller's `.map`, which would cost the whole
+ * rules surface for one bad row.
+ */
+function stringIdsOf(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
 }
 
@@ -195,6 +220,7 @@ export function formatRuleForDisplay(
     groupIds,
     userAttributes,
     excludedUserIds: excludedUserIdsOf(rule),
+    excludedGroupIds: excludedGroupIdsOf(rule),
     created: rule.created,
     lastUpdated: rule.lastUpdated,
     affectsCurrentGroup,

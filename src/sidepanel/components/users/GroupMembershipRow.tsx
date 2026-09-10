@@ -28,7 +28,7 @@
  * (ADR-0017).
  */
 import React, { useId } from 'react';
-import { Badge, IconButton, ListRow, OpenInOktaLink } from '../shared';
+import { Badge, IconButton, ListRow, OpenInOktaLink, type GroupNameResolver } from '../shared';
 import Icon from '../shared/Icon';
 import MembershipRuleEvidence from './MembershipRuleEvidence';
 import MembershipProofAction, { type MembershipProofOutcome } from './GroupMembershipsListProof';
@@ -57,6 +57,12 @@ export interface GroupMembershipRowProps {
    * they failed (ADR-0021).
    */
   groupContext?: RuleGroupContext;
+  /**
+   * Names the group ids {@link groupContext} cannot — the ones this user is not
+   * in. Built once by the pane, like the context beside it, and passed through
+   * unchanged: the row fetches nothing.
+   */
+  resolveGroupName?: GroupNameResolver;
   /** Whether this group is the one being browsed elsewhere in the panel. */
   isCurrentGroup: boolean;
   /** Whether the disclosure is open. Owned by the pane, so filtering cannot close a row. */
@@ -91,6 +97,7 @@ const GroupMembershipRow: React.FC<GroupMembershipRowProps> = ({
   membership,
   user,
   groupContext,
+  resolveGroupName,
   isCurrentGroup,
   expanded,
   onToggle,
@@ -140,6 +147,7 @@ const GroupMembershipRow: React.FC<GroupMembershipRowProps> = ({
                   rule={rule}
                   user={user}
                   groupContext={groupContext}
+                  resolveGroupName={resolveGroupName}
                 />
               ))}
 

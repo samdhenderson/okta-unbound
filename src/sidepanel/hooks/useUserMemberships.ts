@@ -57,6 +57,7 @@ import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
 import { getOrFetch, peek, setEntry, invalidate } from '../cache/entityCache';
 import { cacheKeys, RULE_INVENTORY_KEY } from '../cache/keys';
 import { analyzeMemberships, unclassifiedMemberships } from '../../shared/utils/membershipAnalysis';
+import { groupContextOfGroups } from '../../shared/membership/groupContext';
 import { createLogger } from '../../shared/utils/logger';
 import { useOktaApi } from './useOktaApi';
 import { getUserGroupsRequest } from './getUserGroupsRequest';
@@ -261,20 +262,24 @@ export function useUserMemberships({
    * Finding nothing deliberately leaves the state alone rather than writing
    * `unavailable` — "nobody has fetched these yet" is not "the fetch failed", and
    * only a real attempt may claim the latter.
+   *
+   * @returns Whether the inventory was adopted. `false` means neither local
+   *   source held it, which is {@link ensureRuleInventory}'s cue to go and ask.
    */
-  const adoptCachedRuleInventory = useCallback(async (): Promise<void> => {
+  const adoptCachedRuleInventory = useCallback(async (): Promise<boolean> => {
     const cached = peek<FormattedRule[] | null>(RULE_INVENTORY_KEY);
     if (cached) {
       setRuleInventory({ status: 'available', rules: cached });
-      return;
+      return true;
     }
     const derived = await deriveSnapshotRuleInventory();
-    if (!derived) return;
+    if (!derived) return false;
     // Publish the join, not just the state: the next consumer — another user's
     // load, or this hook after a remount — then peeks it instead of paying the
     // quadratic conflict pass again.
     setEntry(RULE_INVENTORY_KEY, derived);
     setRuleInventory({ status: 'available', rules: derived });
+    return true;
   }, [deriveSnapshotRuleInventory]);
 
   /**
@@ -320,6 +325,28 @@ export function useUserMemberships({
     return rules;
   }, [deriveSnapshotRuleInventory, makeApiRequest]);
 
+  /**
+   * Get the rule inventory from wherever it is, asking Okta only if nowhere
+   * local has it.
+   *
+   * The third rung of the certainty ladder. Adopting was previously the whole of
+   * the memberships-cache-hit path, and it can legitimately find nothing: the
+   * entity cache is per-session and the snapshot walk may not have finished (or
+   * started) for this org. When it did, the state stayed `unresolved` **for the
+   * life of the hook** — nothing else on that path ever set it — so every
+   * downstream "why is this person in this group" answer read "not computed"
+   * indefinitely, on a screen that was otherwise fully loaded.
+   *
+   * The fall-through costs one paginated `GET /api/v1/groups/rules`, shared
+   * org-wide under {@link RULE_INVENTORY_KEY} and coalesced through the entity
+   * cache, so a second user's load pays nothing. That is cheap enough that
+   * leaving the panel unable to answer was never the better trade.
+   */
+  const ensureRuleInventory = useCallback(async (): Promise<void> => {
+    if (await adoptCachedRuleInventory()) return;
+    await loadRuleInventory();
+  }, [adoptCachedRuleInventory, loadRuleInventory]);
+
   const loadMemberships = useCallback(
     async (user: OktaUser, options?: { force?: boolean }) => {
       if (!targetTabId) {
@@ -342,12 +369,17 @@ export function useUserMemberships({
           // The analysis is cached; the inventory is per-instance state, so
           // without this a cache hit left it `unresolved` forever and every
           // downstream "why not" answer degraded to "the rules could not be
-          // loaded". Adopt-only, never fetch: this path must issue no request
-          // (pinned by `useUserMemberships.test.tsx`) and must not reintroduce
-          // the loading flash it exists to avoid, so it is not awaited either.
-          // Nothing cached leaves the state `unresolved`, which reports as "not
-          // computed" rather than as a failure that never happened.
-          void adoptCachedRuleInventory();
+          // loaded".
+          //
+          // Local sources first, and the rules listing only if neither holds it.
+          // This path used to be adopt-only, on the reasoning that a cache hit
+          // must issue no request — but "no request" also meant "no answer",
+          // permanently, because nothing else on this path ever resolves the
+          // state. One shared, coalesced, paginated rules listing is the
+          // cheapest call the panel makes, and an unanswerable screen is not a
+          // saving. Not awaited, so the cached analysis still renders without a
+          // loading flash.
+          void ensureRuleInventory();
           return;
         }
       }
@@ -396,7 +428,18 @@ export function useUserMemberships({
               return unclassifiedMemberships(rawGroups);
             }
 
-            return analyzeMemberships(rawGroups, rules, user);
+            // `rawGroups` IS the user's complete group list — `getUserGroupsRequest`
+            // followed every `Link` page to build it, and the classifier is about
+            // to run over exactly these rows. Handing it back as the evaluator's
+            // group context is what lets an `isMemberOf*` rule, and a rule that
+            // excludes a group this user is in, produce a verdict instead of an
+            // unevaluable. Without it the row header fell back to the coarse
+            // substring scorer while the row's own disclosure — fed the same list
+            // by `GroupMembershipsList` one component away — answered the
+            // identical clause correctly.
+            return analyzeMemberships(rawGroups, rules, user, {
+              groups: groupContextOfGroups(rawGroups),
+            });
           },
           { force: options?.force },
         );
@@ -427,7 +470,7 @@ export function useUserMemberships({
       reportLoading,
       makeApiRequest,
       loadRuleInventory,
-      adoptCachedRuleInventory,
+      ensureRuleInventory,
     ],
   );
 

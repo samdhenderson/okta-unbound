@@ -46,7 +46,7 @@
  * {@link sidepanel/components/users/GroupMembershipsListProof}. It is one API
  * call per row and is never run automatically.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { EmptyState, FilterPill, IconButton, Input, Skeleton } from '../shared';
 import Icon from '../shared/Icon';
 import GroupMembershipRow from './GroupMembershipRow';
@@ -60,6 +60,9 @@ import {
 } from './membershipVerdict';
 import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
 import { groupContextOf } from '../../../shared/membership/groupContext';
+import { conditionExpressionOf } from '../../../shared/membership/ruleExpression';
+import { extractReferencedGroupIds } from '../../../shared/rules/groupRuleIndex';
+import { useGroupNameResolver } from '../../hooks/useGroupNameResolver';
 import type { GroupMembership, OktaUser } from '../../../shared/types';
 
 /** The pills, in the order the summary line reads its terms. */
@@ -113,6 +116,17 @@ interface GroupMembershipsListProps {
    * the list, and never on mount.
    */
   onProveMembershipSource?: (groupId: string) => Promise<MemberRuleAttribution>;
+  /**
+   * The tab whose content script serves the group-name fallback. Absent, group
+   * ids in a rule condition are still named from the memberships below and from
+   * the org snapshot; only the last resort is unavailable.
+   */
+  targetTabId?: number | null;
+  /**
+   * Whether this pane is the one on screen. The panes stay mounted (`docs/state-management.md`),
+   * and a hidden one must not read the snapshot or issue the fallback fetch.
+   */
+  isActive?: boolean;
 }
 
 /**
@@ -130,6 +144,8 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
   recentlyAddedGroupId,
   appsByGroupId,
   onProveMembershipSource,
+  targetTabId,
+  isActive = true,
 }) => {
   const [query, setQuery] = useState('');
   const [bucket, setBucket] = useState<MembershipBucketFilter>('all');
@@ -173,6 +189,80 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
     () => (isLoading ? undefined : groupContextOf(memberships)),
     [isLoading, memberships],
   );
+
+  /*
+    The names this pane already holds: one row per group the user is in. They are
+    live rows from `GET /api/v1/users/{id}/groups`, so they outrank the walked
+    snapshot the resolver falls back to.
+  */
+  const knownGroupNames = useMemo(
+    () => new Map(memberships.map((m) => [m.group.id, m.group.profile.name])),
+    [memberships],
+  );
+
+  const { resolveGroupName, request: requestGroupNames } = useGroupNameResolver({
+    targetTabId,
+    oktaOrigin,
+    known: knownGroupNames,
+    enabled: isActive,
+  });
+
+  /*
+    The group ids the conditions on this screen actually mention — and only
+    those. A rule saying `!isMemberOfAnyGroup("00g…","00g…")` names groups the
+    user is by definition NOT in, so `knownGroupNames` can never cover them, and
+    they are exactly the ones an admin needs read back as names. Naming every id
+    in the org's whole rule corpus would be hundreds of wasted calls; naming the
+    handful on screen is a handful, once.
+  */
+  const referencedGroupIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          memberships.flatMap((membership) =>
+            membership.rules.flatMap((rule) =>
+              extractReferencedGroupIds(conditionExpressionOf(rule)),
+            ),
+          ),
+        ),
+      ].filter((id) => !knownGroupNames.has(id)),
+    [memberships, knownGroupNames],
+  );
+
+  useEffect(() => {
+    if (referencedGroupIds.length > 0) requestGroupNames(referencedGroupIds);
+  }, [referencedGroupIds, requestGroupNames]);
+
+  /*
+    The backstop rung of the certainty ladder (ADR-0031's endpoint, fired without
+    a click).
+
+    Rungs 1-3 answer nearly everything: Okta's own `_embedded['group-rules']`
+    where the roster carried it, then the evaluator with the user's full group
+    list, then the org rules listing. What survives all three is a membership the
+    panel genuinely cannot settle — `attribution` other than `exact` — and for
+    those the honest options are to ask Okta or to keep hedging. Hedging is not
+    an option (`docs/claims.md`), so it asks.
+
+    Scoped hard, because this is the one rung that costs a call per row:
+
+    - only unsettled rows, so a proven membership never spends a request;
+    - only while the pane is on screen and the load has settled, so a hidden tab
+      and a half-read list issue nothing;
+    - once per row per hook instance, enforced inside `proveAll`.
+
+    If this fires often, the defect is in rung 2 and belongs there — the cost is
+    the symptom, not the design.
+  */
+  const unsettled = useMemo(
+    () => (isLoading ? [] : memberships.filter((m) => m.attribution !== 'exact')),
+    [isLoading, memberships],
+  );
+
+  useEffect(() => {
+    if (!isActive || unsettled.length === 0) return;
+    proofs.proveAll(unsettled);
+  }, [isActive, unsettled, proofs]);
 
   const toggleRow = (groupId: string) =>
     setOpenGroupIds((current) => {
@@ -275,6 +365,7 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
               membership={membership}
               user={user}
               groupContext={groupContext}
+              resolveGroupName={resolveGroupName}
               isCurrentGroup={membership.group.id === currentGroupId}
               expanded={openGroupIds.has(membership.group.id)}
               onToggle={toggleRow}

@@ -49,7 +49,7 @@
  * HTML — and **nothing in this module logs**.
  */
 import React from 'react';
-import { AlertMessage, Badge, Button, Eyebrow, Modal } from '../shared';
+import { AlertMessage, Badge, Button, Eyebrow, Modal, type GroupNameResolver } from '../shared';
 import BlastRadiusReport from './BlastRadiusReport';
 import type { BlastRadiusReport as BlastRadiusReportData } from '../../../shared/membership/blastRadiusTypes';
 import type { DraftChange } from './profileDraft';
@@ -85,6 +85,12 @@ export interface ProfileSaveModalProps {
   onAnalyze: () => void;
   /** True while the analysis runs; loads the Analyze button. */
   isAnalyzing: boolean;
+  /**
+   * Names the group ids inside each predicted rule's condition, from
+   * `useBlastRadius`'s `resolveGroupName`. Threaded through to the report; this
+   * modal fetches nothing.
+   */
+  resolveGroupName?: GroupNameResolver;
   /** Message from a previous save attempt that failed, if the parent kept the modal open. */
   error?: string;
 }
@@ -154,6 +160,7 @@ const ProfileSaveModal: React.FC<ProfileSaveModalProps> = ({
   report,
   onAnalyze,
   isAnalyzing,
+  resolveGroupName,
   error,
 }) => {
   const items = changes ?? [];
@@ -237,7 +244,7 @@ const ProfileSaveModal: React.FC<ProfileSaveModalProps> = ({
             </Button>
           )}
           {/* Renders nothing at all under `not-computed`, so it needs no gate. */}
-          <BlastRadiusReport report={report} />
+          <BlastRadiusReport report={report} resolveGroupName={resolveGroupName} />
         </section>
       </div>
     </Modal>

@@ -169,7 +169,10 @@ export function useOktaApi({ targetTabId, oktaOrigin, onResult, onProgress }: Us
       ),
     [coreApi, groupMemberOps],
   );
-  const groupDiscoveryOps = useMemo(() => createGroupDiscoveryOperations(coreApi), [coreApi]);
+  const groupDiscoveryOps = useMemo(
+    () => createGroupDiscoveryOperations(coreApi, oktaOrigin),
+    [coreApi, oktaOrigin],
+  );
   const userOps = useMemo(() => createUserOperations(coreApi), [coreApi]);
   const profileOps = useMemo(() => createProfileOperations(coreApi), [coreApi]);
   const appOps = useMemo(() => createAppOperations(coreApi), [coreApi]);

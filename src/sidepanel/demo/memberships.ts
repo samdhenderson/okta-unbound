@@ -94,6 +94,7 @@ export const GROUP = {
   migrationAccess: 35,
   salesEmeaLegacy: 36,
   verifyRollout: 37,
+  contractorsAll: 38,
 } as const;
 
 /** The departments that get a rule-fed `<Department> - All` group. */
@@ -176,12 +177,12 @@ const RULE_FED: readonly RuleFedGroup[] = [
     expression: `user.city == "${city}"`,
   })),
   {
-    // `user.status` is real Okta EL, but outside what `shared/ruleEvaluator`
-    // reads: it resolves `user.*` against the profile, where `status` does not
-    // exist, and a missing attribute compares as `null` — so the evaluator
-    // answers `no-match` for everyone rather than "cannot tell". The rule is
-    // declared here because it *is* this group's predicate; the disagreement is
-    // an evaluator defect, pinned and explained in `demoRuleCoverage.test.ts`.
+    // `user.status` is real Okta EL and the evaluator now reads it: a handful of
+    // top-level user fields resolve from the user root rather than the profile,
+    // and an attribute that is genuinely absent is `unevaluable` rather than
+    // `null`. Before that (D-114) this rule confidently selected nobody in an org
+    // where it selects nearly everybody, and the coverage suite below carried a
+    // written-down exemption for it.
     ordinal: GROUP.vpnUsers,
     predicate: (user) => user.status === 'ACTIVE',
     expression: 'user.status == "ACTIVE"',
@@ -233,6 +234,22 @@ const RULE_FED: readonly RuleFedGroup[] = [
     expression: null,
     exemption:
       'Sourced from the Workday HR import, which fills it on every sync. The invisible maintainer is the point: to the panel it is indistinguishable from an unmaintained group.',
+  },
+  {
+    // The org's one rule that asks about *another group* rather than a profile
+    // attribute. It exists so the coverage suite below evaluates a rule that
+    // cannot be answered from the profile alone: `isMemberOfAnyGroup` is
+    // two-valued over the group list it is handed, so this row is only
+    // reproducible when the evaluation is given the user's memberships — which
+    // is exactly the wiring the memberships pane was missing.
+    //
+    // Equivalent by construction to the union of the two contractor rules, so
+    // the predicate can state the same fact without consulting group membership.
+    ordinal: GROUP.contractorsAll,
+    predicate: (user) =>
+      attr(user, 'employeeType') === 'CONTRACTOR' &&
+      [...EMEA_COUNTRIES, 'US', 'CA'].includes(attr(user, 'countryCode')),
+    expression: `isMemberOfAnyGroup("${fakeId('00g', GROUP.contractorsEmea)}", "${fakeId('00g', GROUP.contractorsAmer)}")`,
   },
   {
     // Was the fixture's loudest inconsistency: a department predicate no rule

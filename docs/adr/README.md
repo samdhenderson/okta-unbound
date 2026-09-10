@@ -2,9 +2,13 @@
 
 Records of decisions where the **reasoning** has to outlive the rule.
 
-This shelf is empty on purpose. Seventy-four records were deleted on 2026-09-09
-and the rules that were still live were folded into the specs in `docs/` as plain
-house rules. Numbering restarts at **0001**.
+Seventy-four records were deleted on 2026-09-09 and the rules that were still
+live were folded into the specs in `docs/` as plain house rules. Numbering
+restarts at **0001**, and the shelf is deliberately near-empty.
+
+| Record                                    | Decision                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [0001](0001-rule-assessment-certainty.md) | Rule assessment: the certainty ladder, and which expression functions the evaluator refuses |
 
 ## What went wrong the first time
 

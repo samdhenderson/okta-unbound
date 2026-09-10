@@ -52,7 +52,8 @@ import {
 } from '../components/users/profileAttributes';
 import { profileMastering } from '../components/users/profileEditability';
 import { profileRuleReads } from '../components/users/profileRuleReads';
-import { loadCachedGroupNames } from './fetchGroupRulesRequest';
+import { useGroupNameResolver } from './useGroupNameResolver';
+import { extractReferencedGroupIds } from '../../shared/rules/groupRuleIndex';
 import type { OktaUser, GroupMembership } from '../../shared/types';
 import type { OktaUserProfileSchema } from '../../shared/schemas/okta';
 
@@ -474,43 +475,54 @@ export function useUserComparison({
 
   // Group ids embedded in a rule condition — `isMemberOfGroup("00g…")` — are
   // unreadable on their own, and the comparison's rules are fetched with
-  // `resolveGroupNames: false`, so nothing upstream labels them. Build the labels
-  // here from what is already in hand, cheapest source first and no API traffic:
+  // `resolveGroupNames: false`, so nothing upstream labels them.
   //
-  // 1. Both users' membership lists, which carry id AND name and cover the common
-  //    case (a prerequisite group the compared user qualified through).
-  // 2. The Groups tab's `chrome.storage.local` cache — one read, the same source
-  //    the Rules tab labels its rule targets from.
+  // This used to be a fifth private id→name map, built from the two membership
+  // lists plus one `chrome.storage.local` read. It had the same two rungs the
+  // shared resolver's first two are, and the same hole underneath them: an id
+  // **neither user is a member of** — which, on a worklist whose whole subject is
+  // a group the context user is missing, is the id most likely to be on screen —
+  // had no name anywhere and rendered raw. `useGroupNameResolver` keeps both
+  // rungs and adds the fetch behind them.
   //
-  // An id in neither falls back to the id itself at the point of use, exactly as
-  // `RuleCard` does. Deliberately NOT solved by flipping `resolveGroupNames` in
-  // `useUserMemberships`: that path keeps ids-as-names out of the shared
-  // `RulesCache`, and this map also works when the Groups tab was never opened.
-  // Re-read on an org change: names are scoped by origin (ADR-0040), so keeping
-  // the previous org's would label these ids confidently and wrongly.
-  const [cachedGroupNames, setCachedGroupNames] = useState<ReadonlyMap<string, string>>(
-    () => new Map(),
-  );
-
-  useEffect(() => {
-    if (!isActive) return;
-    let cancelled = false;
-    void loadCachedGroupNames(oktaOrigin).then((names) => {
-      if (!cancelled) setCachedGroupNames(names);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isActive, oktaOrigin]);
-
-  const resolveGroupName = useMemo(() => {
-    const byId = new Map(cachedGroupNames);
-    // Live memberships last so they win over a possibly stale cache entry.
+  // The two membership lists are passed as `known` rather than left to the
+  // snapshot: they are live rows, and they win over a walked one.
+  const knownGroupNames = useMemo(() => {
+    const byId = new Map<string, string>();
     for (const membership of [...contextGroups, ...comparedGroups]) {
       byId.set(membership.group.id, membership.group.profile.name);
     }
-    return (groupId: string): string | undefined => byId.get(groupId);
-  }, [cachedGroupNames, contextGroups, comparedGroups]);
+    return byId;
+  }, [contextGroups, comparedGroups]);
+
+  const { resolveGroupName, request: requestGroupNames } = useGroupNameResolver({
+    targetTabId,
+    oktaOrigin,
+    known: knownGroupNames,
+    enabled: isActive,
+  });
+
+  // Bounded to the ids this worklist is about to print: the group references the
+  // classifier carried, plus any id inside a failing clause's own text (which
+  // `FailingClauses` renders through `RuleExpressionText`). Never a walk over the
+  // rule corpus.
+  const referencedGroupIds = useMemo(() => {
+    if (!causes) return [];
+    const ids = new Set<string>();
+    for (const cause of causes) {
+      for (const reference of [...(cause.requiredGroups ?? []), ...(cause.blockingGroups ?? [])]) {
+        if (reference.match === 'id') ids.add(reference.value);
+      }
+      for (const clause of cause.failingClauses) {
+        for (const id of extractReferencedGroupIds(clause.expressionText)) ids.add(id);
+      }
+    }
+    return [...ids];
+  }, [causes]);
+
+  useEffect(() => {
+    if (referencedGroupIds.length > 0) requestGroupNames(referencedGroupIds);
+  }, [referencedGroupIds, requestGroupNames]);
 
   const groupDiffCount = groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length;
   const appDiffCount = appBuckets.onlyCompared.length + appBuckets.onlyContext.length;

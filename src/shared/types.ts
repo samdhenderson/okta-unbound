@@ -208,6 +208,17 @@ export interface FormattedRule {
    */
   excludedUserIds?: string[];
   /**
+   * Group ids the rule excludes (`conditions.people.groups.exclude` on the raw
+   * rule) — the twin of {@link FormattedRule.excludedUserIds}, and carried for
+   * the same reason: the formatted shape drops `conditions`, so without this the
+   * user path cannot tell that a rule excludes every member of a group the user
+   * is in, and credits the rule anyway.
+   *
+   * Answering with it needs the user's complete group list; see
+   * `membershipAnalysis`'s exclusion helpers.
+   */
+  excludedGroupIds?: string[];
+  /**
    * Target group ids with no group behind them — a rule assigning users into a
    * group the org no longer has (D-061).
    *
@@ -308,6 +319,12 @@ export interface MembershipRule {
    * exclusions under `conditions` instead; consumers read whichever is present.
    */
   excludedUserIds?: string[];
+  /**
+   * The formatted shape's carrier for `conditions.people.groups.exclude` — see
+   * {@link FormattedRule.excludedGroupIds}. Same raw/formatted split as
+   * {@link MembershipRule.excludedUserIds}.
+   */
+  excludedGroupIds?: string[];
 }
 
 /**

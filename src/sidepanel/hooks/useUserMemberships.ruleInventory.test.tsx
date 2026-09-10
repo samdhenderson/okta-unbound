@@ -7,21 +7,29 @@
  * downstream "why does this user not have that group" answer degraded into "the
  * rules targeting this group could not be loaded", a failure that never happened.
  *
- * Two things are pinned here, and they pull against each other:
+ * Two things are pinned here:
  *
- * 1. The path still issues **no** content-script request (the contract
- *    `useUserMemberships.test.tsx` pins for the same early return), so it may only
- *    adopt an inventory already in hand.
- * 2. Nothing in hand therefore leaves the inventory `unresolved` — "nobody has
- *    fetched these yet" — which is a different claim from the `unavailable` that
- *    only a real, failed attempt may write.
+ * 1. An inventory already in hand is adopted with **no** request at all — the
+ *    entity cache and the org snapshot are both local reads, so a cache hit
+ *    still costs nothing.
+ * 2. Nothing in hand no longer ends the story. The path asks for the rules
+ *    listing and publishes what the attempt returned.
  *
- * RETARGETED for D-029b. "Already in hand" used to mean the `shared/rulesCache`
- * storage slot; it now means the background-owned org snapshot's `rules`
- * collection. Both assertions are unchanged — adopt without issuing a request,
- * and nothing in hand stays `unresolved` — only the store they are seeded
- * against moved (ADR-0022). Which store answers is pinned by
- * `useUserMemberships.ruleSource.test.tsx`.
+ * RETARGETED twice. First for D-029b: "already in hand" used to mean the
+ * `shared/rulesCache` storage slot and now means the background-owned org
+ * snapshot's `rules` collection (which store answers is pinned by
+ * `useUserMemberships.ruleSource.test.tsx`).
+ *
+ * Then for the certainty ladder's third rung. The second case used to assert
+ * that nothing in hand left the inventory `unresolved`, on the reasoning that
+ * this path is forbidden from fetching and `unresolved` is the honest answer for
+ * an attempt nobody made. Both halves were true and the outcome was still wrong:
+ * nothing else on this path ever resolved the state, so a user opened from a
+ * warm memberships cache with a cold snapshot reported "not computed" for every
+ * membership, permanently, on a fully-loaded screen. The assertion is retargeted
+ * to the new boundary rather than relaxed — the fetch is now expected, and its
+ * result is what gets published. `unresolved` surviving an attempt would be the
+ * bug now.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
@@ -59,9 +67,20 @@ import { emptySyncMeta } from '../../shared/snapshot/syncMeta';
 import type { OktaGroupRule, OktaUser } from '../../shared/types';
 
 const tabsSendMessage = vi.fn();
+/**
+ * The background scheduler's transport. Answers the one paginated rules listing
+ * with the same raw row the snapshot fixture uses, so the two cases below differ
+ * only in *where* the inventory came from.
+ */
+const runtimeSendMessage = vi.fn(async (_message: unknown) => ({
+  success: true,
+  data: [rawRule],
+  headers: {},
+}));
 
 globalThis.chrome = {
   tabs: { sendMessage: tabsSendMessage },
+  runtime: { sendMessage: runtimeSendMessage, lastError: undefined },
   storage: { local: { get: vi.fn(), set: vi.fn(), remove: vi.fn() } },
 } as unknown as typeof chrome;
 
@@ -142,7 +161,7 @@ describe('useUserMemberships rule inventory on a memberships cache hit', () => {
     expect(tabsSendMessage).not.toHaveBeenCalled();
   });
 
-  it('leaves the inventory unresolved — never unavailable — when nothing is cached', async () => {
+  it('asks for the rules listing when neither local source holds one', async () => {
     setEntry(['userMemberships', user.id], []);
 
     const { result } = renderHook(() => useUserMemberships({ targetTabId: 1, oktaOrigin: ORIGIN }));
@@ -151,9 +170,27 @@ describe('useUserMemberships rule inventory on a memberships cache hit', () => {
       await result.current.loadMemberships(user);
     });
 
-    // `unavailable` would say an attempt was made and failed. None was: this path
-    // is forbidden from fetching, so the honest answer stays "not resolved".
-    expect(result.current.rules).toEqual({ status: 'unresolved' });
+    // The rules listing is scheduler-routed, so the request goes to the
+    // background rather than straight to the tab.
+    await waitFor(() =>
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'scheduleApiRequest' }),
+      ),
+    );
+    expect(runtimeSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: expect.stringContaining('/api/v1/groups/rules') }),
+    );
     expect(tabsSendMessage).not.toHaveBeenCalled();
+
+    // And the attempt's outcome is published. It stays `unresolved` only while
+    // nobody has tried; somebody has now.
+    await waitFor(() => expect(result.current.rules.status).not.toBe('unresolved'));
+    // Identity, not the whole row: the fetched path additionally stamps the
+    // group-name fields the snapshot-derived path leaves off, and which of the
+    // two shapes arrives is `fetchGroupRulesRequest`'s contract, not this one's.
+    expect(result.current.rules).toMatchObject({
+      status: 'available',
+      rules: [{ id: rule.id, conditionExpression: rule.conditionExpression }],
+    });
   });
 });

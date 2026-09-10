@@ -147,6 +147,11 @@ export interface ComparisonPendingSave {
   readonly report: BlastRadiusReport;
   /** True while this column's analysis runs. */
   readonly isAnalyzing: boolean;
+  /**
+   * Names the group ids inside a predicted rule's condition, from the same
+   * snapshot read the analysis used. No fetch, no second source.
+   */
+  readonly resolveGroupName: (groupId: string) => string | undefined;
   /** A message from a previous attempt that failed, kept on the re-armed confirmation. */
   readonly error?: string;
   /** Run the analysis against this column's draft. Costs no API calls. */
@@ -398,6 +403,9 @@ function useComparisonEditSide({
             isSaving: edit.isSaving,
             report: blast.report,
             isAnalyzing: blast.isAnalyzing,
+            // The names the analysis already read, so the rule rows can print a
+            // condition's group ids as groups.
+            resolveGroupName: blast.resolveGroupName,
             ...(message?.type === 'danger' ? { error: message.text } : {}),
             analyze: analyzeSide,
             cancel: dismiss,
@@ -410,6 +418,7 @@ function useComparisonEditSide({
       edit.isSaving,
       blast.report,
       blast.isAnalyzing,
+      blast.resolveGroupName,
       message,
       analyzeSide,
       dismiss,
