@@ -18,7 +18,7 @@ export default [
     // `reel/**` is the demo reel's Remotion composition: a separate npm project
     // with its own React, its own TypeScript and its own `type-check` script,
     // deliberately outside the extension's graphs so a Remotion upgrade cannot
-    // break the build (ADR-0045). `npm run lint` only ever walks `src`, so this
+    // break the build. `npm run lint` only ever walks `src`, so this
     // line changes nothing there; it is here because `lint-staged` passes
     // explicit paths and would otherwise judge a Remotion composition by the
     // side panel's React rules. `react-hooks/immutability` already flagged a
@@ -81,7 +81,7 @@ export default [
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off', // Using TypeScript for type checking
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      // No-`any` policy (ADR-0004/0006): the message/API-layer burndown is done and
+      // No-`any` policy (`docs/development.md`): the message/API-layer burndown is done and
       // the §7 god components are decomposed, so every production `any` is now either
       // gone or an intentional, reason-annotated `eslint-disable`. Flipped warn→error.
       // Exceptions: test/setup files (mocks) via the override block below.
@@ -91,7 +91,7 @@ export default [
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-hooks/set-state-in-effect': 'warn', // Downgrade from error to warning
-      // Logging policy (ADR-0004): use the logger util (src/shared/utils/logger.ts),
+      // Logging policy (`docs/development.md`): use the logger util (src/shared/utils/logger.ts),
       // not raw console. Migration complete — logger.ts is the only production
       // console.* holder (allowed via its own override); tests may spy on console.
       'no-console': 'error',

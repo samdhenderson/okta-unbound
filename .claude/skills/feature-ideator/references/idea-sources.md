@@ -68,8 +68,9 @@ Gaps between the two are usually the highest value per unit of effort available,
 because the expectation already exists in a user's head — the feature is _believed_ to
 be there.
 
-**Where to look.** `README.md`, `docs/features-plan.md` ground rules, ADR consequence
-sections, and any exported function with no caller.
+**Where to look.** `README.md`, `docs/features-plan.md` ground rules, the consequences
+sections of the house-rule docs under `docs/`, and any exported function with no
+caller.
 
 **The cheapest detector** — an export nothing imports is a promise with no delivery
 path:
@@ -176,6 +177,6 @@ source produced it, so the reader can weigh it.
 | Proposing what the demo would look like rather than what the question is | The house format leads with the admin's question for this reason                                  |
 | Volume over specificity                                                  | Twelve uncosted ideas transfer the triage work back to the reader                                 |
 | Ignoring the reuse map                                                   | An idea that reinvents `runBatch`, `BulkTargetList`, or `ProgressContext` reads as ungrounded     |
-| Estimating a write feature as if it were a read feature                  | Audit, confirmation, prior-state capture, and usually an ADR are part of the cost                 |
+| Estimating a write feature as if it were a read feature                  | Audit, confirmation, prior-state capture, and usually a plan-gate round trip are part of the cost |
 | Collapsing an honest "unknown" to look tidier                            | The app deliberately surfaces `unevaluable` and `cannot-determine`; removing that is a regression |
 | Re-proposing a rejected idea without naming its rejection                | Both plan docs record rationale specifically to prevent this                                      |

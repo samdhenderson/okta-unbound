@@ -1,7 +1,13 @@
 # Component explorer (Storybook)
 
 **Storybook 10** (`@storybook/react-vite`, Vite builder) is the component
-explorer for shared and feature UI. Decision + rationale: ADR-0010.
+explorer for shared and feature UI, and Storybook is the single documentation
+site.
+
+This page is the authoring contract: how to run the explorer, where a story
+lives, and what a story owes its docs page. The rig around it — viewport presets,
+motion defaults, the browser test suite, screenshots, the docs-site build — is
+[storybook-infra.md](./storybook-infra.md).
 
 ## Running it
 
@@ -137,9 +143,7 @@ follows these four rules. `Button.stories.tsx` is the Template-A reference;
    `IconButton.stories.tsx`). The global mode is `a11y.test: 'error'`
    (`.storybook/preview.tsx`), so an axe violation **fails the story** in the
    browser suite — it is not advisory. Suppress a rule per-story only with a
-   comment saying why. (This paragraph previously said the mode was report-only
-   `'todo'` and warned against flipping it; that flip has since happened, closing
-   the ADR-0011 follow-up. See "Coverage expectation" below.)
+   comment saying why.
 
 ### Sidebar taxonomy
 
@@ -156,55 +160,7 @@ route each container to where it belongs:
 - **`Sidepanel/`** — app-shell chrome that isn't feature-specific (`ActivityBar`,
   `ActivityBarView`, `TabNavigation`, `ContextBar`, `ErrorBoundary`,
   `AuditLogViewer`).
-- **`Demo/`** — the demo reel's stages (ADR-0043, ADR-0045). These are **not
-  component stories and not tested surfaces**: each mounts the whole `App` against
-  the seeded demo org in `src/sidepanel/demo/`, carries `tags: ['!test']` with `a11y`
-  and `actions` disabled, and holds **no `play` function**. Playwright walks them;
-  the walks live in `.storybook/scripts/capture/walks/`. Do not copy this shape for a
-  component story.
-
-  The reel is two halves that meet at `captures/`. Playwright records short clips of
-  the real panel and writes a manifest beside each; React composes the film. Nothing
-  about how the reel _reads_ is in the browser, so a caption, a speed or a diagram
-  changes with no re-shoot at all.
-
-  | Command                         | What it does                                                       |
-  | ------------------------------- | ------------------------------------------------------------------ |
-  | `npm run capture`               | Film every chapter whose walk, driver or demo data changed         |
-  | `npm run capture -- groups`     | One chapter, by id                                                 |
-  | `npm run capture -- --all`      | Ignore the staleness cache                                         |
-  | `npm run probe -- <chapter>`    | Report what is on the stage, under the real capture geometry       |
-  | `npm run capture:check`         | Judge the footage: settle, scroller, opening frame                 |
-  | `npm run capture:check:fixture` | Prove the guard can fail, by planting one defect per control       |
-  | **`npm run studio`**            | **Remotion studio. Scrub, edit `reel/src/script.ts`, hot reload.** |
-  | `npm run reel`                  | Render `clips/okta-unbound-reel.mp4`                               |
-  | `npm run reel:vo:budget`        | Per-beat narration time budget, derived from the cut               |
-  | `npm run reel:vo:measure`       | ffprobe `captures/vo/` into `reel/src/vo.generated.ts`             |
-  | `npm run reel:vo:check`         | The narration gate: every act voiced, every line inside its budget |
-
-  `capture:check` distinguishes a bad take (exit 1) from **a detector that could not
-  look** (exit 2) — a guard that cannot see what it is looking for reports a clean
-  run over the exact defect it exists to catch, so its verdict is treated as
-  meaningless rather than as a pass. It does not replace watching the reel end to
-  end: a caption that narrates something the panel never showed is not mechanically
-  detectable, and that failure has shipped twice. Narration doubles that surface:
-  a spoken claim is exactly as unverifiable as a printed one, which is why
-  `reel:vo:check` enforces the rule it _can_ mechanise, that no digit is spoken
-  which is not a `figure()` read off a manifest (ADR-0073).
-
-  **Where to change what.** Editorial decisions — chapter order, what a beat is played
-  at, what the margin says, which figure a diagram enlarges — all live in
-  `reel/src/script.ts`. Selector facts and app-driving live in
-  `.storybook/scripts/capture/selectors.mjs` and `drive.mjs`. The two never mix: a
-  caption change must never require opening a browser, and a selector fix must never
-  require re-rendering.
-
-  Narration is the **third** place a change can land, and the only one that cannot
-  be fixed from a keyboard: the script is `reel/NARRATION.md`, the audio is
-  `captures/vo/<act-key>.wav`, and re-cutting a beat shorter than its recorded line
-  fails `reel:vo:check` rather than quietly talking over the next act. Because the
-  cut leads and the voice follows (ADR-0073), a retime is free until it crosses a
-  line's measured duration, and then it costs a re-record.
+- **`Demo/`** — the reel's stages. Rules in [reel.md](./reel.md).
 
 The `Introduction.mdx` landing page is titled **`Getting Started`** so it sorts
 as its own root rather than colliding with the `Overview/*` component group.
@@ -213,10 +169,10 @@ as its own root rather than colliding with the `Overview/*` component group.
 
 The side panel never calls `fetch` — all Okta API traffic flows
 `side panel → background (ApiScheduler) → content script`
-(`docs/architecture.md`), so MSW's request interception has nothing to catch
-here. Mocking is done one layer up, at the `useOktaApi` facade boundary itself
-(a Vite `resolveId` alias in `main.ts`), plus a fake `chrome` global for the
-providers that poll it on mount. Do not wire up MSW in stories.
+([architecture.md](./architecture.md)), so MSW's request interception has nothing
+to catch here. Mocking is done one layer up, at the `useOktaApi` facade boundary
+itself (a Vite `resolveId` alias in `main.ts`), plus a fake `chrome` global for
+the providers that poll it on mount. Do not wire up MSW in stories.
 
 **Mock stability matters.** The real facade returns one _memoized_ object whose
 operation identities are stable across renders. The mock must honour that: its
@@ -230,143 +186,16 @@ story canvas crashes. Keep the mock's identities stable.
 ## Coverage expectation
 
 Every new or changed `shared`/leaf feature component ships a co-located story in
-the same change — same bar as tests (`docs/testing.md`). Reviewed at PR time; an
-un-storied shared/leaf component is backlog, caught at review. God components and
-hook-only extraction targets aren't required to get a story just because they were
-touched — story the presentational pieces that come out of them. The full catalog
-is currently covered (all stories run as browser tests). The a11y addon runs in
-`test: 'error'` mode (`.storybook/preview.tsx`) — an axe violation fails the story
-in the browser suite. (This closes the former ADR-0011 `todo → error` follow-up:
-the cleanup pass fixed the real gaps — a named progress bar, labelled selects,
-named icon buttons — and a handful of page-fragment stories disable `heading-order`
-locally, since a standalone panel has no ancestor `<h1>`.)
+the same change — same bar as tests ([testing.md](./testing.md)). Reviewed at PR
+time; an un-storied shared/leaf component is backlog, caught at review. God
+components and hook-only extraction targets aren't required to get a story just
+because they were touched — story the presentational pieces that come out of
+them. The full catalog is currently covered (all stories run as browser tests).
 
-CI gate: `build-storybook` runs as a parallel job in `.github/workflows/ci.yml`
-(ADR-0005) — a story that fails to type-check or build fails the PR.
+The a11y addon runs in `test: 'error'` mode (`.storybook/preview.tsx`) — an axe
+violation fails the story in the browser suite. A handful of page-fragment
+stories disable `heading-order` locally, since a standalone panel has no ancestor
+`<h1>`.
 
-## Side-panel viewport presets
-
-`preview.tsx` registers three side-panel width presets under the toolbar's
-**Viewport** control: `sidepanelCompact` (360px, below the 640px `useIsNarrow`
-breakpoint), `sidepanelDefault` (480px) and `sidepanelWide` (720px). The
-extension lives in a Chrome side panel the user drags freely, and `ActivityBar`
-condenses below 640px — switch a story to the compact preset to preview that
-collapse in the explorer. No preset is the default, so stories fill the canvas as
-before. (Note: the presets resize the explorer preview; the headless test runner
-renders at its own window size, so exercise width-dependent logic through the
-presentational prop — e.g. `ActivityBarView`'s `collapsed` — for automated
-coverage.)
-
-## Motion is off by default in stories
-
-`preview.tsx`'s `withMotion` decorator stamps `data-motion="off"` on every story
-root, which `tailwind.css` matches with the same declaration block as
-`@media (prefers-reduced-motion: reduce)`. Two reasons: every story is a render
-test in headless Chromium (and the suite already carries `retry: 2` for a Vite
-dep-optimizer race, so a second timing-shaped flake source is unwelcome), and
-`npm run shoot` would otherwise catch entrance animations mid-flight and produce a
-different contact sheet each run. A useful side effect is that the reduced-motion
-path gets exercised by all ~550 story tests on every CI run.
-
-A story whose _subject_ is the animation opts back in:
-
-```tsx
-export const ExitTransition: Story = {
-  parameters: { motion: 'on' },
-  // …no `play` function — see below
-};
-```
-
-Keep `play` functions off motion-enabled stories: an interaction assertion racing a
-220ms transition is exactly the flake the default is there to prevent. If a
-motion-enabled story does need one, drive it with `findBy*`/`waitFor`, never
-`getBy*`.
-
-## Fixed / bottom-anchored components
-
-A `position: fixed` component (the `ActivityBar`/`ActivityBarView`, which pin to
-`bottom-0`) otherwise renders at the bottom of an empty page in the canvas and
-escapes the autodocs preview block entirely. Wrap those stories in the shared
-`inSidePanelFrame` decorator (`.storybook/decorators.tsx`): a `transform` on the
-wrapper establishes a containing block, so the fixed bar anchors to a bounded,
-panel-sized frame and renders in view, in context. Reach for it whenever a new
-component is `position: fixed`.
-
-## Stories as browser tests (`@storybook/addon-vitest`, ADR-0011)
-
-`vitest.config.ts` has two projects: `unit` (jsdom, the ~940 existing tests) and
-`storybook` (headless-browser, every story becomes a render test; the 11 `play`
-functions become interaction tests). Scripts:
-
-```
-npm run test:run         # jsdom unit project only (fast, browser-free)
-npm run test:storybook   # the browser story suite
-```
-
-CI runs both (the `storybook` job installs Chromium). Locally, set
-`VITEST_BROWSER_EXECUTABLE` to a Chromium path to skip the download. A story that
-genuinely can't run headless (e.g. a deliberately-throwing one) is opted out with
-the `!test` tag — `tags: ['autodocs', '!test']` — and stays in the explorer.
-a11y is enforced (`preview.tsx` `a11y.test: 'error'`): a story with an axe
-violation fails the suite.
-
-## Screenshots on demand (`npm run shoot`)
-
-`.storybook/scripts/shoot-stories.mjs` renders stories headlessly and writes PNGs
-to `shots/` (gitignored). It exists so a **reviewer or coding agent can see the UI**
-without booting the extension — a design-system or UX review reads pixels instead
-of inferring them from Tailwind classes.
-
-```
-npm run shoot -- Shared/Button           # all 10 variants → ONE contact sheet
-npm run shoot -- shared-button--loading  # a single story, by id
-npm run shoot -- Rules --list            # matching ids only, no browser launch
-npm run shoot -- Modal --split           # one PNG per story instead of a sheet
-```
-
-Filters are case-insensitive substrings of `Title/StoryName` (an exact story id
-also matches); at least one is required. Flags: `--max=12` (cap, reported when it
-truncates), `--width=480` / `--height=900` (canvas, defaults to the
-`sidepanelDefault` preset), `--cell=320` (on-sheet cell width), `--out=shots`.
-
-Three properties matter, and each is a deliberate choice:
-
-- **Context economy.** Multiple matches compose into one labelled sheet, and every
-  capture is cropped to its rendered content. Ten Button variants cost ~630 image
-  tokens as a sheet versus ~5.7k as ten full-panel PNGs — blank pixels bill the
-  same as drawn ones.
-- **Play functions run.** The canvas executes them, so the Template-B mocked
-  states (`Loading`, `Empty`, `ErrorState`) capture in their real state rather
-  than falling back to the default mock.
-- **System Chrome.** It launches with `channel: 'chrome'`, so Playwright's managed
-  browser download isn't needed (the same constraint behind
-  `VITEST_BROWSER_EXECUTABLE` in `vitest.config.ts`).
-
-It reuses a dev server on `:6006` when one is up, otherwise starts a throwaway one
-on a free port and stops it on exit — so a single command works from nothing, and
-keeping `npm run storybook` running just skips the boot (a few seconds with Vite's
-cache warm, up to a minute cold).
-
-Two known limits: a story whose content is entirely `position: fixed` (a modal
-overlay) can't be measured for cropping and falls back to the full canvas, which
-is the right framing anyway; and the `sidepanelCompact`/`Wide` viewport presets
-are explorer-only toolbar state, so reach for `--width=360` to preview the narrow
-collapse.
-
-## One docs site: Components + Internals + Documentation (ADR-0011)
-
-The static build is the whole documentation site, three sidebar sections:
-
-- **Components** — stories + autodocs (component TSDoc).
-- **Internals** — the auto-generated API reference for non-component code. TypeDoc
-  emits Markdown (`typedoc-plugin-markdown`), `bundle-internals.mjs` groups it per
-  subsystem, and `gen-doc-pages.mjs` writes MDX wrappers that render it via the
-  `Markdown` doc block. Refresh with `npm run docs`.
-- **Documentation** — `docs/*.md` specs + `docs/adr/*.md`, rendered the same way.
-
-Both scripts write to `.storybook/generated/` (gitignored); `build-storybook` runs
-them first. Hook-coupled components carry a **"Related internals"** cross-link block
-(`parameters.docs.description.component`) to the API pages they use — add one when
-you build a new hook-coupled component. The site deploys to GitHub Pages via
-`.github/workflows/deploy-pages.yml` (enable Settings → Pages → Source = GitHub
-Actions once).
+CI gate: `build-storybook` runs as a parallel job in `.github/workflows/ci.yml` —
+a story that fails to type-check or build fails the PR.

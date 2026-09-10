@@ -59,16 +59,17 @@ const ROOT_FILES = new Set([
 /**
  * Docs, skills, and ledger corpus this check actually owns.
  *
- * **`docs/adr/` is deliberately excluded.** An ADR is a dated record of a
- * decision, and `docs/adr/README.md` states they are immutable once accepted —
- * a later decision supersedes an earlier one rather than rewriting it. A path
- * in an ADR describes where a file lived *at the time of the decision*, so
- * "correcting" it to today's layout falsifies the record rather than repairing
- * it. Two ADRs were edited that way before this exclusion existed: ADR-0010 had
- * its 2026-era `src/test/mocks/handlers.ts` rewritten to name a file that would
- * not exist for months, which is precisely backwards. If an ADR's citation has
- * gone stale, that is a signal to write a superseding ADR, not to edit the old
- * one — and this gate must not create pressure to do the wrong thing.
+ * **`docs/adr/` is deliberately excluded.** An architecture decision record is
+ * a dated record of a decision, immutable once accepted — a later decision
+ * supersedes an earlier one rather than rewriting it. A path in a record
+ * describes where a file lived *at the time of the decision*, so "correcting"
+ * it to today's layout falsifies the record rather than repairing it. That has
+ * happened before this exclusion existed: a record's contemporaneous path was
+ * rewritten to name a file that would not exist for months, which is precisely
+ * backwards. If a record's citation has gone stale, that is a signal to write a
+ * superseding record, not to edit the old one — and this gate must not create
+ * pressure to do the wrong thing. The exclusion is forward-looking: it protects
+ * every record written from here on, not any particular one already on disk.
  *
  * **`NIGHTLY.md` is deliberately excluded, for the same reason.** It is an
  * append-only log of what each session found and did, so an entry's paths

@@ -85,6 +85,13 @@ never conflated. `check.fixture.mjs` plants one real defect per control with the
 magnitudes imported from `thresholds.mjs`, so raising a threshold cannot silently
 neuter its own control.
 
+**A green check is not a finished film.** The guards judge whether the footage is
+technically sound — settled, unshifted, framed. They cannot judge whether it shows
+what the narration claims it shows. A caption describing something the panel never
+did is invisible to every control here, and that exact failure has shipped twice.
+Watch the cut end to end before calling it done; the guards catch what a person
+watching would miss, not the reverse.
+
 ## Declared motion, and a mark that throws
 
 A guard for "the app moved when we did not ask it to" needs to know when the stage

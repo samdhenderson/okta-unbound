@@ -52,19 +52,20 @@ diff, stated-vs-shipped gaps, and expired parking rationales. Worked as methods 
 Apply these before an idea is written up, not after. Each has already killed something
 real, which is why it is stated as precedent rather than as principle.
 
-| Filter                                                                                                     | What it kills                                                                                     | Precedent                                                                                                           |
-| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Single-tenant.** Every call targets one browser tab's live Okta session. Two orgs at once is impossible. | Cross-tenant migration, org-to-org diffing, "compare staging to prod"                             | Feature G (Policy Migrator) **rejected** — would need a different transport plus persisted cross-tenant credentials |
-| **Never persist tokens; never send data anywhere.**                                                        | External enrichment, cloud backup/restore, third-party analytics, "sync to a spreadsheet service" | Backupta integration **dropped** on privacy grounds                                                                 |
-| **No DOM scraping, no hand-built HTML, no dynamic code execution.**                                        | Anything reading Okta's own settings pages for data the API does not expose                       | App Notes and App Sign-On Policy scraping **dropped**                                                               |
-| **All traffic on the scheduler; per-entity fan-out is a real cost.**                                       | "Just check every user" ideas that are not costed, cancellable, and progress-reporting            | ADR-0009 — one batch runner, bounded concurrency                                                                    |
-| **Least privilege.** A new manifest permission or host match needs its own ADR.                            | Casual "we could also read X" scope creep                                                         | ADR-0015                                                                                                            |
-| **Every mutation audits, confirms, and captures prior state so undo can restore.**                         | Write features estimated as if they were read features                                            | `docs/features-plan.md` ground rules                                                                                |
-| **Okta responses are untrusted; validate with zod at the boundary.**                                       | Features that branch on unvalidated response shape                                                | ADR-0006                                                                                                            |
+| Filter                                                                                                     | What it kills                                                                                                                    | Precedent                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Single-tenant.** Every call targets one browser tab's live Okta session. Two orgs at once is impossible. | Cross-tenant migration, org-to-org diffing, "compare staging to prod"                                                            | Feature G (Policy Migrator) **rejected** — would need a different transport plus persisted cross-tenant credentials |
+| **Never persist tokens; never send data anywhere.**                                                        | External enrichment, cloud backup/restore, third-party analytics, "sync to a spreadsheet service"                                | Backupta integration **dropped** on privacy grounds                                                                 |
+| **No DOM scraping, no hand-built HTML, no dynamic code execution.**                                        | Anything reading Okta's own settings pages for data the API does not expose                                                      | App Notes and App Sign-On Policy scraping **dropped**                                                               |
+| **All traffic on the scheduler; per-entity fan-out is a real cost.**                                       | "Just check every user" ideas that are not costed, cancellable, and progress-reporting                                           | One batch runner with bounded concurrency, everything on the scheduler (`docs/scheduler.md`)                        |
+| **Least privilege.** A new manifest permission or host match needs explicit review before it is proposed.  | Casual "we could also read X" scope creep                                                                                        | The manifest asks for the minimum, and permissions are removed when their last user goes (`docs/security.md`)       |
+| **Every mutation audits, confirms, and captures prior state so undo can restore.**                         | Write features estimated as if they were read features                                                                           | `docs/features-plan.md` ground rules                                                                                |
+| **Okta responses are untrusted; validate with zod at the boundary.**                                       | Features that branch on unvalidated response shape                                                                               | Every response validated at the content-script boundary (`docs/security.md`)                                        |
+| **The panel asserts or withholds; it never hedges.**                                                       | Any feature whose best possible output is a qualified guess — "probably", "likely", "approximately", a `?` on an uncertain label | Uncertainty is a defect, not a disclosure (`docs/claims.md`)                                                        |
 
 Two filters that are softer but decide priority rather than survival:
 
-- **Read beats write.** A read feature ships behind no ADR and no undo contract. The
+- **Read beats write.** A read feature ships behind no plan gate and no undo contract. The
   same insight delivered read-only is often 60% of the value at 20% of the cost — and
   the parity plan already re-scoped several features this way rather than dropping
   them.
@@ -103,8 +104,13 @@ Match `docs/features-plan.md`, which is where accepted ideas land. Per idea:
   that reinvents `runBatch`, `BulkTargetList`, or `ProgressContext` signals the idea
   was not grounded.
 - **API cost** — from the costing step, as numbers.
-- **Ground rules triggered** — new write surface? new permission? an ADR? Say so in the
-  pitch, not during implementation.
+- **Ground rules triggered** — new write surface? new permission? does it commit to an
+  approach that needs the plan-and-approval gate (`CLAUDE.md`) before any code? Say so
+  in the pitch, not during implementation.
+- **The answer it states** — the exact sentence the panel will put on screen, with no
+  qualifier. If the honest version needs "probably" or "likely", the idea is not
+  finished: name the extra field or endpoint that would settle it, and cost that too
+  (`docs/claims.md`).
 - **Done when** — one falsifiable sentence.
 
 Where a real design fork exists, give **three options with one recommended** — the
@@ -121,8 +127,8 @@ established convention in both plan docs. Where no fork exists, do not manufactu
   different idea; present it as one.
 - **Propose; do not edit the plan docs.** Produce ideas in the conversation and offer
   to append accepted ones to `docs/features-plan.md`. Editing a living planning
-  document unprompted pre-empts the plan gate (ADR-0024) and the one-concern-per-PR
-  rule.
+  document unprompted pre-empts the plan-and-approval gate (`CLAUDE.md`) and the
+  one-concern-per-PR rule.
 - **Prefer specificity over volume.** Three costed, anchored, kill-filtered ideas beat
   a list of twelve.
 
@@ -137,6 +143,7 @@ established convention in both plan docs. Where no fork exists, do not manufactu
 | What has already been proposed, shipped, parked, or rejected                | `docs/features-plan.md`, `docs/rockstar-parity-plan.md` — read live, never restated here |
 | Whether an idea fits the message-passing and caching architecture           | `docs/architecture.md`, `docs/state-management.md`                                       |
 | Whether a UX idea meets the loading / empty / error / a11y bar              | `docs/ux-guidelines.md`                                                                  |
+| Whether an idea can state its answer without hedging                        | `docs/claims.md`                                                                         |
 | Landing an accepted export idea as code                                     | the **`export-descriptor`** skill                                                        |
 
 ## Additional resources

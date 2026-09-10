@@ -27,13 +27,13 @@ whether a camera has to run again.
 | Territory                                               | Where                                          | What it costs                                 |
 | ------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------- |
 | **The shoot** — what the camera does in the panel       | `.storybook/scripts/capture/` (rig + 12 walks) | A re-shoot. Minutes, and the footage changes. |
-| **The composition** — everything drawn over the footage | `reel/src/`                                    | A render. Nothing is re-filmed (ADR-0045).    |
+| **The composition** — everything drawn over the footage | `reel/src/`                                    | A render. Nothing is re-filmed.               |
 | **The narration** — what is said over it                | `reel/NARRATION.md`, `captures/vo/*.wav`       | A re-record, which only Sam can do.           |
 | **The advertisement** — the store page cut              | `reel/src/ad/`, `reel/AD.md`                   | A render. No footage exists or is wanted.     |
 
 The fourth is a separate film sharing the first one's parts. It is nineteen
 seconds, entirely synthetic, and lives behind its own Remotion entry
-(`src/ad-entry.ts`) precisely so a broken capture cannot take it down with the
+(`reel/src/ad-entry.ts`) precisely so a broken capture cannot take it down with the
 reel. **`reel/AD.md` is its one page**; read that instead of these rows when the
 task is the ad.
 
@@ -82,14 +82,14 @@ Everything the film can draw is addressed by a string id. **Adding one is the
 component file plus one registry entry; nothing else.** Previews are derived, so
 a registered thing is immediately viewable in the studio.
 
-| To add…                               | Write                                                | Register in                                                          | Then                                                                                                                  |
-| ------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| A set piece (full-frame, panel gone)  | `reel/src/pieces/<Name>.tsx` + a `tempo()` sheet     | `pieces/index.ts` → `PIECES`, with `cues` and `preview: '<capture>'` | name it from an act: `{ kind: 'piece', piece: '<id>', from: '<capture>' }`; retune with `holds: { <cue>: <seconds> }` |
-| A diagram (drawn beside the panel)    | a component + an adapter entry                       | `diagrams/registry.tsx` → `DIAGRAMS`                                 | name it from a mark: `diagram: '<id>'`                                                                                |
-| A card (opening, seam, end furniture) | `reel/src/comp/<Name>.tsx` + a props-free `*Preview` | `comp/cards.ts` → `CARDS`                                            | placed by `Reel.tsx`/`Chapter.tsx`, never by the script                                                               |
-| A verb (reusable motion primitive)    | `reel/src/verbs/<Name>.tsx`                          | `verbs/useVerb.ts` → `VERBS`, budget in `verbs/ease.ts` → `FRAMES`   | add a row to `comp/Verbs.tsx` by hand — that matrix is not derived                                                    |
-| A beat or act                         | —                                                    | `reel/src/script.ts`                                                 | `npm run reel:plan`, then `npm run reel:vo:targets`                                                                   |
-| A stab (one shot of the ad)           | `reel/src/ad/stabs/<Name>.tsx` + a `tempo()` sheet   | `ad/stabs/index.ts` → `STABS`                                        | name it from `ad/script.ts`; look with `npm run ad:look -- stab-<id> --sheet`. See `reel/AD.md`                       |
+| To add…                               | Write                                                | Register in                                                          | Then                                                                                                                                                     |
+| ------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A set piece (full-frame, panel gone)  | `reel/src/pieces/<Name>.tsx` + a `tempo()` sheet     | `pieces/index.ts` → `PIECES`, with `cues` and `preview: '<capture>'` | name it from an act: `{ kind: 'piece', piece: '<id>', from: '<capture>' }`; retune with `holds: { <cue>: <seconds> }`                                    |
+| A diagram (drawn beside the panel)    | a component + an adapter entry                       | `diagrams/registry.tsx` → `DIAGRAMS`                                 | name it from a mark: `diagram: '<id>'`                                                                                                                   |
+| A card (opening, seam, end furniture) | `reel/src/comp/<Name>.tsx` + a props-free `*Preview` | `comp/cards.ts` → `CARDS`                                            | placed by `Reel.tsx`/`Chapter.tsx`, never by the script                                                                                                  |
+| A verb (reusable motion primitive)    | `reel/src/verbs/<Name>.tsx`                          | one row in `reel/src/verbs/registry.ts` → `VERBS`, budget included   | `verbs/ease.ts` → `FRAMES` is a derived _view_ over that table, never edited by hand; add a row to `comp/Verbs.tsx` by hand — that matrix is not derived |
+| A beat or act                         | —                                                    | `reel/src/script.ts`                                                 | `npm run reel:plan`, then `npm run reel:vo:targets`                                                                                                      |
+| A stab (one shot of the ad)           | `reel/src/ad/stabs/<Name>.tsx` + a `tempo()` sheet   | `ad/stabs/index.ts` → `STABS`                                        | name it from `ad/script.ts`; look with `npm run ad:look -- stab-<id> --sheet`. See `reel/AD.md`                                                          |
 
 **A piece's length is a literal, never a computation.** `Reel.tsx` resolves every
 act's length at module scope, so anything on that path that can throw —
@@ -105,7 +105,7 @@ the walk did not record is a walk that needs to record it — which is a re-shoo
 
 ## Detail
 
-@references/architecture.md — the three territories, the capture→manifest→composition contract, and the five reel ADRs compressed to their operative rules.
+@references/architecture.md — the three territories, the capture→manifest→composition contract, and the six rules the whole system rests on.
 @references/authoring.md — step-by-step procedures: add a beat, an act, a piece, a diagram, a verb; retime; re-record.
 @references/traps.md — the failure modes that look like success. Read this before trusting a green result.
 @references/gates.md — every gate, what it catches, and what a red one means.

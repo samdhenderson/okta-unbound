@@ -30,7 +30,7 @@ jobs:
 
       - name: Test + coverage gate
         # Runs the jsdom unit project with the coverage thresholds enforced
-        # (thresholds live in vitest.config.ts — ADR-0019). Replaces the old bare
+        # (thresholds live in vitest.config.ts, and nowhere else). Replaces the old bare
         # `test:run`.
         run: npm run test:coverage
 
@@ -72,7 +72,7 @@ jobs:
       - name: Cited paths resolve
         run: npm run lint:cited-paths
 
-  # Component explorer build gate (ADR-0010). Runs in parallel with `verify` (no
+  # Component explorer build gate. Runs in parallel with `verify` (no
   # `needs:`), so it never delays the fast lint/type/test feedback. A broken or
   # mis-imported story fails the PR.
   storybook:

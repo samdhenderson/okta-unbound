@@ -62,7 +62,7 @@ Okta's own attribution at zero extra cost.
 **Three states, never two:** populated → rule-fed; present-and-empty →
 authoritative manual add; **key absent** → unknown, fall back. An absent key is not
 evidence of a manual add.
-`[verified: shared/membership/memberRuleAttribution, ADR-0020]`
+`[verified: shared/membership/memberRuleAttribution]`
 
 Remember Okta drops this parameter from the `rel="next"` link — re-append it per
 page or everyone past member 200 degrades to `unknown`.
@@ -121,7 +121,9 @@ a `sortBy` on the same request both require `search`, not `filter`.
 groups` has no equivalent of `expand=group-rules`, so a user-centric view sees
 `unknown` for every membership. A group-centric and a user-centric view of the same
 membership may therefore legitimately disagree — but only where the group side said
-`unknown`. `[verified: ADR-0020, ADR-0021]`
+`unknown`. `[verified: sidepanel/hooks/getUserGroupsRequest]` — every membership it returns
+is UNKNOWN for exactly this reason, and `shared/membership/attributionParity` pins
+the divergence as expected.
 
 Since June 2026 the user-side view has a documented way out, one call per
 membership: `GET /api/v1/groups/{groupId}/users/{userId}/group-rules` for each group
@@ -282,7 +284,9 @@ Name matching is **case-sensitive**.
 Consequently, evaluating a membership function client-side requires the user's
 _complete_ group list across all sources, not the Okta groups a screen happens to
 have cached. A partial list produces confidently wrong answers.
-`[verified: ADR-0021]`
+`[verified: shared/membership/groupContext → groupContextOf]`, which takes the
+user's **complete** membership list because `isMemberOf*` is two-valued over the
+list it is given — a group missing from it reads as a confident "not a member".
 
 `isMemberOfAnyGroupName` is implemented in the okta-unbound evaluator but does not
 appear in Okta's published function list. `[unverified]`
@@ -301,7 +305,9 @@ Predicting which users a rule will capture is genuinely useful — for previewin
 rule before activating it, and for the attribution fallback. Two rules make it safe:
 
 **Parse, never `eval`.** Rule expressions are tenant-authored text. Use a real
-expression parser. `[verified: ADR-0017]`
+expression parser. `[verified: shared/ruleEvaluator]` — it parses with `jsep`, an
+AST-only parser that generates no code, then walks the AST against an explicit
+operator/function allow-list; never `eval` or `new Function`.
 
 **Return three values, not two: match, no-match, and unevaluable.** An evaluator
 that cannot resolve a construct must say so rather than guessing, because a wrong

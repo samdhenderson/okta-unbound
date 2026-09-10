@@ -34,7 +34,7 @@ Marker legend lives in `../SKILL.md`.
   `LOCKED_OUT`, `STAGED`, `SUSPENDED`, and password-reset states. `[docs]`
 - Status vocabulary in the admin console differs from the API's. Normalise before
   comparing a console export with an API result.
-  `[unverified: was shared/utils/statusNormalizer, retired as dead code in ADR-0022]`
+  `[unverified: was shared/utils/statusNormalizer, since retired as dead code]`
 
 Filter on it with `search`, not `filter`:
 
@@ -100,7 +100,7 @@ conflating them is how a panel comes to lock every attribute in the org.
 
 ### `master.type` has three values and they are not variations on a theme
 
-`[docs]` `[verified: sidepanel/components/users/profileEditability, ADR-0037]`
+`[docs]` `[verified: sidepanel/components/users/profileEditability]`
 
 | `master.type`    | Means                                                  | Carries `master.priority` |
 | ---------------- | ------------------------------------------------------ | ------------------------- |
@@ -118,12 +118,12 @@ attributes, and it names **no sources at all**, because the order it follows is
 org-level. Code that resolves a `PROFILE_MASTER` block by walking its `priority`
 is reading a field that is never there — it will not error, it will simply always
 find nothing, and whatever it does with "nothing" becomes its answer for the
-entire org. This repo shipped that bug and had to write ADR-0037 about it.
+entire org. This repo shipped that bug and had to write the rule down afterwards.
 
 ### The profile source is on the app row — no extra call
 
 `[verified: useOktaApi/userOperations → getUserApps, shared/schemas/okta →
-isProfileSourceApp, ADR-0037]`
+isProfileSourceApp]`
 
 Asked whether a user's profile source is available through the API, Okta Support
 answers _"currently, there is no API call to determine the user's profile
@@ -163,7 +163,7 @@ silently, because the drop is logged as a count. This repo shipped exactly that
 and it cost the Apps pane an app and the editability gate its whole answer. Never
 enumerate which fields an Okta list row may null; make every field below `id`
 degrade to "not reported" instead of costing the row.
-`[verified: shared/schemas/okta → oktaAppListItemSchema, ADR-0037]`
+`[verified: shared/schemas/okta → oktaAppListItemSchema]`
 
 **Only one profile source per user at a time.** `[docs]` Several attached sources
 are resolved by an org-level priority order Okta does not expose, so a user in two

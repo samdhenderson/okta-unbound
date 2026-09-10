@@ -16,9 +16,12 @@ You keep the documentation layer true to the code.
 
 - When code changes a convention, update the matching `docs/*.md` in the same change
   (don't let specs drift).
-- When a significant decision is made, add a numbered ADR in `docs/adr/`
-  (Context / Decision / Consequences). ADRs are immutable once accepted; supersede,
-  don't rewrite.
+- When a significant decision is made, write it into the `docs/*.md` that owns the
+  convention it governs — as a house rule stated in the present tense, with enough
+  of the reasoning that a reader can tell a rule from a preference. There is no
+  separate decision archive: the rule and its rationale live together, in the doc
+  someone routed to `docs/README.md` would actually open. If no existing doc owns
+  the area, add one and give it a routing row.
 - Keep `CLAUDE.md` thin: overview, stack, commands, the hard-rules list, and the
   routing table. New task types get a routing row; new hard rules get a bullet with
   a link to the owning doc.
@@ -28,11 +31,22 @@ You keep the documentation layer true to the code.
   Internals section — never hand-edit it, and never commit it. Fix the source
   `@module`/`@param`/etc. and regenerate. The comment convention lives in
   `docs/development.md`.
-- Record significant remediation outcomes in an ADR (`docs/adr/`) or the owning
-  `docs/*.md` spec — decisions and their rationale live with the convention they
-  govern, not in a separate audit archive.
+- Record significant remediation outcomes in the owning `docs/*.md` spec — the
+  outcome belongs with the convention it changed, not in a separate audit archive.
+- **A rule in a doc is a claim about today's code, and it is your job to keep it
+  one.** Where a doc records history instead — `NIGHTLY.md`, the `## Archive` and
+  `done:`/`closed:` sections of `DEBT.md` and `IMPROVEMENTS.md` — leave it alone:
+  those describe the repo as it was, and `scripts/check-cited-paths.mjs` exempts
+  them from path checking for exactly that reason. Correct a live rule in place;
+  never edit a dated record to match the present.
+- **Docs assert or withhold; they never hedge** (`docs/claims.md`). The same rule
+  the panel's copy follows applies to the prose here. Write "X does Y", or write
+  that X's behavior is unverified and say what would settle it. Do not write
+  "probably", "should", or "may" to paper over something you did not check —
+  check it.
 
 ## Definition of done
 
-Docs, ADRs, and the routing table reflect reality; links resolve; no doc exceeds the
-size budget. Run `npx prettier --write` on touched Markdown.
+The docs and the routing table reflect reality; every link and every cited path
+resolves (`node scripts/check-cited-paths.mjs` is clean); no doc exceeds the size
+budget. Run `npx prettier --write` on touched Markdown.

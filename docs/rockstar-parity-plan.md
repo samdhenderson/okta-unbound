@@ -36,7 +36,8 @@ Deliberately deferred (needs your input, not blocked):
 - **Administrators export** — unlike every other entity there is no clean single
   paginated list endpoint (it's per-user role assignments or the newer IAM
   `assignees` API, whose response envelope needs confirming against a live tenant).
-  Left out rather than ship a likely-wrong descriptor. See ADR-triggers below.
+  Left out rather than ship a likely-wrong descriptor. See the decisions this forces,
+  below.
 
 ---
 
@@ -57,8 +58,8 @@ Deliberately deferred (needs your input, not blocked):
 | Verify Factors (Push poll, TOTP, SMS, Voice, Email, SecQ)                                                                                    | **Port (write)**   | Interactive polling; hardest write, last.                                                                                                                                   |
 | Search Users / Search Groups (regex)                                                                                                         | Port               | `searchUsers` exists; add group regex search.                                                                                                                               |
 | Deleted-object browser (System Log mining)                                                                                                   | **Re-scope**       | Build the browser; **drop Backupta** (third-party data handoff breaks our privacy posture). Restore = native re-create where the log captured enough state; else read-only. |
-| API Explorer (REST client)                                                                                                                   | **Re-scope `[~]`** | Read-only slice shipped as the **Explorer** tab (GET-only, no new transport, no write surface). Writes remain a separate, future ADR per ADR-0041.                          |
-| Pretty-print JSON page                                                                                                                       | **Re-scope `[x]`** | Shipped as `JsonViewer`'s Shape/Redacted/Raw tree view inside the Explorer tab (ADR-0041).                                                                                  |
+| API Explorer (REST client)                                                                                                                   | **Re-scope `[~]`** | Read-only slice shipped as the **Explorer** tab (GET-only, no new transport, no write surface). Writes remain a separate, future decision.                                  |
+| Pretty-print JSON page                                                                                                                       | **Re-scope `[x]`** | Shipped as `JsonViewer`'s Shape/Redacted/Raw tree view inside the Explorer tab.                                                                                             |
 | Omnibox `rs` group search                                                                                                                    | Port               | New `omnibox` permission + SW handler.                                                                                                                                      |
 | App Notes / App Sign-On Policy HTML scraping                                                                                                 | **Drop/Park**      | Fragile settings-page scraping; conflicts with "responses are untrusted, no hand-built HTML." Revisit only if an API appears.                                               |
 | YubiKeys / AD OU export                                                                                                                      | Park               | Narrow-org value.                                                                                                                                                           |
@@ -95,7 +96,7 @@ Prove the export pattern end to end on the safest entities.
 - New **Export** tab shell.
 - Ship first descriptors: **Users**, **Groups (+`expand=stats`)**, **Group Rules**,
   **Group Memberships** — each with column picker + query box.
-- Zod-validate every new list response at the content boundary (ADR-0006). No new `any`.
+- Zod-validate every new list response at the content boundary. No new `any`.
 - Done when: an admin picks columns, previews, and downloads a correctly-escaped CSV for
   those four entities, cancellable, with a progress bar — green + stories + docs.
 
@@ -179,9 +180,9 @@ _Surfacing entity context (apps / idp / device / zone)_
   view. Session-expiry badge on Overview.
 - **Phase 3 — person deep-dive (reads).** Show User / Show AD / Show Linked Objects,
   folded into the Users-tab detail. Low risk, high daily value.
-- **Phase 4 — API Console + deleted-object browser** _(ADR-gated, see below)._
-  The read-only slice — GET-only Explorer tab, pattern-based redaction, Shape/
-  Redacted/Raw viewer — shipped per ADR-0041. **Remaining:** write support
+- **Phase 4 — API Console + deleted-object browser** _(gated on a written decision,
+  see below)._ The read-only slice — GET-only Explorer tab, pattern-based redaction,
+  Shape/Redacted/Raw viewer — has shipped. **Remaining:** write support
   (method allow-list beyond GET, write-confirm, audit) and the deleted-object
   browser over the System Log (no Backupta).
 - **Phase 5 — powerful writes** _(each audited, prior-state captured, hardest last)._
@@ -191,20 +192,20 @@ _Surfacing entity context (apps / idp / device / zone)_
 
 ---
 
-## ADRs this forces (our hard rules require them — write before the phase)
+## Decisions this forces (our hard rules require them — settle before the phase)
 
 - **API Console write-surface widening** (Phase 4): the read-only (GET-only) slice
-  shipped under ADR-0041 without triggering this, since it adds no write surface —
-  today the content script enforces a same-origin path guard plus an HTTP-method
+  shipped without triggering this, since it adds no write surface — today the content script enforces a same-origin path guard plus an HTTP-method
   allow-list (there is no path-level allow-list — any same-origin path may be
   fetched) and the Explorer only ever calls it with `GET`. Extending the Explorer
-  to `POST`/`PUT`/`PATCH`/`DELETE` still needs its own ADR fixing confirm-on-write
-  and audit before it ships.
+  to `POST`/`PUT`/`PATCH`/`DELETE` still needs a written decision fixing
+  confirm-on-write and audit before it ships.
 - **New write endpoints** (Phase 5): profile update, set-password, admin role
   grant/revoke, factor verify — each expands the write surface; each must audit + capture
   prior state so undo can _restore_.
 - **`omnibox` permission** (Phase 6), and whether to add the `okta-gov.com` / `okta.mil`
-  hosts rockstar covers — least-privilege ADR either way.
+  hosts rockstar covers — a least-privilege call either way, and any new permission
+  or host match needs Sam's explicit sign-off.
 - **Backupta dropped** — record the privacy rationale (never hand data to a third party)
   so it isn't re-litigated.
 - **HTML-scraping features dropped** — record the "treat every Okta response as untrusted;

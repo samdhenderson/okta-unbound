@@ -8,10 +8,10 @@ description: >-
   enumerating items rather than trusting an aggregate; working around grep's silent
   blind spots and substring false positives; using knip vs knip:production and git
   archaeology correctly; and proving a test is not vacuous. Use before deleting,
-  merging, unifying, retiring, or "consolidating" anything a doc, ADR, plan, or code
-  comment says is safe to touch, or when asked "is this still true", "verify this
+  merging, unifying, retiring, or "consolidating" anything a doc, plan, ledger item, or
+  code comment says is safe to touch, or when asked "is this still true", "verify this
   claim", "are these actually duplicates", "is anything still using this", "check
-  before I delete", "the ADR says N of these", or when implementing a cleanup item
+  before I delete", "the doc says N of these", or when implementing a cleanup item
   scoped from docs/features-plan.md or a remediation plan.
 ---
 
@@ -19,7 +19,7 @@ description: >-
 
 ## Scope and stance
 
-A plan, an ADR, a doc, or a code comment states a fact about this repo — _"14 verbatim
+A plan, a house doc, a ledger item, or a code comment states a fact about this repo — _"14 verbatim
 copies"_, _"nothing uses this"_, _"these three are structural twins"_ — and you are
 about to act on it destructively. Verify it first.
 
@@ -47,7 +47,7 @@ Run it when the claim is load-bearing for a destructive or committing action:
 - Merging, unifying, or "consolidating" N things into one
 - Retiring a test as superseded, or a module as dead
 - Implementing a cleanup item whose scope is a number in a plan
-- Writing an ADR that asserts a count or a taxonomy
+- Writing a house doc or a ledger item that asserts a count or a taxonomy
 
 Skip it when the action is additive and reversible, or when the work itself requires
 reading every item anyway — the reading _is_ the check.
@@ -92,7 +92,8 @@ never copies of anything.
 
 **Count** — list the items, classify each into a column, then total. Never report the
 total you were given. Classification is where the claim dies: of the "20 hand-rolled
-error states", most were mutation state, which ADR-0009's batch runner owns and the
+error states", most were mutation state, which the shared batch runner owns
+(`docs/scheduler.md`) and the
 proposed fix could never have absorbed.
 
 **Reachability** — the definition and its own tests will match your grep. Exclude them
@@ -109,9 +110,11 @@ primary coverage of the most safety-critical function in the module.
 
 **Behavioral** — open the file and find the mechanism. A `useRef` holding the last
 processed input is an owed-load latch; a boolean cleared on hide is a deferred re-arm.
-Do not infer the pattern from the hook's name, and do not trust a doc's assignment: the
-whole of ADR-0018's taxonomy was wrong about `src/sidepanel/hooks/useAppsData.ts`, and
-contradicted itself doing so. ADR-0026 corrects it to five patterns.
+Do not infer the pattern from the hook's name, and do not trust a doc's assignment: a
+published two-pattern taxonomy of visibility gating was wrong about
+`src/sidepanel/hooks/useAppsData.ts`, and contradicted itself doing so. A later audit
+corrected it to five patterns. The two the house docs name are in
+`docs/state-management.md`; derive the rest from the guards themselves.
 
 ## Step 3 — Enumerate; never trust an aggregate
 
@@ -160,7 +163,8 @@ git checkout -- src/sidepanel/components/policies/policyFilters.ts
 
 Red means the pin is real and you may not merge past it. Green means the test asserts
 nothing and the "pinned behaviour" you were protecting does not exist. Never edit the
-assertion to find out — that is ADR-0012 territory.
+assertion to find out — weakening a test to make it pass is forbidden outright
+(`docs/testing.md`).
 
 The same technique recovers ground truth a refactor erased:
 `git show <commit>^:<path>` prints a file as it was _before_ a commit, which settles
@@ -179,10 +183,18 @@ expand scope.
 4. **What should happen instead** — the revised action, or "leave alone", plus whether
    the source doc needs fixing.
 
-Point 4 has a repo-specific fork. A **doc or plan** gets corrected in place. An **ADR
-does not** — `docs/adr/README.md` holds them immutable, so a wrong ADR is superseded by
-a new one, never edited. ADR-0023 still says "14 verbatim"; ADR-0026 supersedes
-ADR-0018's taxonomy rather than rewriting it. Both are correct handling.
+Point 4 has a repo-specific fork. A **live doc or plan** — anything under `docs/`, or a
+still-open item in `DEBT.md` / `IMPROVEMENTS.md` — gets corrected in place. A **dated
+record does not.** `NIGHTLY.md` is an append-only session log, and the `## Archive`
+sections of `DEBT.md` and `IMPROVEMENTS.md` (along with any `done:` / `closed:` item)
+are closed history; `scripts/check-cited-paths.mjs` exempts the log from path checking
+for exactly that reason, because an entry's paths describe the repo _as it was that
+night_. Correcting one falsifies the record instead of repairing it. The remedy for a
+stale claim in a dated record is the next entry, never an edit to an old one.
+
+The lesson underneath both halves: **being written down in a published document is not
+evidence.** A dated record describes the repo as it was, not as it is — and a live doc
+is only as fresh as the last person who checked it.
 
 ## Standing rules
 
@@ -202,9 +214,9 @@ ADR-0018's taxonomy rather than rewriting it. Both are correct handling.
 | A search returning suspiciously little               | `references/tooling.md` (grep blind spots) |
 | Recovering what a file looked like before a refactor | `references/tooling.md` (git archaeology)  |
 | Wanting the precedent for why this gate exists       | `references/casebook.md`                   |
-| Deciding whether a test may be removed at all        | `docs/testing.md`, ADR-0022, ADR-0023      |
+| Deciding whether a test may be removed at all        | `docs/testing.md`                          |
 | Whether a module is genuinely unreachable            | `docs/dead-code.md`                        |
-| Writing the correction up as an ADR                  | `docs/README.md` + `docs/adr/README.md`    |
+| Writing the correction up in the house docs          | `docs/README.md`                           |
 
 ## Additional resources
 

@@ -3,6 +3,16 @@
 Append-only. Newest entry first. One entry per session, whether or not it
 shipped a PR.
 
+**Entries are not rewritten.** An entry describes the repo as it was that night,
+and a stale path or a superseded rule in an old entry is the record working, not
+rot to repair. Correct the present, never the log.
+
+One deliberate exception, on 2026-09-09: the decision-record corpus was deleted
+and restarted, so every record number cited in an older entry was replaced by the
+title of the decision it named. Nothing about what a session found or did was
+changed — a number that now points nowhere says less than the title it stood for.
+Live rules are in `docs/*.md`; the way in is `CLAUDE.md`'s routing table.
+
 Entry format:
 
 ```
@@ -84,7 +94,7 @@ resolution asked for `chromium_headless_shell-1228`, which is not installed,
 and the download is blocked. The lead ran it with the
 `VITEST_BROWSER_EXECUTABLE` pin `CONVENTIONS.md` documents and it passed,
 including 13 tests in the new `TabNavigation.stories.tsx` and its axe pass. So
-the ADR-0014 axe requirement for `I-034` is **proven here, not deferred to
+the axe requirement for `I-034` is **proven here, not deferred to
 CI** — but the pin needs to reach the writer agents, not just the lead, or
 every UI item will keep reporting its stories unverified.
 
@@ -305,7 +315,7 @@ a good pick for the next run** — `D-052` deliberately left
 `### [ID]-NNN` header in both ledgers was extracted and passed through
 `uniq -d`. `D-062` is the only duplicate in 100+ items, and it is a real
 collision of two unrelated items: a `perf` `research:awaiting-review` item at
-`DEBT.md:2630` (the one ADR-0058 and `docs/adr/README.md` cite) and an **open
+`DEBT.md:2630` (the one the context-engine work cites) and an **open
 P2 security** item at `:2668` (`handleGetAppInfo` reading an Okta response with
 no zod boundary). This is not cosmetic. Step 2 greps open PRs for bare
 `I-NNN`/`D-NNN` tokens and treats every match as claimed — so a PR closing
@@ -343,7 +353,7 @@ rather than dropped.
 **For the next run.** `D-073` is unblocked and disjoint now. `D-080` should be
 taken early — every night it survives is a night the duplicate id can swallow
 another item. `I-029` is newly filed and newly _unblocked_ by tonight: the
-reel's rule-impact chapter was held out of the reel by ADR-0043 precisely
+reel's rule-impact chapter was held out of the reel precisely
 because the product made the claim `D-052` just fixed, and that dependency was
 recorded only inside `D-052`, which is now closed.
 
@@ -368,22 +378,25 @@ to do this without contending for that tree.
 
 **The problem addressed.** Nine items were gated, and the gates had stopped being
 a queue and become a shelf. Five sat at `research:awaiting-review`, each waiting
-on a Proposed ADR that no unattended session had written, some since 2026-08-24.
+on a Proposed decision record that no unattended session had written, some since
+2026-08-24.
 Three sat at `blocked:needs-human`. One (`D-028`) had been skipped by six
 consecutive nights. None of it was going to change on its own: every item was
 waiting on either a human decision or a docs-only deliverable that the item's own
 rules permitted but no night had picked up.
 
-**Items moved:** `D-007b`, `I-008`, `I-012`, `I-018`, `D-062` (ADRs written);
+**Items moved:** `D-007b`, `I-008`, `I-012`, `I-018`, `D-062` (records written);
 `D-029c`, `D-029d`, `D-052` (decided by Sam); `I-014` (re-gated); `D-028`
 (extended). Two new items filed: `D-072`, `D-073`.
 
-**Five ADRs written, all at Status: Proposed** — 0054 (a 401 is a session, not a
-request), 0055 (what the evaluator refuses to guess), 0056 (how deep the snapshot
-goes), 0057 (a keyboard route into the panel), 0058 (one context engine). **Their
-five items stay at `research:awaiting-review` on purpose**: the status legend says
-Sam moves a research item to `open` by accepting the ADR and the session that
-wrote it never does. Writing the ADR does not exempt this session from that. The
+**Five decision records written, all at Status: Proposed** — a 401 is a session,
+not a request; what the evaluator refuses to guess; how deep the snapshot goes; a
+keyboard route into the panel; one context engine. (All five were later lost with
+the rest of the corpus when it was deleted and restarted at `0001`; the items they
+belong to say so.) **Their five items stay at `research:awaiting-review` on
+purpose**: the status legend says Sam moves a research item to `open` by accepting
+the record and the session that wrote it never does. Writing it does not exempt
+this session from that. The
 deliverable moved from "unwritten" to "on Sam's desk"; the gate word is unchanged
 and still accurate.
 
@@ -408,25 +421,24 @@ and still accurate.
 **`D-028` was already re-gated by PR #102's own session** to
 `blocked:needs-live-org`, with a thorough note. That call is right and stands;
 this session only appended **audit items 11–13**, each a question one of the new
-ADRs rests on and cannot answer from the repo: whether an expired session really
-returns 401 (ADR-0054 is inert if Okta redirects instead), `String.substring`
-out-of-range behaviour, and relative time-window boundaries (both ADR-0055
-refusals). `I-014` was re-gated to the same `blocked:needs-live-org`, since its
+decision records rests on and cannot answer from the repo: whether an expired
+session really returns 401 (the session-expiry design is inert if Okta redirects
+instead), `String.substring` out-of-range behaviour, and relative time-window
+boundaries (both evaluator refusals). `I-014` was re-gated to the same `blocked:needs-live-org`, since its
 own **Risk** paragraph already said its blocker cannot be closed from the repo.
 
 **Notes:**
 
-_The reserved-ADR-number habit failed five times out of five._ Every one of the
-five research items named an ADR **filename** in its **Files** list, and every one
-of those numbers had been taken by an unrelated ADR before the item was picked up
-— 0041, 0042, 0043, 0046 and 0047 all went to feature branches in the five days
-after the items were filed. The proposals landed as 0054–0058 instead. This is not
-bad luck: a number is claimed by whoever writes an ADR, feature branches write them
-continuously, and a backlog item waits weeks. Worse, it fails _quietly_ —
-`lint:cited-paths` only checks that a path resolves, so `I-018`'s reserved `0046`
-resolves today, to the response-layer ADR. A reader following that citation lands
-somewhere plausible and wrong. Filed as `D-072`; the fix is to name ADRs by title
-in the ledger and assign the number at write time.
+_The reserved-decision-record-number habit failed five times out of five._ Every
+one of the five research items named a record **filename** in its **Files** list,
+and every one of those numbers had been taken by an unrelated record before the
+item was picked up — five in a row went to feature branches in the days after the
+items were filed. This is not bad luck: a number is claimed by whoever writes a
+record, feature branches write them continuously, and a backlog item waits weeks.
+Worse, it fails _quietly_ — `lint:cited-paths` only checks that a path resolves,
+so a reserved number resolves today, to an unrelated record. A reader following
+that citation lands somewhere plausible and wrong. Filed as `D-072`; the fix is
+to name a record by title in the ledger and assign the number at write time.
 
 _A dead URL in a filing, found only by following it._ `D-052` cited an Okta support
 article that 404s. The quotes in the filing were accurate — the slug had rotted; it
@@ -440,11 +452,11 @@ module, in the reference meant to catch it, under a `[verified:]` marker pointin
 back at that module. Filed as `D-073`.
 
 _For the next unattended run._ Do not re-select `D-028` or `I-014`; both are
-`blocked:needs-live-org` and that is now a real gate word. The five ADR items are
-not available either — they need Sam's acceptance, not another session. `D-029c`
-is newly `open` with a real **Done when** and is a good pick, but note it deletes
-a user-visible control and retargets four test files, so it wants the ADR-0022
-note. `D-052` is newly `open`, fully scoped, and must stay its own PR.
+`blocked:needs-live-org` and that is now a real gate word. The five research
+items are not available either — they need Sam's acceptance, not another session.
+`D-029c` is newly `open` with a real **Done when** and is a good pick, but note it
+deletes a user-visible control and retargets four test files, so it wants the
+what-stays-covered note. `D-052` is newly `open`, fully scoped, and must stay its own PR.
 
 ---
 
@@ -642,7 +654,7 @@ is expected, so a session can stop re-deriving it.**
 
 `I-013` sorted second and was skipped again, this time _before_ dispatching a
 writer rather than after. The previous entry's refusal (the item names the verb
-and where ADR-0039 puts it, but not what the create-rule form asks for — design
+and where the action-bar rules put it, but not what the create-rule form asks for — design
 content a reviewer could disagree with once the code exists, with nobody to take
 the go-ahead from) was read at step 2 and treated as binding. The ordering fix
 that entry proposed works.
@@ -662,7 +674,7 @@ days (`D-013c` 2026-08-24, the other two 2026-08-27), so the `okta-claim-check`
 re-check was not mandated. Each **Problem** was read against the tree before
 claiming; all three held, and `D-050`'s turned out to understate the defect.
 
-_`D-050` was worse than its filing._ The item described an ADR-0006 boundary gap —
+_`D-050` was worse than its filing._ The item described a zod-boundary gap —
 unvalidated data reaching a surface that renders access verdicts. True, but the
 sharper consequence is that it was a **whole-surface outage from one bad row**: a
 rule whose `conditions.expression.value` is not a string makes
@@ -777,8 +789,8 @@ cost of that is no longer trivial.
 
 `I-013` sorted second (P2, `IMPROVEMENTS.md`, ungated) and I **started** a writer
 on it before stopping it. The previous entry had declined it on the grounds that
-the item says which verb to add and where ADR-0039 puts it, but not what the
-create-rule form asks for — design content a reviewer could disagree with after
+the item says which verb to add and where the action-bar rules put it, but not
+what the create-rule form asks for — design content a reviewer could disagree with after
 the code exists, which is `CLAUDE.md`'s plan-and-approval gate, with nobody to
 take the go-ahead from. That reasoning was recorded _for the next session_, and I
 did not read it until after dispatching the agent. Stopped it at its first tool
@@ -841,7 +853,7 @@ a diff would have prevented:
 - `ui-reviewer` was asked directly whether removing `RuleCard`'s comparator is an
   acceptable trade given the render-volume cost, and said yes, on the grounds that
   the comparator was not merely suboptimal but wrong — it omitted all five handler
-  props, each of which gates a control per ADR-0039. It confirmed the existing
+  props, each of which gates a control in the action bar. It confirmed the existing
   story set still covers what the component renders.
 
 _Seven new items filed_ (`D-045`–`D-051`), none folded into tonight's diff. Two
@@ -849,7 +861,7 @@ are worth Sam's attention above the rest: **`D-048`** — a rule's exclusion lis
 never reaches the user-path classifier, so an excluded user is attributed to the
 very rule that excludes them; long-standing, newly visible, and it is the item
 that would let `UsersTab.test.tsx`'s flipped assertion be restored. **`D-050`** —
-the group-rules fallback fetch validates nothing, an ADR-0006 gap on a path that
+the group-rules fallback fetch validates nothing, a zod-boundary gap on a path that
 five surfaces read.
 
 _Scope beyond Files lists, disclosed._ `D-029b` needed an origin its callers held
@@ -911,8 +923,8 @@ because re-gating is Sam's call. Four nights have now spent the same reasoning
 on the same unreachable item.
 
 `I-013` sorted second (P2, `IMPROVEMENTS.md`, ungated) and was **not** taken.
-The item says which verb to add and where ADR-0039 puts it, but not what the
-create-rule form asks for — a rule name, a condition expression, a target group.
+The item says which verb to add and where the action-bar rules put it, but not
+what the create-rule form asks for — a rule name, a condition expression, a target group.
 That is design content a reviewer could disagree with after the code exists,
 which is exactly `CLAUDE.md`'s plan-and-approval gate, and an unattended run has
 nobody to take the go-ahead from. Left `open` and unmodified. If Sam wants it
@@ -943,7 +955,7 @@ of independently checking the diff's own load-bearing claim rather than taking
 it: `ruleImpact.ts` widens snapshot rows `as unknown as OktaGroupRule[]` on the
 argument that `RULES_SPEC` zod-parsed them on write, and the reviewer verified
 that against `snapshotSync.ts` — same schema as the fallback fetch path, so no
-ADR-0006 gap. It also confirmed the origin read is an exact-match IndexedDB
+zod-boundary gap. It also confirmed the origin read is an exact-match IndexedDB
 index lookup, not a substring match, so `CLAUDE.md`'s hostname-parsing rule is
 not in play.
 
@@ -1190,7 +1202,7 @@ claimable by a nightly that previously had none of them.
 finding that mattered most and the reason both ledgers now carry a `Verified:`
 date and a 14-day re-check rule. `D-008` claimed `useEntityQuery.ts` had zero
 production consumers; it has nine importers across eleven call sites and
-ADR-0026 affirms them. A night that had picked up that P3 "cleanup" would have
+the visibility-gating spec affirms them. A night that had picked up that P3 "cleanup" would have
 deleted a hook nine surfaces depend on, and the ledger would have read as tidy
 housekeeping while it happened. The lesson is narrower than "verify things":
 **every one of the three was refuted by enumerating importers, and every one of
@@ -1229,8 +1241,9 @@ also split: file contention applies to every open PR including Sam's own, while
 the three-PR cap counts only PRs an unattended run would have opened.
 
 **`research:awaiting-review` is a new status and a nightly may claim it.** The
-deliverable is a Proposed ADR and the PR touches `docs/` only. `I-008`, `I-012`
-and the new `D-007b` are seeded there, with target filenames named in each item
+deliverable is a Proposed decision record and the PR touches `docs/` only.
+`I-008`, `I-012` and the new `D-007b` are seeded there, with target filenames
+named in each item
 — `lint:cited-paths` cannot check a `docs/` path (`D-024`), so those filenames
 are load-bearing and unverified by any gate.
 
@@ -1397,7 +1410,7 @@ a grep whose whole purpose is completeness.)
 The item says to adopt `getAppById`. Doing so would have dropped the `low`
 priority this bulk phase runs at, and discarded the HTTP `status` that
 `D-019`'s test asserts by value — i.e. it would have forced deleting a field
-from a live assertion, which is the ADR-0012 stop condition. The writer parsed
+from a live assertion, which is the never-weaken-a-test stop condition. The writer parsed
 inline instead and recorded why in the module's `@remarks`. The consequence —
 a validated single-app read the one caller who most wants it cannot use — is
 filed as `D-027` rather than papered over. **A Done-when is a proposal, not an
@@ -1868,7 +1881,7 @@ reproduces the same 5 failures locally and deterministically. Root cause was
 a **wait that never waited** — `await findByText('Engineering')` resolved
 against the user's `department` (the fixture uses `Engineering` for both the
 department and the group name, and all three detail panes stay mounted per
-ADR-0018), so it returned while zero `<h4>`s existed and the row lookup
+the tabs-stay-mounted rule), so it returned while zero `<h4>`s existed and the row lookup
 raced the load. A probe pinned this exactly: matched node was a `SPAN` in a
 `<dd>`, one `Engineering` node total, `queryAllByRole('heading', {level: 4})`
 empty. The second symptom was a genuine production bug — two uncancelled

@@ -10,6 +10,25 @@ divergence is filed as debt, not silently normalized.
 caps, off-limits areas). This doc owns the technical standards a nightly
 agent needs to match the existing house style.
 
+## Decision records
+
+The practice continues, the corpus does not: the historical records were
+deleted and numbering restarts at `0001` under `docs/adr/`. Nothing in this
+repo cites an old number any more, and nothing should — a rule that still
+applies has been restated as a plain house rule in `CLAUDE.md` or the owning
+`docs/*.md`, and that restatement is now the source of truth.
+
+The bar for writing a new record is the plan-gate test, unchanged: a change
+that **commits to an approach** (new abstraction, data path, storage schema,
+cache-key grammar, message action), is **architecturally significant**, is
+**cross-cutting**, **touches the security surface**, or **changes an existing
+contract**. Anything below that bar is a house rule in a doc, not a record.
+
+A record is immutable once accepted — supersede it with a later one rather
+than editing it. That is why `scripts/check-cited-paths.mjs` excludes
+`docs/adr/` as a _citing_ corpus: a path inside a record describes the repo as
+it was on the date of the decision.
+
 ## DOM injection rules
 
 `src/content/pageContext.ts` is the reference pattern for scraping the Okta
@@ -79,7 +98,7 @@ concurrency cap of 5, a priority queue (`interactive > high > normal > low`),
 when remaining capacity drops below a threshold, and exponential backoff with
 up to 3 retries.
 
-Two things about that threshold and that cooldown (ADR-0059). The threshold is
+Two things about that threshold and that cooldown. The threshold is
 the **org's own** — `GET /api/v1/rate-limit-settings/warning-threshold` less 5
 percentage points, read once per org per browser session — falling back to the
 configured 10% on any unusable answer, including the 403 a non-super-admin
@@ -116,7 +135,7 @@ that there is now something to call instead of improvising: use
 try/catch.
 
 Both gaps the predicate left open are now closed (`D-007b`, `D-007c`,
-2026-09-02, ADR-0054 Accepted):
+2026-09-02):
 
 - **Session expiry is app-wide, not one surface.** The scheduler observes every
   settled result; the first `isSessionExpired` hit suspends that tab, settles
@@ -134,7 +153,8 @@ Both gaps the predicate left open are now closed (`D-007b`, `D-007c`,
   enters that path. A resolved failure also no longer counts as a success in
   `metrics.successfulRequests`, nor as `success` in the audit trail.
 
-Two pieces of ADR-0054 remain outstanding and are filed, not forgotten: surfaces
+Two pieces of that app-wide session-expiry design remain outstanding and are
+filed, not forgotten: surfaces
 still render their own failed-request error states rather than last-known
 content under the banner (`D-104`), and the `interrupted` / `not attempted`
 audit outcomes do not exist (`D-105`).
@@ -144,10 +164,13 @@ audit outcomes do not exist (`D-105`).
 - Mock at the `useOktaApi` facade or a fake `CoreApi`, never MSW (not used in
   this repo — the side panel never calls `fetch` directly).
 - Coverage thresholds (enforced in CI via `test:coverage`, source of truth
-  is `vitest.config.ts`): lines 75 / functions 70 / branches 65 / statements 75. Never lower a threshold to pass — that needs an ADR.
-- Never weaken an assertion or delete a case to silence a failure (ADR-0012).
-  Removing a test is only legitimate under the four ADR-0022 carve-outs, and
-  needs a PR note saying what stays covered.
+  is `vitest.config.ts`): lines 75 / functions 70 / branches 65 / statements 75. Never lower a threshold to pass — that is a decision record, not a config edit.
+- Never weaken an assertion or delete a case to silence a failure. Removing a
+  test is only legitimate under the four carve-outs — the subject was deleted, a
+  story already asserts the same render, the unit was replaced and the suite is
+  retargeted assertion-by-assertion, or the assertion pins something the house
+  rules ban (CSS classes, referential identity, props brokered to mocked
+  children) — and needs a PR note saying what stays covered.
 - A new regression test must be proven non-vacuous: revert the fix, confirm
   the test goes red, restore the fix, confirm green.
 - Wrap every local `vitest run` invocation with an external timeout — a

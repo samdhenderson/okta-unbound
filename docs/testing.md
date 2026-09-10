@@ -2,9 +2,9 @@
 
 Stack: **Vitest 4** + **@testing-library/react**, jsdom env (`src/test/setup.ts`).
 Coverage via v8, thresholds lines 75%, statements 75%, functions 70%, branches 65%
-(enforced in CI). This is the one place prose spells the numbers out; everywhere else
-refers to `vitest.config.ts`, which is authoritative
-([adr/0019](./adr/0019-coverage-threshold-recalibration.md)).
+(enforced in CI). `vitest.config.ts` is the single source of truth for those numbers;
+this is the one place prose spells them out, and no other doc, comment, badge, or
+agent file may restate them — reference the config instead.
 
 Two projects: `unit` (jsdom, browser-free — `npm run test:run`) and `storybook`
 (headless Chromium, every story as a render test — `npm run test:storybook`). Only
@@ -20,36 +20,34 @@ Two projects: `unit` (jsdom, browser-free — `npm run test:run`) and `storybook
 - **Components** — RTL tests for shared components and feature components with real
   behavior: interactions, conditional states, error paths. Query by role, assert what
   the user sees. A component whose whole contract is "renders these props" gets a
-  story instead ([adr/0023](./adr/0023-test-value-policy.md)).
+  story instead — one runner per pure-render component, never both.
 
 ### What a story actually asserts
 
 A story without a `play` function asserts exactly two things: **it renders without
-throwing, and it is axe-clean** ([adr/0011](./adr/0011-storybook-single-docs-site.md),
-[adr/0014](./adr/0014-storybook-hardening.md)). It does **not** check that the right
-text appeared, that a callback fired, or that a derived value is correct. Only a
-`play` function does that, and at the time of writing **6 of 115 story files have
-one**.
+throwing, and it is axe-clean**. It does **not** check that the right text appeared,
+that a callback fired, or that a derived value is correct. Only a `play` function does
+that, and at the time of writing **6 of 115 story files have one**.
 
-This matters when applying ADR-0023's "one runner per pure-render component". A
-2026-08-13 audit found 45 components carrying both a `.test.tsx` and a
-`.stories.tsx` and checked whether the story could stand in for the test. **None
-could.** Even the three whose stories have `play` functions cover different ground
-than their tests — `AuthPoliciesTab`'s play expands a policy, while its test also
-pins re-expansion caching and the ADR-0018 visibility deferral.
+This matters when applying "one runner per pure-render component". A 2026-08-13 audit
+found 45 components carrying both a `.test.tsx` and a `.stories.tsx` and checked
+whether the story could stand in for the test. **None could.** Even the three whose
+stories have `play` functions cover different ground than their tests —
+`AuthPoliciesTab`'s play expands a policy, while its test also pins re-expansion
+caching and the deferral that keeps a hidden tab from fetching.
 
-So "there's already a story" is **not** on its own a reason to delete a test. Removal
-under [adr/0022](./adr/0022-test-lifecycle.md)(2) requires the story to actually
-assert the same behavior — read its `play` function and say so in the PR note. Going
-forward, the rule bites at authoring time: don't write a render-only test for a
-component that already has a story.
+So "there's already a story" is **not** on its own a reason to delete a test.
+Collapsing duplicate coverage requires the story to actually assert the same
+behavior — read its `play` function and say so in the PR note. Going forward, the
+rule bites at authoring time: don't write a render-only test for a component that
+already has a story.
 
 ## Mocking the network — at the facade, not MSW
 
 The side panel **never calls `fetch`**. Every Okta request goes side panel →
 background scheduler → content script, and the content script holds the only `fetch`
 in the codebase. So there is no request for MSW to intercept, and MSW is not used
-anywhere in this repo ([adr/0010](./adr/0010-component-explorer.md)).
+anywhere in this repo.
 
 Mock at the layer under test instead:
 
@@ -75,24 +73,48 @@ fake every `useOktaApi/*` suite builds on; pass per-suite defaults through its
 - Test behavior, not implementation: query by role/text (`getByRole`), assert what
   the user sees, avoid snapshotting large trees.
 - Fixtures or factories used by three or more files live in `src/test/`, not copied
-  into each ([adr/0023](./adr/0023-test-value-policy.md)).
+  into each.
 - For refactors, **write the test against current behavior first** (it should pass),
   then refactor and keep it green — that's the safety net (see
   [state-management.md](./state-management.md)).
-- **Never modify or delete an existing test to make it pass** ([adr/0012](./adr/0012-no-test-tampering.md)).
-  A red test is a signal to investigate. Fix the code, or — if the behavior
-  legitimately changed — update only the test's setup/mocks/fixtures. Rewriting an
-  assertion or deleting/skipping a case to silence a failure is banned; if the
-  assertion itself looks wrong, flag it in the PR and stop.
-- **Removing a test is not the same as silencing one** ([adr/0022](./adr/0022-test-lifecycle.md)).
-  Four cases are allowed — the subject was deleted, a story already asserts the same
-  render, the unit was replaced and the suite is retargeted assertion-by-assertion,
-  or the assertion pins something [adr/0023](./adr/0023-test-value-policy.md) bans.
-  Each needs a PR note naming what stays covered.
-- **What we don't test** ([adr/0023](./adr/0023-test-value-policy.md)): CSS class or
-  inline-style assertions, referential identity (`Object.is` on props/callbacks),
-  props brokered to mocked children, static literal tables, and a second runner for a
-  pure-render component that already has a story. Fixtures used by 3+ files live in
+- **Never modify or delete an existing test to make it pass.** A red test is a signal
+  to investigate. Fix the code, or — if the behavior legitimately changed — update
+  only the test's setup/mocks/fixtures. The line is between the observable contract
+  (assertions, and the existence of a case) and the scaffolding around it (setup,
+  mocks, fixtures): scaffolding may move with the behavior, the contract may not be
+  quietly weakened to resolve a failure. Rewriting an assertion or deleting/skipping a
+  case to silence a failure is banned; if the assertion itself looks wrong, flag it in
+  the PR and stop — a human decides. PRs here are squash-merged, so a weakened
+  assertion is unrecoverable from history; that is why the rule is enforced at
+  authoring and review time rather than audited afterward.
+- **Removing a test is not the same as silencing one.** Exactly four cases are
+  allowed, because in each the test's subject moved or vanished rather than being
+  silenced:
+  1. **Subject deleted → test deleted.** The module, export, or component is gone, so
+     there is nothing left to assert against.
+  2. **Duplicate coverage collapsed.** A story already asserts the same observable
+     behavior. Keep the test where there is interaction logic; keep only the story for
+     a pure-render component.
+  3. **Unit retargeted.** The unit was replaced rather than removed, and the suite
+     moves onto its replacement **assertion-by-assertion**. Retargeting is not an
+     opportunity to thin — a dropped case is a deleted case and needs its own
+     justification under (1) or (2).
+  4. **Implementation-detail assertion removed.** The assertion pins something the
+     "what we don't test" list below bans.
+
+  Each needs a note in the PR description naming what was removed and what behavior
+  stays covered. That note is the reviewable artifact; without it the diff is
+  indistinguishable from tampering after the squash. A behavior that legitimately
+  changed is still an assertion change — prefer **inverting** the case over deleting
+  it, in its own commit that changes nothing else.
+
+- **What we don't test**: CSS class or inline-style assertions (`toHaveClass`,
+  `className).toContain`, `[style*=]`), referential identity (`Object.is` on
+  props/callbacks/shared instances), props brokered to mocked children, static literal
+  tables, and a second runner for a pure-render component that already has a story.
+  Assert the user-visible consequence instead — a label, a role, an `aria-*` state,
+  presence or absence. If a tree is too heavy to render without mocking its children,
+  that is a signal to decompose the component. Fixtures used by 3+ files live in
   `src/test/`.
 - **Always put a hard external timeout around any local `vitest run`** —
   `perl -e 'alarm 240; exec @ARGV' npx vitest run <file>`. `--testTimeout` does
@@ -126,10 +148,11 @@ fake every `useOktaApi/*` suite builds on; pass per-suite defaults through its
 The thresholds in `vitest.config.ts` are enforced in CI — the `verify` job runs
 `npm run test:coverage`. The gate is a **ratchet against regression, not a quality
 target**: it sits a few points below actual coverage so a real drop trips it while
-routine work stays green ([adr/0019](./adr/0019-coverage-threshold-recalibration.md)).
-Keep new code covered so the gate stays green; the `test-writer` agent owns this.
-Malformed-Okta-payload rejection is covered by the zod schema tests (see
-[adr/0006](./adr/0006-zod-boundary-validation.md)).
+routine work stays green. It answers "did coverage fall off a cliff?", not "is this
+code well tested?" — raising it later is separate work that must be preceded by
+actually writing the tests. Keep new code covered so the gate stays green; the
+`test-writer` agent owns this. Malformed-Okta-payload rejection is covered by the zod
+schema tests.
 
 Coverage says nothing about whether code is _reachable_. Two things follow, and they
 pull in opposite directions:

@@ -137,7 +137,7 @@ returns 200 with the key absent rather than an error, so absence stays a state t
 handle rather than an exception to catch.
 
 **Verified.** `shared/membership/memberRuleAttribution` (three-state read),
-`shared/utils/oktaPagination` (`preserveQueryParams`), ADR-0020.
+`shared/utils/oktaPagination` (`preserveQueryParams`).
 
 ### `/admin/users/search` status labels — T2
 
@@ -168,7 +168,7 @@ cares about most.
 better path for automation regardless.
 
 **Verified.** Formerly `shared/utils/statusNormalizer`, which carried this mapping
-table until it was deleted as unreachable dead code (ADR-0022, `docs/dead-code.md`).
+table until it was deleted as unreachable dead code (`docs/dead-code.md`).
 The mapping itself is unchanged — but nothing in the codebase pins it any more, so
 treat it as `[unverified]` and re-confirm against a console export before relying on it.
 

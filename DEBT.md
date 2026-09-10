@@ -53,7 +53,7 @@ makes that move.
 
 ---
 
-### D-028 · Independently audit the ADR-0040 org snapshot against a real org
+### D-028 · Independently audit the org snapshot against a real org
 
 A line that links a **PR** rather than a commit was archived while that PR was
 still in flight, so its squash-merge sha did not exist yet. Replace the PR link
@@ -68,8 +68,7 @@ PR you expect to land.
 - **Files:** `src/shared/snapshot/snapshotSync.ts`,
   `src/shared/snapshot/syncMeta.ts`,
   `src/shared/snapshot/orgSnapshotStore.ts`,
-  `src/background/snapshotScheduler.ts`, `src/background/snapshotBridge.ts`,
-  `docs/adr/0040-the-background-owns-the-org.md`
+  `src/background/snapshotScheduler.ts`, `src/background/snapshotBridge.ts`
 - **Problem:** The snapshot was built and tested entirely against canned
   pages and a `Map`-backed `idb` fake. Every unit test passes, and several
   were checked by mutation — but **no part of it has run against real Okta.**
@@ -122,17 +121,18 @@ PR you expect to land.
       disagree. Confirm no surface reads one while another reads the other
       within a single view.
 
-  11. **An expired session really returns 401.** ADR-0054 rests entirely on
+  11. **An expired session really returns 401.** The whole app-wide
+      session-expiry design rests entirely on
       `isSessionExpired()` firing, which requires Okta to answer an expired
       admin session with HTTP 401 rather than a 302 to a sign-in page. If these
       endpoints redirect instead, the whole suspension mechanism sits idle and
       the panel behaves exactly as it does today. Sign out in a second tab and
       watch what the next queued request actually receives.
-  12. **`String.substring` out-of-range behaviour.** ADR-0055 refuses to
-      implement it because Okta's clamp-versus-throw behaviour at the boundary
+  12. **`String.substring` out-of-range behaviour.** The rule evaluator
+      refuses to implement it because Okta's clamp-versus-throw behaviour at the boundary
       is undocumented, and the disagreement is silent. Write a rule using it
       with an out-of-range index and record which it does.
-  13. **Relative time-window boundaries.** Also ADR-0055: whether a "within N
+  13. **Relative time-window boundaries.** Same source: whether a "within N
       days" condition is inclusive or exclusive, and whether it evaluates
       against org time or UTC. A rule granting access for 30 days that the
       panel reads as 31 is a security claim the panel got wrong.
@@ -140,8 +140,8 @@ PR you expect to land.
 - **Done when:** Each numbered item above has a recorded verdict against a
   real org — confirmed, refuted, or not-reachable — with any refuted item
   filed as its own `DEBT.md` entry. Assumptions that turn out to be wrong are
-  corrected in ADR-0040 rather than only in code, since the ADR is what the
-  next change will be read against.
+  corrected in `docs/architecture.md`'s snapshot section rather than only in
+  code, since the written design is what the next change will be read against.
 - **Risk:** None to ship — this is a read-only audit. The risk is in _not_
   doing it: every item above is currently an argument rather than an
   observation.
@@ -164,9 +164,9 @@ PR you expect to land.
   right and stands. `I-014` is blocked from the other direction on the same
   missing thing — its sparse-patch-merge blocker also cannot be closed from the
   repo — so if a live-org session happens, run both in it. And items 11–13 were
-  appended by `chore/unstick-backlog`: each is a question one of ADR-0054 /
-  ADR-0055 rests on and cannot answer from the repo, which is exactly the shape
-  of thing this item collects.
+  appended by `chore/unstick-backlog`: each is a question the session-expiry
+  design or the rule evaluator rests on and cannot answer from the repo, which
+  is exactly the shape of thing this item collects.
 
 ### D-029 · Retire `shared/rulesCache` — the last hand-rolled cache
 
@@ -178,8 +178,8 @@ decision to do it deliberately stands, but nobody should scope from the original
 `groupRuleIndex.ts`) mention `RulesCache` **only in prose comments** and do not
 import it. Worse, it named `src/sidepanel/cache/entityCache.ts` as a **writer**;
 `entityCache.ts` does not reference `RulesCache` outside a cross-reference in a
-doc comment at `:17`. `docs/adr/0040-the-background-owns-the-org.md:183` repeats
-the same wrong count and is corrected alongside this.
+doc comment at `:17`. The snapshot's own design write-up repeats the same wrong
+count and is corrected alongside this.
 
 **There are four real importers**, and the split below follows them. Do not land
 this as a sweep — one consumer per PR, tests first.
@@ -240,7 +240,7 @@ rationale that caching a join is only one more thing to invalidate.
   the tab header's timestamp from `lastFullWalkAt`. The Rules tab renders a
   freshness line in place of the refresh control and the cost readout. The four
   test files that mock `RulesCache` for this path are retargeted
-  assertion-by-assertion per ADR-0022, with a PR note saying what stays covered;
+  assertion-by-assertion, with a PR note saying what stays covered;
   any assertion pinning the refresh button or the cost number is removed under
   the "subject was deleted" carve-out, not weakened.
 - **Risk:** Medium. This is the slice that changes what the Rules tab _is_. It
@@ -254,8 +254,7 @@ rationale that caching a join is only one more thing to invalidate.
 - **Priority:** P2
 - **Size:** L
 - **Files:** `src/sidepanel/hooks/useOktaApi/groupDiscovery.ts:8,91,121,145-156`,
-  `src/shared/rulesCache.ts` (deleted here, and only here),
-  `docs/adr/0040-the-background-owns-the-org.md` §6
+  `src/shared/rulesCache.ts` (deleted here, and only here)
 - **Verified:** 2026-08-24.
 - **Problem:** `fetchAndCacheAllGroupRules` is a **duplicate producer** of
   `RULES_SPEC`'s walk — the snapshot already fetches every group rule in the org
@@ -270,8 +269,9 @@ rationale that caching a join is only one more thing to invalidate.
 - **Done when:** `src/shared/rulesCache.ts` is deleted, no module outside
   `orgSnapshotStore` reads or writes a rules cache, and a test pins that two
   surfaces reading rules within one view cannot disagree. Anything removed
-  carries an ADR-0022 note. ADR-0040 §6's Status paragraph is updated to say the
-  retirement is complete — and not before.
+  carries a PR note saying what stays covered. The snapshot design's
+  rules-retirement note is updated to say the retirement is complete — and not
+  before.
 - **Risk:** Medium. Land last, after `D-029a`–`c`.
 - **Status:** blocked:D-029c
 - **Re-gated 2026-08-29 by Sam.** This was `blocked:needs-human`, but the human
@@ -380,7 +380,8 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** Low. `--bar-bleed` feeds only the merge chrome and the bleed plate —
   nothing in flow, nothing interactive.
 - **Status:** open
-- **Related:** ADR-0032
+- **Related:** the sticky-band contract — bands publish their heights
+  (`--rail-h`, `--header-h`); never hard-code a sticky offset
 
 ### D-057 · `RulesTab`'s alert states cannot be reached by a story
 
@@ -399,7 +400,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   covered; this is the one render site that is not.
 - **Done when:** The alert stack is reachable from a story — most likely by
   extracting it into a prop-driven subcomponent — and both states ship an
-  axe-clean story (ADR-0010/ADR-0014). This is a refactor of how the tab gets its
+  axe-clean story. This is a refactor of how the tab gets its
   alert state, not a copy change, which is why it was not folded into `D-013c`.
 - **Risk:** Low-medium — touches a large tab component; `RulesTab.tsx` is already
   near the ~300-line bar, so extraction should reduce it rather than grow it.
@@ -427,10 +428,10 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Done when:** stories mirroring `IdResolvesWithoutARequest` /
   `UserIdCostsOneRequest` override `getAppById` to return `{ kind:
 'session-expired' }` and `{ kind: 'failed', status: 500 }` and assert the exact
-  message each renders; axe-clean per ADR-0014.
+  message each renders; axe-clean, per the house story requirement.
 - **Risk:** Low — stories only, no `src/` behavior.
 - **Status:** open
-- **Related:** `D-007a`, ADR-0010, ADR-0014
+- **Related:** `D-007a`
 
 ### D-074 · A null figure on Home renders an em dash, on camera
 
@@ -442,14 +443,14 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   `null`, confirmed by reading the component while building the reel's Home
   chapter.
 - **Problem:** `FigureNumber` prints an em dash as its placeholder for a figure
-  that has not resolved. ADR-0043 bans em and en dashes on camera, and Home is
+  that has not resolved. The reel bans em and en dashes on camera, and Home is
   about to become the reel's first chapter, so this glyph is one incomplete
   collection away from being in the film.
 
   It is latent rather than live: under a complete demo snapshot every figure
   resolves and the branch is never taken. But "never taken under the fixtures we
   happen to ship" is not the same as safe — a collection left `complete: false`
-  (ADR-0040 §7 makes that a real state, not a hypothetical) puts one on screen,
+  (an incomplete collection is a real state, not a hypothetical) puts one on screen,
   and it would be discovered in footage rather than in review.
 
   Not folded into the reel work that found it: the placeholder glyph for an
@@ -462,12 +463,12 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   `aria-hidden` behaviour it already has preserved. A story covers the null
   case.
 - **Risk:** Low. One component, one branch, already storied.
-- **Related:** ADR-0043 (no dashes on camera), ADR-0040 §7 (a collection can
-  honestly be incomplete)
+- **Related:** the reel's no-dashes-on-camera rule; a snapshot collection can
+  honestly be incomplete
 - **Renumbered:** filed as `D-063` on `feat/demo-org-writes` while `main` gave that
   number to a different item. Main's numbering is the published one, so this moved
-  rather than main's. Exactly the failure `D-072` describes for ADR numbers, one
-  ledger over.
+  rather than main's. Exactly the failure `D-072` describes for reserved
+  decision-record numbers, one ledger over.
 - **Status:** open
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
@@ -491,9 +492,9 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 
   Nothing detects it. The drift check (`checkDrift` → `driftVerdict`) compares
   the collection's _total row count_ against `x-total-count`, and membership
-  churn does not change how many groups exist. ADR-0040 pairs delta with drift
-  because "a delta cannot see a deletion"; this is a second hole in the same
-  argument, and drift does not close it either.
+  churn does not change how many groups exist. The snapshot design pairs delta
+  with drift because "a delta cannot see a deletion"; this is a second hole in
+  the same argument, and drift does not close it either.
 
   Consequence: every surface reading a group's member count off the snapshot —
   the Groups list, the size filter, `analyzeClutter`'s `empty` signal,
@@ -518,14 +519,14 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   3. Whether Okta's `filter` (which documents `lastMembershipUpdated`) is the
      better instrument than `search` here — `filter` supports the field and the
      ordering operators, `search` supports neither reliably.
-- **Risk:** Medium. This is the sync contract and it touches ADR-0040's
-  reasoning, so it wants an ADR rather than a direct edit. The failure mode it
+- **Risk:** Medium. This is the sync contract and it touches the snapshot
+  design's reasoning, so it wants a decision record rather than a direct edit. The failure mode it
   fixes is silent and affects numbers admins act on, which argues for doing it
   soon; the fix itself can widen a delta into a near-full walk if the query is
   wrong, which argues for the probe being right first.
 - **Status:** research:awaiting-review
-- **Related:** `0247c9f` (parses the field this needs), ADR-0040 (the sync
-  design this amends)
+- **Related:** `0247c9f` (parses the field this needs); the snapshot sync
+  design this amends
 
 ### D-077 · `STALE_AGE_DAYS` was tuned for the wrong clock
 
@@ -562,7 +563,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   the verbs and the search field sit at gutter + 8px. Measured docked at 400px:
   title `x=16`, first verb `x=24`, search field `x=24`; at 840px, `x=20` against
   `x=28`. The 8px is constant at every density, because the row's padding is a
-  raw `p-2` rather than one of ADR-0048's spacing roles.
+  raw `p-2` rather than one of the spacing roles.
 
   It is filed as debt rather than cosmetics because `ActionBar`'s own module
   header states the opposite as a design guarantee — "the row keeps the column's
@@ -589,8 +590,8 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   overflow budget, so the split can change at narrow widths and wants a look at
   360px before and after.
 - **Status:** open
-- **Related:** ADR-0032 (the sticky stack and the merge), ADR-0048 (the spacing
-  roles the raw `p-2` predates), `useActionOverflow` (reads the row's padding)
+- **Related:** the sticky stack and the header/action-bar merge; the spacing
+  roles the raw `p-2` predates; `useActionOverflow` (reads the row's padding)
 
 ### D-084 · The granting-group fallback's walked app-group rows still die with the panel
 
@@ -601,15 +602,16 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   `src/sidepanel/cache/appGroupSnapshot.ts` (the read half, which exists),
   `src/shared/snapshot/snapshotSync.ts` (`APP_GROUPS_SPEC`, `runShardedWalk`'s
   sweep), `src/shared/snapshot/orgSnapshotStore.ts` (`upsertMany`, `sweepStale`)
-- **Verified:** 2026-08-31 — filed by the ADR-0059 work while wiring the read
-  half; the sweep interaction was read directly in `runShardedWalk`, not assumed.
-- **Problem:** ADR-0059 made the fallback read app→group assignments out of the
+- **Verified:** 2026-08-31 — filed by the rate-limit/bucketing work while wiring
+  the read half; the sweep interaction was read directly in `runShardedWalk`, not
+  assumed.
+- **Problem:** That work made the fallback read app→group assignments out of the
   org snapshot before walking anything, which covers `GROUP_PUSH` apps. Every
   **other** app still walks `/api/v1/apps/{id}/groups`, and that result lands
   only in the panel-owned in-memory `entityCache` at `TTL_LONG`. Close the side
   panel and it is gone; the next visit to the same user's Apps pane re-spends one
   request per unresolved app against the `/api/v1/apps` bucket — the same bucket
-  the report that prompted ADR-0059 was exhausting.
+  the report that prompted it was exhausting.
 - **Why it is not just "write them to the snapshot":** `runShardedWalk` stamps
   every row it writes with the walk's mark and then **sweeps** anything not
   re-marked. A row written opportunistically by the panel, for an app the
@@ -630,8 +632,8 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   loosely would make deletions invisible in a collection whose whole job is to
   reflect the org.
 - **Status:** open
-- **Related:** ADR-0040 (the snapshot and its sweep), ADR-0059 (the read half
-  that exists), ADR-0020 (why absence is not an empty answer)
+- **Related:** the snapshot and its sweep; the app→group read half that already
+  exists; the rule that absence is not an empty answer
 
 ### D-091 · `GroupDetailView.tsx` is 514 lines, well over the ~300-line bar
 
@@ -760,7 +762,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   unevaluable one — most likely a distinct `WithheldReason` code set where
   `active` is computed — and each renders its own sentence. The retargeted
   `Not Predicted Rule Inactive` story pins the current combined wording; retire
-  or split it deliberately, with a note (ADR-0022).
+  or split it deliberately, with a PR note saying what stays covered.
 - **Risk:** Low — additive reason code plus copy; the engine already has the
   status it needs.
 - **Status:** open
@@ -773,36 +775,35 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Size:** S
 - **Files:** `src/sidepanel/hooks/useOktaTabContext.ts`,
   `src/sidepanel/hooks/useOktaTabContext.test.tsx`,
-  `docs/adr/0026-visibility-gating-patterns.md`
-- **Verified:** 2026-09-02 — enumerated by the ADR-0058 implementer while
-  merging the two context engines. The pin used to be expressed as
+  `docs/state-management.md` (the visibility-gating patterns)
+- **Verified:** 2026-09-02 — enumerated while merging the two context engines. The pin used to be expressed as
   `useOktaPageContext(!isPinned)`; it is now expressed as frozen identity
   selection in `App`, and no production call site passes `enabled: false`.
 - **Problem:** `enabled` and `resyncPending` remain implemented, documented and
-  tested as the generic ADR-0026 visibility gate, but nothing in `src/` uses
+  tested as the generic visibility gate, but nothing in `src/` uses
   them any more. They are a maintained API with no consumer — the same shape
-  ADR-0039 rejects for unwired action descriptors, one layer down. Either they
-  are the repo's general gating mechanism and something should use them, or
-  they are dead weight that future readers will mistake for the live mechanism
-  (ADR-0026's own audit table already had to be annotated as historical).
-- **Done when:** either removed, with ADR-0026 updated to name the surviving
-  mechanism, or explicitly kept with a comment saying why an unused gate is
+  the action-bar rules reject for unwired action descriptors, one layer down.
+  Either they are the repo's general gating mechanism and something should use
+  them, or they are dead weight that future readers will mistake for the live
+  mechanism (the gating write-up's own audit table already had to be annotated
+  as historical).
+- **Done when:** either removed, with `docs/state-management.md` updated to name
+  the surviving mechanism, or explicitly kept with a comment saying why an unused gate is
   worth maintaining. Deciding is the work; both outcomes are acceptable.
 - **Risk:** Low — the tests that cover them pass either way, but they are the
   thing that has to be retargeted or retired.
 - **Status:** open
-- **Related:** ADR-0058, ADR-0026, `D-062` (the merge)
+- **Related:** `docs/state-management.md`, `D-062` (the merge)
 
 ### D-104 · A suspended session blanks every surface instead of holding last-known content
 
 - **Category:** ux
 - **Priority:** P2
 - **Size:** M
-- **Files:** `docs/adr/0054-a-401-is-a-session-not-a-request.md` §3, and the
-  per-surface error states across `src/sidepanel/components/**`
+- **Files:** the per-surface error states across `src/sidepanel/components/**`
 - **Verified:** 2026-09-02 — the `D-007b` implementer stopped here deliberately;
   the banner ships, the per-surface half does not.
-- **Problem:** ADR-0054 §3 says a suspended session should leave each surface
+- **Problem:** The session-expiry design says a suspended session should leave each surface
   showing its **last-known content** under the one global banner, because the
   data on screen was true a moment ago and an expired session does not make it
   false. What ships instead: the banner appears, and every surface independently
@@ -813,9 +814,9 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   with the banner as the single explanation, and only surfaces with no content
   yet show an empty/error state.
 - **Risk:** Medium — touches many surfaces' loading/error branches; needs the
-  ADR-0018 stay-mounted behaviour respected.
+  tabs-stay-mounted behaviour respected.
 - **Status:** open
-- **Related:** `D-007b`, ADR-0054 §3
+- **Related:** `D-007b`, `CONVENTIONS.md`'s session-expiry section
 
 ### D-105 · `interrupted` and `not attempted` audit outcomes do not exist
 
@@ -826,7 +827,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   vocabulary), `src/shared/scheduler/apiScheduler.ts` (the short-circuit path)
 - **Verified:** 2026-09-02 — enumerated by the `D-007b` implementer while
   wiring suspension; `requestLog.ts` was outside its ownership.
-- **Problem:** ADR-0054 §5 asks for `interrupted` and `not attempted` as audit
+- **Problem:** The session-expiry design asks for `interrupted` and `not attempted` as audit
   outcomes, so a request the scheduler settled without sending is
   distinguishable from one that was tried and failed. `recordRequest` has a
   two-outcome vocabulary and no third state, so today a short-circuited request
@@ -839,7 +840,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** Low — additive vocabulary; the audit store already validates rows on
   read-back (`D-043`), so the schema is the thing to extend.
 - **Status:** open
-- **Related:** `D-007b`, `D-043`, ADR-0054 §5
+- **Related:** `D-007b`, `D-043`, `CONVENTIONS.md`'s session-expiry section
 
 ### D-106 · A narrowed error message can still be Okta's own `errorSummary`
 
@@ -981,7 +982,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   hierarchy re-designed rather than merely made compliant.
 - **Status:** open
 - **Related:** `I-017` (chose the correct value and doubted itself), `I-015`
-  (its raw id uses `text-neutral-500`, same register), ADR-0010, ADR-0014
+  (its raw id uses `text-neutral-500`, same register), `docs/design-system.md`
 
 ### D-109 · `AppListItem`'s header is click-to-expand but not keyboard-operable
 
@@ -1192,7 +1193,8 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
   making, but it is a visible behaviour change on live data, so it wants the
   `okta-claim-check` skill run over a real org's rules before it lands.
 - **Status:** open
-- **Related:** `I-026` (found it), `ADR-0017` (parse, never guess)
+- **Related:** `I-026` (found it); the parse-never-guess rule for untrusted
+  expressions
 
 ### D-115 · One `error` field serves two independent loads
 
@@ -1273,7 +1275,8 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
   most state and the deep-link path is easy to break silently. Pure refactor:
   if an assertion needs rewriting, the extraction is wrong.
 - **Status:** open
-- **Related:** `I-019` (grew it and reported it), `D-091`, `ADR-0024`
+- **Related:** `I-019` (grew it and reported it), `D-091`; `CLAUDE.md`'s
+  plan-and-approval gate
 
 ### D-118 · `App.tsx` is 732 lines and mounts its provider stack inline
 
@@ -1293,7 +1296,8 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Done when:** the provider stack moves into an `AppProviders` component
   (its own file) taking the values it needs and rendering `children`, so
   `App.tsx` nests one level and adding a provider stops touching it at all.
-  Pure refactor: no provider's `enabled` semantics change, and ADR-0018 gating
+  Pure refactor: no provider's `enabled` semantics change, and the
+  tabs-stay-mounted gating
   stays bit-for-bit — `App.tabpersistence`, `App.contextengine` and the palette
   suites must pass untouched. If an assertion needs rewriting, the extraction
   is wrong.
@@ -1310,8 +1314,8 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Files:** `scripts/check-cited-paths.mjs`, `docs/state-management.md`,
   `docs/architecture.md`
 - **Verified:** 2026-09-02 — found by the `I-033` writer: both docs asserted
-  "exactly two contexts" and had been wrong since ADR-0030 added
-  `NavigationContext`. Corrected in that commit; the absence of a check is not.
+  "exactly two contexts" and had been wrong since `NavigationContext` was
+  added. Corrected in that commit; the absence of a check is not.
 - **Problem:** Two specs state a closed inventory of React contexts, and a
   third context existed for months without either noticing. A closed list with
   nothing enforcing it is worse than no list: readers trust it, and it silently
@@ -1324,7 +1328,7 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Risk:** Low — build tooling; the failure mode is a false red, which is
   visible immediately.
 - **Status:** open
-- **Related:** `I-033` (found it), `ADR-0030`
+- **Related:** `I-033` (found it)
 
 ### D-120 · `useExportTab.ts` carries every concern the Export tab has
 
@@ -1352,7 +1356,7 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
   paths run through here. Pure refactor only; no change to what a cell
   contains.
 - **Status:** open
-- **Related:** `I-020` (found it and added to it), `ADR-0065`, `D-118`, `D-117`
+- **Related:** `I-020` (found it and added to it), `D-118`, `D-117`
 
 ### D-121 · Two demo chapters cannot be filmed
 
@@ -1387,10 +1391,11 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Risk:** Medium. `npm run capture` is not in the verification ladder, so
   this does not fail CI — which is exactly why it went unnoticed. The reel
   cannot be rendered complete until it is fixed, and a demo that silently films
-  nine of ten chapters is the failure mode `ADR-0045` and the capture rig's
-  own judging step exist to prevent.
+  nine of ten chapters is the failure mode the capture rig's own judging step
+  exists to prevent.
 - **Status:** open
-- **Related:** `ADR-0045`, `ADR-0043`, `I-029` (filmed clean alongside these)
+- **Related:** `.claude/skills/okta-reel/SKILL.md`, `I-029` (filmed clean
+  alongside these)
 
 ### D-122 · The cooldown arms on a global count the gate no longer uses
 
@@ -1398,8 +1403,9 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Priority:** P2
 - **Size:** S
 - **Files:** `src/shared/scheduler/apiScheduler.ts`
-- **Verified:** 2026-09-03 — found while implementing `ADR-0070` §4.
-- **Problem:** `ADR-0070` §4 stopped charging every in-flight request to every
+- **Verified:** 2026-09-03 — found while implementing per-bucket rate-limit
+  gating.
+- **Problem:** That change stopped charging every in-flight request to every
   bucket's budget, but scoped the correction to `gateFor()` only. The cooldown
   arming path still adds the global `activeRequests.size` to a single bucket's
   observed usage when deciding whether that bucket is close enough to its limit
@@ -1417,7 +1423,7 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
   `security-logging-reviewer` pass `CLAUDE.md` requires — and the safe-direction
   argument must be re-checked, not assumed, if the charge is narrowed.
 - **Status:** open
-- **Related:** `ADR-0070`, `ADR-0059`
+- **Related:** `CONVENTIONS.md`'s Okta API throttling section
 
 ### D-123 · `ActionBar.tsx` is 664 lines and renders its measurement probe twice
 
@@ -1442,7 +1448,7 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
   the headless story runner loads no Tailwind, so a refactor's real effect is
   only visible by eye. Land it behind a manual pass in `npm run storybook`.
 - **Status:** open
-- **Related:** `ADR-0051`, `ADR-0068`, `D-117`, `D-118`
+- **Related:** `docs/components.md`, `D-117`, `D-118`
 
 ### D-124 · Three `ActivityView` fields survive with no reader
 
@@ -1468,7 +1474,7 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Risk:** Low, but it touches many fixtures — the reason it was left out of
   the redesign's diff rather than folded in. One concern, one commit.
 - **Status:** open
-- **Related:** `ADR-0008`, `ADR-0070`, `docs/dead-code.md`
+- **Related:** `docs/dead-code.md`
 
 ### D-125 · A cold org's first burst spends on the default threshold
 
@@ -1479,7 +1485,7 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Files:** `src/background/rateLimitThreshold.ts`,
   `src/background/snapshotBridge.ts`, `src/shared/scheduler/apiScheduler.ts`
 - **Verified:** 2026-09-03 — found while verifying the threshold path end to end
-  for the activity-rack redesign (ADR-0072); the wiring gap found alongside it
+  for the activity-rack redesign; the wiring gap found alongside it
   (the alarm route never arming the probe at all) is fixed, this half is not.
 - **Problem:** `ensureRateLimitThreshold` is deliberately never awaited — a
   request must not wait on, or be failed by, an optional refinement of the
@@ -1490,7 +1496,7 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
   it is not. Its default warning threshold is 60, which implies backing off at
   45% remaining, and the cold window runs at 10% instead — a 35-point gap,
   spanning exactly the moment a snapshot fan-out is at its widest and the
-  detector has observed nothing (ADR-0070's "wider cold start" consequence
+  detector has observed nothing (the per-bucket gate's wider cold start
   compounds it). The org whose admins configured a low threshold because they
   are near their limits is the org this hurts.
 - **Done when:** a cold org's first fan-out cannot run wide on the default. The
@@ -1505,7 +1511,8 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
   as a security invariant, and awaiting anything on the snapshot path risks
   stalling a walk behind a probe that a non-Super-Admin org answers with 403.
   The memo already makes that 403 cost one request per browser session, so the
-  stall is bounded — but it needs an ADR-shaped argument, not a one-line change.
+  stall is bounded — but it needs a decision-record-shaped argument, not a
+  one-line change.
 
 ### D-126 · The blast radius asserts a membership change it cannot compute
 
@@ -1657,6 +1664,29 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
   either drops the rail row or records that the rail no longer participates.
 - **Risk:** None. Comments only.
 
+### D-132 · The one-skeleton-per-pane rule has one implementation, not two
+
+- **Status:** open
+- **Category:** ux
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/groups/detail/GroupOverviewPane.tsx`
+- **Verified:** 2026-09-09 — found while restating the rule into
+  `docs/state-management.md` and checking it against the panes that exist.
+- **Problem:** The rule as written says a pane draws one `Skeleton` for its
+  whole layout and swaps once. `UserProfilePane` is the only pane that does
+  this. `GroupOverviewPane` uses the older per-tile shape: each tile renders
+  absent-until-resolved, so the pane passes through exactly the mixed
+  real-and-placeholder state the rule calls a defect. The record that
+  introduced the rule named `GroupOverviewPane` as its reference
+  implementation; it never was one.
+- **Done when:** `GroupOverviewPane` holds a single pane-level `Skeleton`
+  while its queries are in flight and swaps once, releasing on idle-by-design,
+  failure and settled-empty per the rule; or the rule is narrowed in
+  `docs/state-management.md` to describe what the panes actually do.
+- **Risk:** Low. Loading presentation only, no data path. The pane's story
+  covers the settled render; the swap needs a story or a test of its own.
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
@@ -1673,7 +1703,7 @@ system" section for when an item moves here.
 - **D-004** — useRuleLifecycle.ts has zero test coverage on a security-sensitive audit path — done:#67 ([9ea42a3](https://github.com/samdhenderson/okta-unbound/commit/9ea42a3))
 - **D-005** — useRuleImpact.ts has zero test coverage on its race guards — done:#70 ([c2d0109](https://github.com/samdhenderson/okta-unbound/commit/c2d0109))
 - **D-006** — Untested error/guard branches in three hooks — done:#70 ([c2d0109](https://github.com/samdhenderson/okta-unbound/commit/c2d0109))
-- **D-007** — No session-expiry / 401 handling anywhere in the API path — umbrella, discharged: scoped 2026-08-24 into `D-007a`/`D-007b`/`D-007c`, all three now landed. The `401 ⇒ expired` decision this item recorded is ADR-0054, Accepted — done:#118 ([PR #118](https://github.com/samdhenderson/okta-unbound/pull/118))
+- **D-007** — No session-expiry / 401 handling anywhere in the API path — umbrella, discharged: scoped 2026-08-24 into `D-007a`/`D-007b`/`D-007c`, all three now landed. The `401 ⇒ expired` decision this item recorded is now house rule in `CONVENTIONS.md` — done:#118 ([PR #118](https://github.com/samdhenderson/okta-unbound/pull/118))
 - **D-007a** — A failure result that can say what failed — done:#102 ([82a5ce4](https://github.com/samdhenderson/okta-unbound/commit/82a5ce4))
 - **D-007b** — One expired session, not thirty failed requests — done:#118 ([PR #118](https://github.com/samdhenderson/okta-unbound/pull/118))
 - **D-007c** — A 429 is never retried, because it is not an error — done:#118 ([PR #118](https://github.com/samdhenderson/okta-unbound/pull/118))
@@ -1721,7 +1751,7 @@ system" section for when an item moves here.
 - **D-050** — The group-rules fallback fetch validates nothing — done:#99 ([a5903c4](https://github.com/samdhenderson/okta-unbound/commit/a5903c4))
 - **D-051** — Two always-on log calls pass a raw caught error — done:#118 ([PR #118](https://github.com/samdhenderson/okta-unbound/pull/118))
 - **D-052** — `ruleImpact` models rule deactivation as retracting membership — done:#106 ([415baf9](https://github.com/samdhenderson/okta-unbound/commit/415baf9))
-- **D-053** — Late-landing content re-lays-out the text beside it — umbrella; one defect filed as a seven-part cluster (D-053a–g), all closed (no direct commit of its own — see those entries; convention recorded in ADR-0044)
+- **D-053** — Late-landing content re-lays-out the text beside it — umbrella; one defect filed as a seven-part cluster (D-053a–g), all closed (no direct commit of its own — see those entries; the reserve-space convention is recorded in `docs/motion.md`)
 - **D-053a** — The match percentage goes from 2 characters to 4, beside a truncating label — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
 - **D-053b** — A status chip swings between 4 and 13 characters beside a wrapping mono expression — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
 - **D-053c** — A group-count badge takes width out of a multi-line description — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))

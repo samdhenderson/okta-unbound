@@ -3,25 +3,29 @@
 Shared UI lives in [`src/sidepanel/components/shared/`](../src/sidepanel/components/shared/).
 Feature components live under `components/{groups,users,apps,home}/`.
 
+This doc answers **which primitive to reach for, and what the rules are**; the per-primitive prop
+and mode contracts are in [component-primitives.md](./component-primitives.md). Verb strips —
+`ActionBar`, descriptors, `primary`, refresh: [action-bars.md](./action-bars.md). Shell layout, the
+rail, sticky bands, the view stack: [page-shell.md](./page-shell.md). Card chrome and `ListRow`'s
+row contract: [surfaces.md](./surfaces.md).
+
 ## Hard rules
 
 1. **Never hand-roll a `<button>`, `<input>`, `<select>`, `<textarea>`, or
-   `<input type="checkbox">`** in a feature component. Use `Button`/`IconButton`/
-   `FilterPill`/`SortPill`, `Input`, `Select`, `Textarea`, `Checkbox`. If a shape is
-   missing (e.g. a filter chip / toggle), add a variant to the shared component —
-   don't inline bespoke classes. The only remaining raw controls are the
-   **documented exceptions** listed below.
-2. **Import from the barrel** `components/shared` — not deep paths. The barrel
-   exports every shared component (see below).
+   `<input type="checkbox">`** in a feature component. Use
+   `Button`/`IconButton`/`FilterPill`/`SortPill`, `Input`, `Select`, `Textarea`, `Checkbox`. If a
+   shape is missing (e.g. a filter chip / toggle), add a variant to the shared component — don't
+   inline bespoke classes. The only remaining raw controls are the **documented exceptions** below.
+2. **Import from the barrel** `components/shared` — not deep paths. The barrel exports every shared
+   component.
 3. **No raw hex / no ad-hoc spacing** — see [design-system.md](./design-system.md).
-4. **Icons come from the `Icon` registry** (`shared/Icon.tsx`, 31 typed
-   icons, `currentColor`). Don't inline `<svg>` in feature code.
+4. **Icons come from the `Icon` registry** (`shared/Icon.tsx`, 31 typed icons, `currentColor`).
+   Don't inline `<svg>` in feature code.
 
 ## The variant/size convention
 
-Every configurable component uses a **`Record<Variant, string>` lookup map** plus a
-composed `baseClasses` string. Follow this exact pattern (see `Button.tsx`,
-`AlertMessage.tsx`, `Modal.tsx`, `Icon.tsx`):
+Every configurable component uses a **`Record<Variant, string>` lookup map** plus a composed
+`baseClasses` string (see `Button.tsx`, `AlertMessage.tsx`, `Modal.tsx`, `Icon.tsx`):
 
 ```tsx
 export type FooVariant = 'primary' | 'secondary' | 'danger';
@@ -29,555 +33,166 @@ const variantClasses: Record<FooVariant, string> = {/* … */};
 const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' };
 ```
 
-- Size scale is `sm | md | lg` by default. Three primitives extend it where call sites
-  needed steps the three-name scale could not express: `Button` adds `xs` (24px, the
-  recessed step — `ActionBar`'s selection register, never a page verb), `Icon` is
-  `xs | sm | md | lg | xl` (12/16/20/24/32px) and `LoadingSpinner` is
-  `sm | md | lg | xl | 2xl` (16/20/24/32/48px) — deliberately **name-for-name aligned**
-  over the sizes they share, so a spinner standing in for a glyph is requested by the
-  glyph's own size name. Extend a scale only when a real call site needs the step.
-  Express sizing in Tailwind classes only — do **not** add parallel inline pixel `style`
-  maps (`Button.tsx` is the model: its sizing is class-based).
-- Variant/status names use the shared `StatusType` (`success | warning | danger |
-info`) — never `error`.
+- Size scale is `sm | md | lg` by default. Three primitives extend it where a call site needed a
+  step the three-name scale could not express: `Button` adds `xs` (24px, the recessed step —
+  `ActionBar`'s selection register, never a page verb), `Icon` is `xs | sm | md | lg | xl`
+  (12/16/20/24/32px), `LoadingSpinner` is `sm | md | lg | xl | 2xl` (16/20/24/32/48px). The scales
+  are **name-for-name aligned** over the sizes they share, so a spinner standing in for a glyph is
+  requested by the glyph's own size name. Extend a scale only when a real call site needs the step,
+  and express sizing in Tailwind classes only — never a parallel inline pixel `style` map
+  (`Button.tsx` is the model).
+- Variant/status names use the shared `StatusType` (`success | warning | danger | info`) — never
+  `error`.
 
 ## Catalog
 
-`shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`,
-`CopyButton`, `CopyableId`, `CopyIconButton`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`,
-`Textarea`, `PageHeader`, `EntityIdentity`, `EntityLink`, `Badge`, `Breadcrumbs`, `Tabs`,
-`Tooltip`,
-`CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`,
-`Eyebrow`, `StableWidth`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`,
-`SearchDropdown`, `SelectionChips`, `RuleExpressionText`.
+`shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`, `CopyButton`,
+`CopyableId`, `CopyIconButton`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`,
+`Textarea`, `PageHeader`, `EntityIdentity`, `EntityLink`, `Badge`, `Breadcrumbs`, `Tabs`, `Tooltip`,
+`CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`, `Eyebrow`,
+`StableWidth`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`, `SearchDropdown`,
+`SelectionChips`, `RuleExpressionText`.
 
-There are **three** copy primitives and they are not interchangeable. `CopyButton` is a
-labelled `Button` for copying a _body_ of text (a list of emails, a CSV). `CopyableId` is
-a truncating `<code>` plus a ghost icon button, for a single identifier sitting in a line
-of metadata — never hand-roll that pair again. `CopyIconButton` is the ghost icon button
-on its own, with no `<code>` beside it, for a control that copies an id the surface is
-already displaying some other way (`EntityLink`'s `copyId`); `CopyableId` delegates to it,
-so the glyph swap and the ~1.5s `"Copied!"` accessible-name flip are decided in one place
-(D-015).
+These carry a written contract; read it before using one:
 
-`EntityLink` is the **one** way to reference another entity — "that rule / that group /
-that user / that app" — and it has three modes, picked by which of `name` and `id` you
-pass. Never hand-roll any of them:
+- [`EntityLink`](./component-primitives.md#entitylink) — reference another entity
+- [`RuleExpressionText`](./component-primitives.md#ruleexpressiontext) — print a rule's condition
+- [`EntityChooser`](./component-primitives.md#entitychooser) — the scope-first launcher (`home/`)
+- [`Tabs`](./component-primitives.md#tabs) — the tab bar: `underline`, `segmented`, `rail`
+- [`Tooltip`](./component-primitives.md#tooltip) — the hover- and focus-triggered label chip
+- [`IconButton` / `StretchedButton`](./component-primitives.md#iconbutton-and-stretchedbutton) — the
+  disclosure control, and the whole-card press target
+- [`StableWidth`](./component-primitives.md#stablewidth) — hold a slot open at its widest state
+- [`Breadcrumbs` / `PageHeader`](./component-primitives.md#breadcrumbs-and-pageheader) — the in-tab
+  trail, and the rung's header
+- [`ListRow`](./surfaces.md) — the row chrome primitive; props and interior contract in surfaces.md
+- [`Eyebrow`](./design-system.md) — the one uppercase section-label recipe, fixed in
+  design-system.md. `as` picks `span` (default), `div` or `h3`; use `h3` only for a heading that
+  joins the document outline. A label, not a control: one needing a verb sits beside a `Button`.
 
-| You have         | Pass          | You get                                                                                                                         |
-| ---------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| a name and an id | `name` + `id` | a chip with the type glyph and a chevron that opens the entity on its own tab                                                   |
-| a name, no id    | `name` only   | plain text with a tooltip saying why it cannot be opened — a link is never a control that does nothing                          |
-| an id, no name   | `id` only     | the missing name **stated** in the non-answer register, the raw id beside it via `CopyableId`, and the entity still opens by id |
+### Copy primitives
 
-The id-only mode is the shared home for "this reference is known only by an id" (I-017).
-Three views had each grown their own local chip for it, and none could open the entity —
-a capability regression against the resolved chip beside it in the same list, since a
-valid id is a valid destination whether or not the view learned a name. **Never pass the
-id in as the `name`**: an id in a name's slot is indistinguishable from a group actually
-called `00gFAKE…` (I-003).
+Three, not interchangeable. `CopyButton` is a labelled `Button` for copying a _body_ of text (a list
+of emails, a CSV). `CopyableId` is a truncating `<code>` plus a ghost icon button, for a single
+identifier in a line of metadata — never hand-roll that pair again. `CopyIconButton` is that ghost
+icon button alone, for a control copying an id the surface already shows another way (`EntityLink`'s
+`copyId`); `CopyableId` delegates to it, so the glyph swap and the ~1.5s `"Copied!"` accessible-name
+flip are decided in one place (`D-015`).
 
-Its chrome follows the house **non-answer convention** that `AppScopeIndicator` and
-`GroupSourceIndicator` state explicitly and that applies well beyond `EntityLink`: **a
-chip is a proven answer; a non-answer is muted italic text and is never chipped**, so a
-missing answer can never carry an answer's weight at a glance. A reference whose entity
-is _gone_ ("no group in this org has this id") is a proven answer and keeps its warning
-chip — `RuleDetailView`'s `MissingGroupChip` is that, and is deliberately not the same
-thing.
+## Two conventions that outlive their primitive
 
-Four props parameterise the unresolved state, all with sane defaults so no caller passes
-Tailwind to make it fit: `unresolvedLabel` (the words, default `"<Type> name not loaded"`),
-`unresolvedReason` (the tooltip — "Okta returned no name" and "this view never asked" are
-different facts), `copyIdLabel` (default `"Copy <type> id <id>"`), and `type`, which picks
-the glyph. Whether it links is not a prop and should not become one: it follows the id's
-navigability, so a chevron appears only where it can be honoured. Sizing is likewise fixed
-at `text-xs` on purpose — a resolved and an unresolved reference share one slot in a list,
-and letting a caller size one of them was the type-size mismatch I-003 had to fix.
+**A chip is a proven answer; a non-answer is muted italic text and is never chipped.** `EntityLink`
+states it, and so do `AppScopeIndicator` and `GroupSourceIndicator`. A reference whose entity is
+_gone_ ("no group in this org has this id") is a proven answer and keeps its warning chip —
+`RuleDetailView`'s `MissingGroupChip` is that, deliberately not the same thing.
 
-`RuleExpressionText` is the **one** way to print a rule's condition text. It renders the
-expression in mono and swaps each quoted literal the caller can name for an `EntityLink`
-group chip, so `isMemberOfAnyGroup("00gFAKE1")` reads as the group instead of as an opaque
-id. It **resolves nothing it was not already given** — the caller passes a
-`resolveGroupName` (the same `GroupNameResolver` shape `ClauseGroupList` takes), there is
-no fetch, and an id with no known name keeps its raw quoted form rather than becoming a
-half-labelled badge. It never guesses which literal is a group id: it offers every literal
-to the resolver and badges only what comes back named, which is why
-`user.department == "Engineering"` prints as itself. It lived under `groups/detail/` until
-three features were consuming it across feature boundaries (I-016).
+**A value that arrives late must not move the text beside it** (`D-053`). `StableWidth` is the
+mechanical half of that rule: reserve the widest state so a late chip, badge or label lands in a
+slot already the right size, beside a `min-w-0` column free to absorb the difference.
 
-| Prop               | Default      | What it does                                                                                                                      |
-| ------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `text`             | — (required) | the condition text; **untrusted**, rendered escaped and never logged                                                              |
-| `resolveGroupName` | `undefined`  | names group ids in the text; omitted, the whole expression prints verbatim                                                        |
-| `tone`             | `'default'`  | `'default'` (`neutral-900`) for the condition in question, `'subdued'` (`neutral-700`) for one printed under another it qualifies |
-| `className`        | `''`         | **layout and spacing only** — `min-w-0`, `flex-1`, a margin                                                                       |
+## Panes or a section stack
 
-The type treatment — `block font-mono text-xs break-words whitespace-pre-wrap` — is
-**fixed and not a prop**. All three call sites used to restate that exact recipe through
-`className`, which is the drift `Eyebrow` was extracted to stop, and a size prop would
-reintroduce the resolved-vs-unresolved type-size mismatch `I-003` had to fix on
-`EntityLink`. Colour is the one axis that genuinely varied — a clause versus the
-alternatives nested under it — so it is a two-value `tone` and not a colour. The badge's
-`copyIdLabel` names the _id_, not the group, because two groups in one condition can share
-a display name (I-009); that is decided here rather than per caller.
+**A detail rung that answers several questions about one entity uses tabbed panes of one card**, not
+a stack of sections — `UserDetailPanel` is the pattern (Groups / Apps / Profile, through shared
+`Tabs`). Stacking made the page a scroll where the reader wanted a comparison. Panes render as
+siblings and the inactive ones carry the `hidden` **attribute** as well as the class — every tab
+stays mounted, so each pane keeps its filter, pills and disclosures as local state, and the
+attribute matters because jsdom loads no stylesheet: a class-only hide leaves every pane answering
+`getByRole` at once. Only the active pane may load — which pane is showing is the one piece of state
+that lifts, because the loads are gated on it (see [state-management.md](./state-management.md)) —
+and a pane's tab shows **no count** until a walk has returned, tested by a `hasLoaded` flag rather
+than `items.length` ("Unknown is not zero", below). The panel composes and does not fetch.
 
-`ListRow` is the **row chrome** primitive (ADR-0029): border, radius, hover,
-`density` (`compact` | `comfortable`), `state` (`default` | `selected` |
-`highlighted`) and `as` (`div` | `li` | `a` | `button`). It owns the box and
-never the interior — the interior follows the typography contract in
-`docs/design-system.md`. Never hand-roll a row container. Prefer
-`StretchedButton` over `as="button"` when the row holds its own controls, since
-a button cannot legally contain a checkbox or another button.
-
-`StableWidth` holds a slot open at the width of its widest state, so a readout that
-changes after mount cannot re-lay-out the text beside it. It is the mechanical half of
-ADR-0044's layout-stability convention (`D-053`): a chip whose label swaps, a badge that
-lands with a fetch, a button label that runs through three lengths, each sitting beside a
-`min-w-0` column free to absorb the difference. Pass the widest state as `reserve` — it
-renders invisibly in the same grid cell, so the browser measures it in the reader's own
-font rather than trusting a hard-coded `min-w-[...]`. The twin is `aria-hidden` and carries
-`data-reserve-width`, which both test setups add to Testing Library's `defaultIgnore`, so
-a text query never sees it. It reserves the **box**; a numeric readout still needs
-`tabular-nums` to stop its own digits twitching inside it — the two are used together.
-
-`Eyebrow` is the **uppercase section label** — `text-xs font-semibold uppercase
-tracking-wide text-neutral-600`, fixed. That one recipe had been hand-rolled across
-roughly eighteen files in four variants (`tracking-wide` vs `tracking-wider`,
-`text-xs` vs the off-scale `text-[10px]`/`text-[11px]`, `text-neutral-500`/`600`/`700`),
-so several sizes of the same element could appear on one screen; ADR-0030 settled the
-values in prose but never extracted the primitive, and the drift continued. There is
-deliberately **no colour, size or tracking prop** — a section wanting a different
-eyebrow treatment is the drift this exists to stop, and `className` takes layout and
-spacing only. `as` picks `span` (default), `div` or `h3`; use `h3` only when the
-eyebrow is a real section heading that should join the document outline. It is a label,
-not a control: a section header needing a verb composes it beside a `Button`.
-
-`IconButton` is also the **disclosure** primitive: pass `expanded` + `controls`
-and it emits `aria-expanded` / `aria-controls` (as `active` does `aria-pressed`).
-Any chevron that opens a region uses it — never a bare `<button>`.
-
-`StretchedButton` makes a **whole card or row activatable**: an empty,
-absolutely-positioned button that covers its `relative` ancestor and sits behind
-the card's own controls (`relative z-10`). It replaces both bad alternatives —
-`role="button"` on a `<div>`, and wrapping the card's content in a `<button>`
-(invalid content model, and axe `nested-interactive` as soon as the card has a
-checkbox). Because every card in a list shares one `label`, pass `describedBy`
-pointing at that card's title. First consumer: `GroupListItem`'s row-body
-drill-in.
-
-When the card it covers **discloses** a region rather than navigating, pass
-`expanded` and `controls` — the same disclosure contract `IconButton` documents,
-so a card and a chevron announce a collapse identically. Two traps the
-`AttributeHealthCard` consumer had to solve, and the next one will too. Scope
-the overlay to the card's **header** region (`ListRow`'s `headerClassName`),
-or the button covers the body it just opened and a click inside it collapses
-the card. And give the button a `label` that names its subject — a grid of
-cards otherwise offers a screen-reader user a list of identically-named
-controls, and `describedBy` does not fix that, because a description is not a
-name.
-
-`Tabs` is the accessible tab-bar primitive (`role="tablist"/"tab"`, roving
-`tabindex`, arrow-key nav) with three variants: `underline` (section nav),
-`segmented` (compact toggle) and `rail` (icon-first primary nav). **Never
-hand-roll a `role="tablist"`**: the ARIA attributes are the part that gets
-copied and the keyboard handling is the part that gets left behind, which is
-exactly what `ComparisonTabBar` shipped — a strip a keyboard user could reach
-and then not move inside.
-
-Three additive capabilities keep a caller from forking it for styling, and each
-is a property of a tab rather than of one surface:
-
-| Capability             | What it is                                                                                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TabItem.icon`         | a glyph before the label, in **every** variant; only `rail` collapses the tab to it. Decorative outside `rail` — the visible label is the name    |
-| `TabItem.countDisplay` | `always` (default) badges a `0`, right for a count that states a **size**; `nonzero` suppresses it, for one that states a **finding**             |
-| `wrap`                 | a `segmented` strip takes a second row below `sm` (two equal columns, one equal-width row above). `underline`/`rail` scroll instead and ignore it |
-
-`countDisplay: 'nonzero'` also holds the badge's slot open at two digits from
-first render (`StableWidth`), because such a count arrives with a fetch: three
-badges landing at once would otherwise shove three labels sideways in one frame
-(ADR-0044, `D-053e`). `wrap` names no column count — `grid-flow-col` +
-`auto-cols-fr` above the breakpoint — so a strip that grows a tab needs no new
-class, and a `sm:grid-cols-${n}` would not survive Tailwind's static scan anyway.
-
-The **`rail`** variant is what `TabNavigation` uses for the panel's top-level
-sections — `RAIL_TAB_DEFS`, which is **seven** of the nine in `TAB_DEFS`.
-Explorer and History carry `railHidden` and are reached through the ⌘K palette
-instead (ADR-0063); the rail is the only consumer that reads the shorter list.
-On a rail-hidden section no tab matches `activeKey`, so the strip shows no
-selection and no indicator, and the roving anchor falls back to the first tab
-so the tablist keeps its one tab stop. Inactive tabs are icon-only (`TabItem.icon`, an `IconType`);
-the active tab's label unfurls via `grid-template-columns: 0fr → 1fr` at
-`--dur-move`, so the strip never toggles `display` to make room. What still
-overflows scrolls, with the scrollbar hidden and `mask-image` edge fades keyed
-off a `data-overflow` attribute. Every rail tab's `aria-label` is derived from
-its own `label` inside `Tabs` — never passed separately — so an icon-only tab
-always has an accessible name and it cannot drift from the visible one. (A rail
-tab's `count` badge is therefore _not_ in its accessible name; see the JSDoc on
-`TabItem.label` before adding counts to the rail.) The measurement behind the
-edge state, the scroll-active-into-view and the sliding indicator lives in
-`hooks/useTabRail.ts`, not the component.
-
-The rail's interaction states are read from Odyssey rather than invented. Active
-is `Tabs`' marking — a 2px `--color-primary` underline plus a
-`--color-primary-text` (`TypographyColorAction`) label at `font-semibold`
-(`TypographyWeightBodyBold`, 600) — and never a filled block, which is `SideNav`'s
-pattern and belongs to a vertical rail. The `--color-neutral-50` hover wash and
-the **inset** focus ring (`box-shadow: inset 0 0 0 2px` with `outline: none`,
-Odyssey's `theme.mixins.insetFocusRing`) are `SideNav`'s, and are identical across
-both Odyssey navigations. Note the rail's focus recipe is deliberately _not_ the
-outset `ring-2` the `underline` and `segmented` variants use — which is why the
-weight and focus classes live per-variant rather than in `Tabs`' shared base.
-
-The underline slide and the label unfurl are **sequenced, not simultaneous**. The
-labels' `grid-template-columns` transition carries a `--dur-move` delay, so the
-strip is held still for one `--dur-move` window while the underline travels on
-`--ease-glide`; only then do the outgoing and incoming labels cross over, and
-across that second window the indicator has no transition at all and is measured
-per frame. `useTabRail`'s `sliding` flag is the line between the two phases. This
-amends ADR-0028, which forbade transitioning the indicator outright — the reason
-it gave (an indicator chasing a growing label) is exactly what the sequence
-removes.
-
-The rail carries **no border of its own**, and neither does `ContextBar`: they are
-bands of one top-chrome slab, and the single rule that closes that slab lives on
-`TabNavigation`'s `<nav>` — the last band, so the edge sits where the slab meets the
-content. Neither band is sticky: the whole slab sits **outside** the panel's scroller
-(ADR-0050), so it holds still without needing to, and the scrollbar spans the content
-region only. `ContextBar` is one line for the same reason — a band that never scrolls
-away spends its height permanently.
-Separation inside the slab is spacing and type weight. The `underline` variant
-keeps its `border-b` — there the rule is the indicator's own track.
-
-`Tooltip` is the **hover- and focus-triggered label chip**, and the reason no new
-code should reach for a native `title=`: `title` cannot be styled, fires on an
-uncontrollable delay, and never appears for a keyboard user at all. It opens on
-hover **and** on focus after `--dur-hover-intent` (400ms, mirrored in JS as
-`HOVER_INTENT_MS` the way `useCountUp` mirrors `--dur-tell`), carries
-`role="tooltip"` wired to its trigger with `aria-describedby`, closes on Escape,
-blur, pointer-leave or any scroll that would move the trigger, and traps no focus.
-
-A tooltip **describes; it does not name.** An icon-only control still needs its own
-`aria-label` — the rail's tabs keep theirs, and the chip is additive on top. It also
-renders **no wrapper element**: the trigger comes from a render prop and the chip is
-portalled to `document.body`, which is what lets it sit inside a `role="tablist"`
-(an intervening `<span>` fails axe's `aria-required-children`) and inside a scroll
-container that would otherwise clip it.
-
-```tsx
-<Tooltip label="Groups">
-  {(trigger) => (
-    <button type="button" aria-label="Groups" {...trigger}>
-      <Icon type="users" />
-    </button>
-  )}
-</Tooltip>
-```
-
-`Breadcrumbs` is the trail primitive for **in-tab push/pop sub-navigation**
-(`nav > ol`, ancestor crumbs are buttons, the last carries `aria-current="page"`).
-It shapes to the `trail` returned by `hooks/useViewStack.ts`, and drops into
-`PageHeader`'s additive `breadcrumbs` slot alongside its `onBack` / `leading`
-slot — a tab keeps **one** `PageHeader` mounted and swaps its contents as views
-are pushed and popped, rather than each view rendering its own header.
-
-`PageHeader` is also where the **entity you are browsing is described** (ADR-0032).
-Do not open a detail view with a card repeating the name and type already in the
-title. Pass `identity` (an opaque node, normally an `EntityIdentity`), `identityKey`
-(the entity's id — a change crossfades the region, no change swaps silently), and
-`sticky={isActive}` to pin it as the page scrolls under. The header owns chrome only
-and never learns what a group or a user is; the description comes from a **pure
-per-entity builder** returning an `EntityIdentityDescriptor`:
-
-```tsx
-const identity = detailGroup ? groupIdentity(detailGroup) : undefined;
-
-<PageHeader
-  title={identity?.name ?? 'Groups'}
-  badge={identity?.badge ?? listBadge}
-  identityKey={identity?.key}
-  identity={identity && <EntityIdentity rows={identity.rows} />}
-  sticky={isActive}
-/>;
-```
-
-`badge` renders in the trailing cluster, immediately left of `actions` — at 360px a
-badge beside the `<h1>` costs the title two lines of wrapping.
-
-A descriptor's `rows` group facts by category (identity, counts, timestamps); facts
-inside a row wrap together and an empty row is dropped. **A builder omits a fact it
-cannot answer rather than emitting a zero** — a group's rule counts are absent until
-the rules payload loads, and "0 references" would state as fact something the panel
-never asked. `memberCount` is the exception, because zero and unknown are
-distinguishable at its source.
-
-Adding an entity kind is one new builder beside that entity (`groupIdentity.ts`,
-`userIdentity.ts`, `ruleIdentity.ts`) plus a unit test, with no edit to anything shared. `PageHeader`
-still describes the _browsed_ entity and `ContextBar` still describes the _live Okta
-tab_ — the two must not converge, and on a drilled-in view their ids routinely differ.
-
-`ActionBar` is the detail rung's **verb strip**, and it takes its verbs as **data**
-(ADR-0038) — never `Button` children, which is what it took before:
-
-```tsx
-<ActionBar
-  ariaLabel={`Actions for ${userDisplayName(user)}`}
-  actions={[
-    { id: 'add', label: 'Add group', icon: 'plus', variant: 'primary', onClick: onAdd },
-    { id: 'compare', label: 'Compare', icon: 'users', onClick: onCompare },
-  ]}
-  expansion={<UserLifecycleActions {...lifecycle} />}
-/>
-```
-
-Declaration order is reading order _and_ overflow order: the strip measures each
-action and, as the panel narrows, drops every icon at once and then moves the tail
-behind **More**. So put the verb an admin came to press first, and expect the last
-one to be the first to disappear.
-
-- **`priority`** is `flex` by default (`pinned` for a `primary` action). Use `pinned`
-  only for the page's own main verb — the row wraps under a pinned action rather than
-  overflowing it. Use `tier` for a verb that should live behind **More** from the
-  start. It is not a way to move a section's verb onto the strip; ADR-0030 §2 still
-  decides that.
-- **`expansion`** is arbitrary caller JSX in the disclosure tier — a form, an
-  account-state block, anything. That slot is why the tier is a region and not a
-  `role="menu"`, and why a descriptor may not carry a `ReactNode`: a node cannot be
-  measured from a cached width.
-- **Never render your own More button.** The strip owns the control, the region and
-  its `aria-controls` target, and renders the control only when the tier has content.
-  Leave the tier uncontrolled unless the page has to collapse it on a rung change.
-
-**No page calls `<ActionBar>` directly — it wraps it in its own
-`<Entity>ActionBar`** (`UserActionBar` is the reference shape), even for a single
-action; the wrapper is where the page's second verb goes, and retrofitting one onto
-an inline call site later means finding and migrating it. The wrapper decides where
-each verb starts with one question, not by feel: reversible or read-only defaults to
-the row (`flex`, or `pinned` for the page's one primary verb); a change to the
-entity's state with **no symmetric undo** — suspend, delete, deactivate — defaults
-to `tier`, behind a confirm `Modal` that states the consequence in plain language
-next to the control ("Blocks sign-in until reversed," not just "Suspend").
-A **list** rung reads the same rules with two additions (ADR-0051, ADR-0061). The tier
-may sort by **frequency** as well as consequence, though frequency may move a verb down,
-never up, and never brings a confirm `Modal` with it.
-
-**`primary` is a verb that acts** (ADR-0068). Two questions, both of which must answer
-yes: is its object the **whole page** — not a selection, a filter or a section — and does
-pressing it **act**, by opening a modal or performing the operation? A fetch fails the
-second, and so does a toggle that opens a read-only panel: revealing something to read is
-not acting. `GroupActionBar`'s **Add** is the reference — its object is the whole group,
-it opens a modal that writes, and adding a member is reversible, so it stays in the row.
-
-Where that leaves an export is a **ranking**, not a ban:
-
-1. **An acting verb wins.** On a rung that has one, every export takes `priority: 'tier'`
-   — `GroupActionBar`'s _Export members_ is behind **More**, under **Add**.
-2. **On a rung with no acting verb, the whole-rung export may hold `primary`** and stay in
-   the row. `GroupsListActionBar` is that rung: it ships `export-list` as `primary` and
-   keeps it. Any _other_ export there is selection-scoped and still goes to the tier.
-   `RulesListActionBar` is the second: three read-only panel toggles and one whole-rung
-   `Export rules`, so the export holds the fill. That rung is also where the rule's
-   reference example used to be — its _Load rules_ / _Refresh_ was ADR-0061's — and it is
-   gone, which is why the ranking is worded from `GroupActionBar`'s **Add** instead.
-3. **Otherwise the rung has no `primary` at all**, which is a real answer rather than a
-   gap to fill — a strip of evenly-weighted peers.
-
-**A refresh is never `primary`, in any of the three cases**, and after ADR-0069 it is not a
-strip verb at all: one chrome control beside the Pin refreshes whatever the panel is
-showing.
-
-Rule 2 is the one that needs policing, because "this rung has no acting verb" is the easy
-thing to claim. It is an **enumeration, written as a comment above the descriptor array**:
-every verb the rung offers in any state, including verbs it renders outside the strip, each
-with the question it fails. On the Groups list rung the selection controls, `Compare`,
-`Export (N)` and `Merge` fail question 1; `Cross-search`, `Collections`, `Cleanup` and
-`Bulk actions` are read-only panels and fail question 2. A rung that later grows an acting
-verb loses the fallback in the same change.
-
-**The open inline panel is named in its label, not in a colour**: `Duplicates (3)` →
-`Hide duplicates`, plus an explicit `priority: 'pinned'` so the control that closes an
-open panel can never overflow behind **More**. An `ActionDescriptor` carries no
-`aria-pressed`, so a `primary` wash was state only a sighted reader could perceive — the
-same correction `RuleCard` already made to its status dot. Pinning and emphasis are
-requested separately now rather than both arriving with `variant`.
-
-Two traps that rung found the hard way. **A wizard in front of a verb does not move that
-verb into the row** — the test asks what the verb does, not what stands between the press
-and the doing. And where the set of verbs **varies with state**, the leading position must
-hold a control whose worst outcome is another click: a strip ordered purely by weight puts
-a different control under the same pixel as the state changes, which is how
-`GroupsListActionBar` briefly shipped _Merge_ where _Select all_ had been.
-**An `ActionDescriptor` is never declared for a handler that isn't wired yet** — an
-unimplemented verb is omitted, the same "absent is not zero" discipline ADR-0032
-applies to identity facts, not rendered `disabled` forever with a tooltip standing
-in for an explanation. A permission-gated verb may still render `disabled` with a
-`title` naming the real reason. See ADR-0039 for the incident this closes.
-
-A detail rung may also end up with **no `primary` at all**, and that is a result rather
-than an omission: `RuleActionBar`'s one row verb is _Preview impact_, which is dropped
-entirely for a rule that targets no groups — no population to compute a change for, so
-no verb (ADR-0051 §3). Nothing is promoted to fill the empty slot. Say the missing fact
-in prose where the reader is looking instead; `RuleDetailView` states "assigns to no
-groups, so it adds nobody anywhere" in the section the verb would have acted on.
-
-**A detail rung that answers several questions about one entity uses tabbed panes of
-one card**, not a stack of sections — `UserDetailPanel` is the pattern (Groups / Apps /
-Profile, through shared `Tabs`). Stacking made the page a scroll where the reader
-wanted a comparison. Panes render as siblings and the inactive ones carry the `hidden`
-**attribute** as well as the class (ADR-0016/ADR-0018), so each keeps its own filter,
-pills and disclosures as local state; the attribute matters because jsdom loads no
-stylesheet, and a class-only hide leaves every pane answering `getByRole` at once. Only
-the active pane may load — which pane is showing is the one piece of state that lifts,
-because the loads are gated on it (see
-[state-management.md](./state-management.md)) — and a pane's tab shows **no count**
-until a walk has returned, tested by a `hasLoaded` flag rather than `items.length`
-("Unknown is not zero", below). The panel composes and does not fetch.
-
-**One question, one load, three short sections: use the stack.** The threshold is real in
-both directions — `RuleDetailView` is a `DetailSection` stack because a rule has one
-condition and three facts about it, all already on the `FormattedRule` the list was
-rendering. Splitting four short sections across tabs would hide three of them to save a
-scroll that does not exist, and the rung fetches nothing, so there is no per-pane load to
-gate. It is also the rung that closes ADR-0030's last unconverted layout dialect: `RuleCard`'s
-expandable body, whose four write verbs flex-wrapped at the bottom of a card were the exact
-"page-level verb read as a section's property" failure ADR-0030 §2 exists to stop.
-
-`EntityChooser` (`components/home/`) is the **scope-first launcher**: pick one entity out
-of a list already in memory, and hand its id back. It exists for the actions a surface
-cannot afford to run for everybody — Home's MFA-coverage row is a factor read per member,
-so the honest shape is not a number with a list behind it but a chooser that names the
-group first and lands where the scan can be started deliberately (`I-019`).
-
-It **filters; it never searches.** Everything offered arrives through `choices`, and
-typing narrows that array locally. A chooser that queried Okta per keystroke would spend
-requests to avoid spending requests, which is the whole reason the surface is a chooser
-and not a count. Its visible cap is stated on screen whenever it truncates, the same rule
-the reports card applies to a capped finding list: a list quietly cut to its first page
-reads as "your group is not in this org".
-
-| Prop          | Default                   | What it does                                                                                                          |
-| ------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `choices`     | — (required)              | every offerable `{ id, name, detail? }`, already in memory; **untrusted** names, rendered escaped                     |
-| `filterLabel` | — (required)              | accessible name _and_ placeholder of the filter field ("Filter groups")                                               |
-| `actionLabel` | — (required)              | accessible name of each row's press target — the **verb**, since the name is already announced via `aria-describedby` |
-| `onChoose`    | — (required)              | called with the chosen id; the caller decides where that goes                                                         |
-| `emptyLabel`  | `'Nothing matches that.'` | what to say when the filter matches nothing                                                                           |
-
-What it **refuses**: no `onFilterChange` or async source (see above — the caller passes
-its 20k rows and pays nothing, but this component is never the thing that fetches them);
-no `renderRow`, `className` or `variant`, because the row treatment is shared with the
-reports card's finding lists through `EntityChoiceRow` and a styling hatch is how those
-two drift apart; no `multiple`/selection state, because pressing a row is a one-shot
-hand-off with nothing to accumulate and nothing to confirm; and no fuzzy matching, since
-an admin filtering by name is recalling a name they already know and a fuzzy match's job
-— surfacing what you did not type — only buries the exact hit.
-
-It lives under `home/` rather than `shared/` because it has exactly one caller. The
-promotion trigger is `RuleExpressionText`'s: the second feature to consume it moves it to
-`shared/`, into the barrel, unchanged. `ReportRow` (`RowLines` + `RowDisclosure`) sits
-beside it for the same reason — it is the reports card's row idiom, shared by the rows
-that count and the row that scopes so the two cannot drift under a polish pass.
+**One question, one load, three short sections: use the stack.** The threshold is real in both
+directions — `RuleDetailView` is a `DetailSection` stack because a rule has one condition and three
+facts about it, all already on the `FormattedRule` the list was rendering. Splitting four short
+sections across tabs would hide three of them to save a scroll that does not exist, and the rung
+fetches nothing, so there is no per-pane load to gate. It is also the rung that retired the last
+hand-rolled layout dialect: `RuleCard`'s expandable body, whose four write verbs flex-wrapped at the
+bottom of a card, is exactly the "page-level verb read as a section's property" failure the verb
+strip exists to stop ([action-bars.md](./action-bars.md)).
 
 ## Documented raw-control exceptions
 
-The button/input migration is complete; these are the raw controls that stay raw
-**by decision**, each carrying an inline `§3 exception` (or `CHARACTERIZED:`)
-comment at the call site:
+The button/input migration is complete; these raw controls stay raw **by decision**, each carrying
+an inline `§3 exception` (or `CHARACTERIZED:`) comment at the call site:
 
-- **Composites** where a shared primitive is not pixel-neutral: the Add-to-Group
-  type-ahead (`AddToGroupModal`) and `UserComparisonModal`'s search field in
-  `ComparisonSearchPhase` — leading-glyph search inputs with an absolutely
-  positioned spinner/dropdown — plus `shared/FilterToggle`.
-
-  `SearchDropdown`, `UserSearchBar` and `GroupSearchBar` **left this list**: they
-  now compose `Input` + `Icon` + `LoadingSpinner` like `MemberSearchBar`. The
-  exception was real — converging on the primitives cost a few pixels of field
-  height (`py-3`/`py-2.5` → `py-2`), leading-icon size (20px → 16px), and the
-  reserved trailing padding the shared `Input` has no slot for. That was accepted
-  as the price of not maintaining a byte-identical copy of the input class string
-  in two files. The two entries that remain are the ones where the delta is larger
-  than that, and they still need a design call rather than a mechanical swap.
-
-- **Roving-focus rows:** `palette/PaletteRow`, the row the ⌘K palette renders for
-  both its sections and its entity results. A palette row is a left-aligned icon +
-  label + trailing-mark row carrying a roving `tabIndex` and a ref for
-  programmatic focus, and **neither** shared primitive can host that: `Button` is
-  a centred CTA and exposes neither `tabIndex` nor a ref, and `ListRow` exposes
-  `elementRef` — half of what is needed — but no `tabIndex` and no `onKeyDown`, so
-  it can carry neither the roving anchor nor the Up/Down handler. The gap is
-  structural rather than stylistic against both, so a new variant would not
-  discharge it. The row renders as an `<a>` rather than a `<button>` when it is
-  given an `href` — a kind this build cannot open in-panel has the Okta console
-  as its only route, and a link nested inside the row button is a
-  `nested-interactive` axe violation (`home/JumpResultRow` makes the same call
-  with `as`). One interactive element per row, chosen by what the row can do.
-  (The same file records why the palette uses
-  roving focus rather than combobox ARIA: `Input` deliberately does not spread
-  arbitrary props, and adding `role`/`aria-expanded`/`aria-controls`/
-  `aria-activedescendant` to a shared primitive for one consumer is the wrong
-  trade. A `Input`-level combobox mode is accepted future work, gated on a second
-  consumer.)
-- **Genuinely custom controls:** the dynamic-color banner, radio-cards, the `AttributeFacet`
-  and `AttributeSpreadBar` data-viz spread bars, the Activity Bar's `BucketRow`
-  lane (a track whose fills, hatches and folded badges encode scheduler state —
-  the same dataviz category as the spread bars, not a list row, so `ListRow`
-  would fight it rather than serve it), and the Export tab's `EntityPicker` selectable entity
-  cards (`role="button"` icon+title+description rows; `Button` is a centered
-  CTA, so it does not fit — but `ListRow as="button"` now does, and
-  `EntityPicker` is on the ADR-0029 migration list rather than a permanent
-  exception).
-- **Awaiting a new shared primitive (accepted future work):**
-  - Chromeless **text-links** ("Clear all", "View details") have no shared
-    `TextLink` primitive — adding one would discharge these across `GroupFilterPanel`,
-    `AttributeFacet`, `AttributeHealthCard` (its `Other (N values)` drill-in), and
-    `ComparisonOverviewTab`.
-  - `FilterPill` legend-row toggles and the semantic-colored variants need a
-    `className` escape hatch to match without inline classes.
-  - The active-filter chip's `rounded-full` close button (`IconButton` is
-    `rounded-md`).
-
-**Barrel:** `shared/index.ts` now exports the full catalog above — import from the
-barrel (`../shared`), not deep paths.
+- **Composites** where a shared primitive is not pixel-neutral: the Add-to-Group type-ahead
+  (`AddToGroupModal`) and `UserComparisonModal`'s search field in `ComparisonSearchPhase` —
+  leading-glyph search inputs with an absolutely positioned spinner/dropdown — plus
+  `shared/FilterToggle`. `SearchDropdown`, `UserSearchBar` and `GroupSearchBar` **left this list**:
+  they compose `Input` + `Icon` + `LoadingSpinner` like `MemberSearchBar`. Converging cost a few
+  pixels of field height (`py-3`/`py-2.5` → `py-2`), leading-icon size (20px → 16px) and the
+  reserved trailing padding the shared `Input` has no slot for — accepted as the price of not
+  maintaining a byte-identical copy of the input class string in two files. The two that remain have
+  a larger delta and need a design call, not a mechanical swap.
+- **Roving-focus rows:** `palette/PaletteRow`, the row the ⌘K palette renders for both its sections
+  and its entity results — a left-aligned icon + label + trailing-mark row carrying a roving
+  `tabIndex` and a ref for programmatic focus. **Neither** shared primitive can host that: `Button`
+  is a centred CTA and exposes neither `tabIndex` nor a ref; `ListRow` exposes `elementRef` but no
+  `tabIndex` and no `onKeyDown`, so it can carry neither the roving anchor nor the Up/Down handler.
+  The gap is structural, not stylistic, so a new variant would not discharge it. The row renders as
+  an `<a>` rather than a `<button>` when given an `href` — a kind this build cannot open in-panel
+  has the Okta console as its only route, and a link nested inside the row button is a
+  `nested-interactive` axe violation (`home/JumpResultRow` makes the same call with `as`). One
+  interactive element per row, chosen by what the row can do. (The same file records why the palette
+  uses roving focus rather than combobox ARIA: `Input` deliberately does not spread arbitrary props,
+  and adding `role`/`aria-expanded`/`aria-controls`/`aria-activedescendant` to a shared primitive
+  for one consumer is the wrong trade. An `Input`-level combobox mode is accepted future work, gated
+  on a second consumer.)
+- **Genuinely custom controls:** the dynamic-color banner, radio-cards, the `AttributeFacet` and
+  `AttributeSpreadBar` data-viz spread bars, the Activity Bar's `BucketRow` lane (a track whose
+  fills, hatches and folded badges encode scheduler state — dataviz, not a list row, so `ListRow`
+  would fight it rather than serve it), and the Export tab's `EntityPicker` selectable entity cards
+  (`role="button"` icon+title+description rows; `Button` is a centered CTA and does not fit — but
+  `ListRow as="button"` does, so `EntityPicker` is on the `ListRow` migration list rather than a
+  permanent exception).
+- **Awaiting a new shared primitive (accepted future work):** chromeless **text-links** ("Clear
+  all", "View details") have no shared `TextLink` primitive — adding one would discharge
+  `GroupFilterPanel`, `AttributeFacet`, `AttributeHealthCard` (its `Other (N values)` drill-in) and
+  `ComparisonOverviewTab`; `FilterPill` legend-row toggles and the semantic-colored variants need a
+  `className` escape hatch to match without inline classes; the active-filter chip's `rounded-full`
+  close button has no home (`IconButton` is `rounded-md`).
 
 ## When to build vs reuse
 
 - Reuse a shared component if one exists (check the catalog first).
 - Extend via a new variant/prop if the difference is stylistic.
-- Build a new shared component only for a genuinely new primitive; put it in
-  `shared/`, follow the variant/size convention, add it to the barrel, and note it
-  here. Delegate this to the `component-builder` agent.
+- Build a new shared component only for a genuinely new primitive; put it in `shared/`, follow the
+  variant/size convention, add it to the barrel, and note it here. Delegate to the
+  `component-builder` agent.
+- A primitive with exactly one caller lives beside that caller, not in `shared/` — `EntityChooser`
+  and `ReportRow` (`RowLines` + `RowDisclosure`) sit under `home/` for that reason. The promotion
+  trigger is `RuleExpressionText`'s: the second feature to consume it moves it to `shared/`, into
+  the barrel, unchanged.
 - New or changed `shared`/leaf components ship a co-located `.stories.tsx` — see
-  [component-explorer.md](./component-explorer.md) for the two templates. Use
-  Storybook to develop and visually review the component in isolation before
-  wiring it into a feature.
-- Composition over configuration: large feature UIs (e.g. a comparison modal) are
-  built by composing primitives, and should be split into subcomponents rather than
-  growing past ~300 lines (see [state-management.md](./state-management.md)).
+  [component-explorer.md](./component-explorer.md) for the two templates. Develop and review the
+  component in Storybook before wiring it into a feature.
+- Composition over configuration: large feature UIs (e.g. a comparison modal) are built by composing
+  primitives and split into subcomponents rather than growing past ~300 lines (see
+  [state-management.md](./state-management.md)).
 
 ## List rows derive; they never fetch
 
-A row in a long list renders a few hundred times, so **a row must not own I/O.** Its
-entire rendered model is derived by a pure, I/O-free module from (a) the entity it was
-given and (b) data already banked in a session cache. `GroupListItem` is the pattern:
-`groupSourceSummary.ts` computes the badge, identity line, facts and meter state, and
-cannot fetch, which is the _structural_ guarantee — not a convention — that scrolling
-a list cannot trigger work.
+A row in a long list renders a few hundred times, so **a row must not own I/O.** Its entire rendered
+model is derived by a pure, I/O-free module from (a) the entity it was given and (b) data already
+banked in a session cache. `GroupListItem` is the pattern: `groupSourceSummary.ts` computes the
+badge, identity line, facts and meter state, and cannot fetch — the _structural_ guarantee, not a
+convention, that scrolling a list cannot trigger work.
 
-That guarantee is load-bearing for the member-source meter specifically: computing one
-breakdown costs `ceil(N/200)` paginated member requests **per group**, against a
-scheduler capped at 5 concurrent with a cooldown at 10% of remaining budget. So the
-row renders a meter only from a breakdown already in the cache
-(`useCachedMemberSource`, which has no API access at all); otherwise it says so and
-offers an explicit action that hands the job to a view which can show its cost.
+That is load-bearing for the member-source meter specifically: one breakdown costs `ceil(N/200)`
+paginated member requests **per group**, against a scheduler capped at 5 concurrent with a cooldown
+at 10% of remaining budget. So the row renders a meter only from a breakdown already in the cache
+(`useCachedMemberSource`, which has no API access at all); otherwise it says so and offers an
+explicit action that hands the job to a view which can show its cost.
 
 Two rules follow for any row-level fact:
 
-- **Unknown is not zero.** A count that has not been loaded yet renders as absent, not
-  as `0` (e.g. `usedInRuleCount` before the rules payload is known).
-- **Prefer a bare `memo(...)` over a hand-written comparator.** Rows (`RuleCard`,
-  `PolicyCard`, `GroupListItem`) are memoised with the default shallow compare, not a
-  custom field list — a hand-written comparator drifts the moment the row renders a
-  field it forgot to compare, which is a stale-UI bug, not a perf nit (`D-039`,
-  `D-045`). It works because each row's entity prop keeps stable per-id identity from
-  its list source; only add a custom comparator back with a measured reason, and keep
-  it enumerated against the render body if you do.
+- **Unknown is not zero.** A count not yet loaded renders as absent, not as `0` (e.g.
+  `usedInRuleCount` before the rules payload is known).
+- **Prefer a bare `memo(...)` over a hand-written comparator.** Rows (`RuleCard`, `PolicyCard`,
+  `GroupListItem`) are memoised with the default shallow compare — a hand-written comparator drifts
+  the moment the row renders a field it forgot to compare, which is a stale-UI bug, not a perf nit
+  (`D-039`, `D-045`). It works because each row's entity prop keeps stable per-id identity from its
+  list source; add a custom comparator back only with a measured reason, and keep it enumerated
+  against the render body if you do.

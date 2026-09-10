@@ -16,7 +16,7 @@ You write and maintain tests, and own coverage.
 
 - **Mock at the facade, not MSW.** MSW is not used in this repo and there is nothing
   for it to intercept — the side panel never calls `fetch`; requests go side panel →
-  background scheduler → content script (ADR-0010). Mock `useOktaApi` (or the specific
+  background scheduler → content script (`docs/architecture.md`). Mock `useOktaApi` (or the specific
   operations module) for component/hook tests; pass a fake `CoreApi` with a `vi.fn()`
   `makeApiRequest` for `useOktaApi/*` tests; set `globalThis.fetch`'s resolved value
   for scheduler/content-script tests.
@@ -28,12 +28,13 @@ You write and maintain tests, and own coverage.
   assertions or delete a test case to make a suite green. Adjusting setup, mocks, or
   fixtures is fine _when the behavior under test legitimately changed_ — but if the
   assertion itself looks wrong, flag it in the PR description and stop; don't rewrite
-  it unilaterally. (CLAUDE.md hard rules, ADR-0012)
-- **Removing a test is not silencing one.** Four cases are legitimate (ADR-0022): the
-  subject was deleted, a story already asserts the same render, the unit was replaced
-  and the suite is retargeted assertion-by-assertion, or the assertion pins something
-  ADR-0023 bans. Each needs a PR note saying what stays covered.
-- **Don't write what ADR-0023 bans**: CSS class or inline-style assertions, `Object.is`
+  it unilaterally. (`CLAUDE.md` hard rules, `docs/testing.md`)
+- **Removing a test is not silencing one.** Four cases are legitimate
+  (`docs/testing.md`): the subject was deleted, a story already asserts the same
+  render, the unit was replaced and the suite is retargeted assertion-by-assertion,
+  or the assertion pins one of the things below that this repo does not test. Each
+  needs a PR note saying what stays covered.
+- **Don't write what the house bans**: CSS class or inline-style assertions, `Object.is`
   identity checks on props/callbacks, props brokered to mocked children, tests over
   static literal tables, or a `.test.tsx` for a pure-render component that already has
   a story. Fixtures used by 3+ files go in `src/test/`, not copied per file.
@@ -49,4 +50,5 @@ You write and maintain tests, and own coverage.
 
 `npx vitest run` green; new/changed code covered; `npm run test:coverage` exits 0
 against the thresholds in `vitest.config.ts` (never lower a threshold to pass —
-that needs an ADR). Run `npx prettier --write` on touched test files.
+that is a coverage-gate change and needs Sam's explicit sign-off, not a commit).
+Run `npx prettier --write` on touched test files.

@@ -1,5 +1,12 @@
 # Design + UX program — session kickoff
 
+> **Spent artifact — do not follow this as current guidance.** This program
+> shipped (PR #128). It is kept as a record of how the work was scoped, and it
+> describes the repo as it stood in early September 2026. Its `ADR-NNNN`
+> references point at a record corpus that was deleted on 2026-09-09; those
+> rules now live in `docs/*.md` as plain house rules, and `CLAUDE.md`'s routing
+> table is the way in. Read that, not this.
+
 You are picking up a thirteen-item design/UX/bugfix program in
 `/Users/samhenderson/Documents/Projects/okta-unbound` (Chrome MV3 side-panel
 extension for Okta group/user admin; React 19, TS strict, Tailwind v4, Vitest +

@@ -22,7 +22,7 @@ export default defineConfig({
     // Coverage stays at the top level so it can span both projects. The
     // `thresholds` block below is the single source of truth for the gate and is
     // ENFORCED in CI: the `verify` job runs `npm run test:coverage`. Prose must
-    // reference this file rather than restate the numbers (ADR-0019).
+    // reference this file rather than restate the numbers.
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
@@ -34,7 +34,7 @@ export default defineConfig({
         '**/*.stories.{ts,tsx}',
         '**/mockData',
         // The demo dataset and its operations exist only to stage the `Demo/`
-        // scenes for the reel (ADR-0043). They ship in no build — Rollup follows
+        // scenes for the reel. They ship in no build — Rollup follows
         // the manifest entry graph and nothing there reaches them — and they are
         // exercised by filming, not by tests, so counting them would drag the
         // gate down for code that has no behaviour to assert.

@@ -24,9 +24,9 @@ on the animation finishing. A keyboard user who presses Escape is never left in 
 dead zone for the length of a close animation waiting for focus to catch up; the
 animation is purely visual by that point; the panel itself goes `aria-hidden` +
 `inert` for the same window, so nothing on it can be queried, tabbed to, or
-clicked while it's on its way out. See `docs/motion.md` and ADR-0027 for the
-mount-hold mechanics and why the hold uses a `1ms` (not `0s`) reduced-motion
-duration to guarantee this still resolves for reduced-motion users.
+clicked while it's on its way out. See `docs/motion.md` for the mount-hold
+mechanics and why the hold uses a `1ms` (not `0s`) reduced-motion duration to
+guarantee this still resolves for reduced-motion users.
 
 ### Tabs (e.g. UserComparisonModal)
 
@@ -35,7 +35,7 @@ duration to guarantee this still resolves for reduced-motion users.
 
 ## Pushed views (in-tab drill-in)
 
-A drill-in built on `useViewStack` (ADR-0016) is **not** a dialog: it replaces the
+A drill-in built on `useViewStack` is **not** a dialog: it replaces the
 list in the page flow rather than overlaying it. So it takes half of `Modal`'s focus
 contract and deliberately drops the other half:
 
@@ -54,7 +54,7 @@ contract and deliberately drops the other half:
   the same affordance — do not give them competing labels.
 - **The header describes the pushed entity; the body does not repeat it.** A detail
   rung passes `identity` / `identityKey` to `PageHeader` and opens its body on the
-  first real section (ADR-0032). Two headings carrying the same string is a redundant
+  first real section. Two headings carrying the same string is a redundant
   heading outline, and in a 360px panel the repeat costs a line directly under the
   title it repeats.
 
@@ -62,7 +62,7 @@ contract and deliberately drops the other half:
 
 The page header and a detail view's `ActionBar` park below one another by publishing a
 measured height (`--header-h`). The tab rail is not part of that stack — it sits outside
-the scroller entirely, so the scroller's top edge already begins beneath it (ADR-0050).
+the scroller entirely, so the scroller's top edge already begins beneath it.
 **None of this is checkable in jsdom or in a story** — neither has a scroller. It is a
 manual pass in the loaded extension:
 
@@ -99,9 +99,43 @@ Every async view handles all three explicitly — never a blank panel:
   — it isn't "content arriving," so `LoadingSpinner` (or, once it's resolved to an
   error, `AlertMessage`) is always the right shape here.
 
+### One skeleton per pane
+
+**A pane renders one skeleton for its whole layout, then swaps once.** A pane is a
+tab's content region on a detail rung — the thing a tab switches to, whose parent
+owns the tab state. While it is waiting, it shows a single placeholder approximating
+the settled layout and nothing else; when it resolves, it renders the real layout and
+does not go back. There is no intermediate state where some tiles are real and others
+are placeholders — a region that pops in field by field, shoving what the reader is
+already looking at, is the defect this prevents. Approximation is the standard, not
+pixel identity: a placeholder of the wrong _height_ is worth fixing, one of the wrong
+shade is not.
+
+**Only work genuinely in flight holds the skeleton.** For each read a pane depends
+on, exactly one of four things is true, and only the first holds it:
+
+| State                                    | Holds the skeleton? | What the settled pane shows                                         |
+| ---------------------------------------- | ------------------- | ------------------------------------------------------------------- |
+| **In flight** — a request is outstanding | **Yes**             | —                                                                   |
+| **Gated idle** — waiting on a user act   | No                  | That tile's own idle affordance (the call to action that starts it) |
+| **Failed**                               | No                  | That tile's own error state, routed to `AlertMessage`               |
+| **Settled empty** — resolved, no rows    | No                  | That tile's own empty state, or its documented absence              |
+
+Gated idle is a fourth state alongside loading/empty/error, and the three
+non-holding rows share one property: no further work is running, so waiting cannot
+change the answer. A skeleton is a promise that content is arriving — over a read
+nobody started it is a lie, and over a read that already failed it is a hang. A pane
+names the reads it waits on in an explicit opt-in list and waits on the in-flight
+state only; a "not yet done" predicate silently folds idle and error in with in
+flight and leaves a gated pane shimmering forever.
+
+None of this fabricates a value the pane doesn't have: a tile with no answer still
+renders nothing rather than a zero or a dash. This governs when the pane appears,
+not what a tile is allowed to claim once it has.
+
 ## Motion & reduced motion
 
-Full token scale, primitives, and rationale live in `docs/motion.md` (ADR-0027).
+Full token scale, primitives, and rationale live in `docs/motion.md`.
 The contract that matters for every new interactive surface:
 
 - Motion explains what just happened; it never decorates. If removing an
@@ -125,7 +159,7 @@ The contract that matters for every new interactive surface:
 ### Activity bar
 
 Scheduler state and operation progress live in one fixed bottom bar (`ActivityBar`
-→ pure `ActivityBarView` + `useActivityBar`, ADR-0008), not two overlapping ones.
+→ pure `ActivityBarView` + `useActivityBar`), not two overlapping ones.
 Keep its layout **stable**: the status region, the metric slots, and the action
 area stay mounted so values swap in place instead of reflowing the row. Cancel is a
 single control that stops the operation and drains the queue.

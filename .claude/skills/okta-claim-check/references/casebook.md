@@ -1,7 +1,7 @@
 # Casebook: seven claims that did not survive a check
 
-Seven confident factual claims about this repo, made in a cleanup plan, an ADR, and a
-doc, all within one week. Each is recorded here with the claim as written, what is
+Seven confident factual claims about this repo, made in a cleanup plan, a published
+decision record, and a house doc, all within one week. Each is recorded here with the claim as written, what is
 actually true, the command that settled it, and what would have shipped if nobody had
 looked.
 
@@ -13,7 +13,7 @@ and grep-based counts systematically over-count.
 
 ## 1. "14 verbatim copies of `makeCore()`"
 
-**Claimed** (ADR-0023): `makeCore()` is redefined verbatim in **14**
+**Claimed** (a published house record): `makeCore()` is redefined verbatim in **14**
 `useOktaApi/*.test.ts` files.
 
 **Actually true:** 14 files define something called `makeCore`, but they are **11
@@ -78,8 +78,8 @@ positives.
 **Claimed:** the file was a characterization table written to prove the shared-AST
 refactor changed no outcome. The refactor landed; the pin is spent.
 
-**Actually true:** the file has two tables. Table 2's route _was_ superseded — ADR-0025
-retired `canEvaluateClientSide` and the table now reaches the grammar gate through
+**Actually true:** the file has two tables. Table 2's route _was_ superseded — a later
+decision retired `canEvaluateClientSide` and the table now reaches the grammar gate through
 `parseRuleExpression` + `checkRuleNodeSupport`. **Table 1 was never superseded.** It pins
 `tryEvaluateRuleExpression`, a live API with a production caller in
 `src/shared/utils/membershipAnalysis.ts`, and it is the primary coverage of the most
@@ -90,9 +90,9 @@ becomes a wrong access decision.
 plus reading the file's own header, which says all of this.
 
 **Would have shipped:** deletion of the primary coverage of membership attribution,
-under an ADR-0022 carve-out ("the assertion pins something superseded") that did not
-apply. ADR-0022 requires a PR note saying what stays covered; no truthful one could have
-been written.
+under a test-removal carve-out ("the assertion pins something superseded") that did not
+apply. That rule also requires a PR note saying what stays covered (`docs/testing.md`);
+no truthful one could have been written.
 
 **Class:** reachability. **Tell:** a file can be _half_ superseded. The filename described
 the weaker half.
@@ -134,7 +134,7 @@ all three alone.
 ## 5. "Add `shared/status.ts` as the single 'error'→'danger' seam"
 
 **Claimed:** the codebase needs one conversion point between the legacy `error` status
-word and ADR-0002's `danger`.
+word and the house status vocabulary's `danger` (`docs/design-system.md`).
 
 **Actually true:** it already existed, at
 `src/sidepanel/components/shared/status.ts` — and the alias it was proposed to convert
@@ -157,7 +157,7 @@ like a factual claim. It is one.
 route them all through a shared component.
 
 **Actually true:** **15 and 17** — wrong in _both_ directions. And composition, again,
-was the real problem: most of the 15 were **mutation** state, which is ADR-0009's batch
+was the real problem: most of the 15 were **mutation** state, which is the shared batch
 runner's territory, not a render-time error state. Others were UI state that the proposed
 shared component could never have absorbed.
 
@@ -175,20 +175,21 @@ a number wrong in both directions was never derived from a list.
 
 ## 7. "Two visibility-gating patterns; `useAppsData` is the deferred re-arm"
 
-**Claimed** (ADR-0018): two gating patterns exist, and `src/sidepanel/hooks/useAppsData.ts`
-plus `src/sidepanel/components/AuthPoliciesTab.tsx` are instances of "deferred re-arm".
+**Claimed** (a published house record): two visibility-gating patterns exist, and
+`src/sidepanel/hooks/useAppsData.ts` plus
+`src/sidepanel/components/AuthPoliciesTab.tsx` are instances of "deferred re-arm".
 
 **Actually true:** there are **five** patterns, and both named hooks are the _other_
 one — owed-load latches. Each holds a `useRef` of the last input it actually loaded and
 returns early when it is unchanged, so a bare hide/show issues no request. That is the
-defining behaviour of the pattern the ADR assigned them away from.
+defining behaviour of the pattern the record assigned them away from.
 
-The ADR also **contradicted itself**: its warning under pattern 2 — "without the latch,
+The record also **contradicted itself**: its warning under pattern 2 — "without the latch,
 'gate on `isActive`' silently turns every tab revisit into a refetch" — describes exactly
 the bug these two hooks avoid _by having a latch_.
 
-**Settled by:** opening both files and reading the guard. Thirty seconds each. ADR-0026
-records the corrected five-pattern taxonomy.
+**Settled by:** opening both files and reading the guard. Thirty seconds each. A later
+audit recorded the corrected five-pattern taxonomy.
 
 **Would have shipped:** a refactor built on the wrong taxonomy, folding latched hooks
 into a re-arm abstraction and turning every tab revisit into a refetch.
@@ -206,9 +207,13 @@ tests a classification. Taxonomies in docs decay faster than the code they descr
    real; the set it described was not homogeneous.
 3. **Three came from an unanchored grep.** `play:` matching `display:` is the clearest,
    but comments, doc references, and stories inflated the others.
-4. **Two were wrong in a _published, immutable_ document.** ADR-0023 still says "14
-   verbatim"; ADR-0018's taxonomy stood until ADR-0026 superseded it. Being written down
-   — even in an ADR, even in this repo's own docs — is not evidence.
+4. **Two were wrong in a _published, dated_ record.** One went on saying "14 verbatim"
+   long after the hashes disproved it; the two-pattern gating taxonomy stood until a
+   later audit superseded it with five. Being written down in a published document is
+   not evidence — a dated record describes the repo as it was, not as it is, and this
+   repo keeps several corpora that are deliberately never rewritten (`NIGHTLY.md`, and
+   the `## Archive` sections of `DEBT.md` and `IMPROVEMENTS.md`) for exactly that
+   reason.
 5. **Four would have destroyed something while leaving the suite green.** Deleted
    coverage, a broken reference-identity pin, a mocked-out system under test. The tests
    would not have caught any of them, because the tests were the thing being changed.

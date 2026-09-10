@@ -110,9 +110,15 @@ The rules:
   An enum turns a new value into a vanished row.
 - **`z.array(z.unknown())`** when only the length is needed.
 
-This is not a relaxation of ADR-0006 — validation still happens at the boundary, and
-`no new any` still holds. It is validating the fields actually read, at the strictness
-the data warrants.
+This is not a relaxation of the rule that every Okta response is untrusted and gets
+validated with zod at the content-script boundary (`docs/security.md`) — validation
+still happens at the boundary, and `no new any` still holds. It is validating the
+fields actually read, at the strictness the data warrants.
+
+A lenient schema is not a licence to hedge in the output, either: a column either
+reports a value it can stand behind or reports nothing. Never emit "approximately",
+"likely", or a `?`-suffixed cell to paper over a field the schema let through empty
+(`docs/claims.md`).
 
 Reuse a shared schema when one fits (`oktaAppUserSchema`, `exportUserSchema` from
 `columns/userColumns.ts`). Declare a local one otherwise; a descriptor that needs a

@@ -101,7 +101,8 @@ Co-locate `<name>.test.ts`. Existing descriptor tests pin three things: descript
 identity and scoping config, the schema accepting a representative row, and any column
 whose `accessor` or `format` does real work. Columns that are bare property reads are
 already covered by `columnCatalogs.test.ts` walking the whole registry — do not
-re-assert them per descriptor (ADR-0023 bans restating what another runner covers).
+re-assert them per descriptor — the house bans restating what another runner already
+covers (`docs/testing.md`).
 
 Then: `npm run type-check`, `npm run lint`, `npx prettier --write` on the touched
 files, and `npx vitest run src/sidepanel/export`.

@@ -1,7 +1,7 @@
 # Features plan (living)
 
 Start here to scope or pick up **new feature** work (as opposed to maintainability
-work, whose 2026-07 overhaul is complete — see `CLAUDE.md` and `docs/adr/`). This is
+work, whose 2026-07 overhaul is complete — see `CLAUDE.md`). This is
 a living catalog: add ideas, check items off, record why something was parked so it
 isn't re-litigated.
 
@@ -9,8 +9,7 @@ The single fact that reshapes everything: **the write surface is narrow and the 
 is single-tenant**. Today the app can `suspend`/`unsuspend` users,
 `resetPassword(sendEmail=true)`, add/remove group members, run bulk group ops,
 `activate`/`deactivate` rules, **create / delete group rules** (Feature A4 — zod-validated,
-via the safe create → activate → retire sequence), and — since
-[ADR-0035](./adr/0035-the-first-profile-write.md) — a **single-user
+via the safe create → activate → retire sequence), and a **single-user
 profile write** (`POST /api/v1/users/{id}`, sparse patch, gated on schema mutability and
 mastering, predicted, audited and undoable). It still has **no** bulk profile write, no
 user `activate`/`reactivate`, no in-place rule edit, no app-push writes, and no policy
@@ -26,7 +25,7 @@ tenants at once is impossible. See [architecture.md](./architecture.md).
   `button`/`input`/`select`/`textarea`); `Modal` for every overlay (role/trap/Esc).
   ([design-system.md](./design-system.md), [components.md](./components.md),
   [ux-guidelines.md](./ux-guidelines.md))
-- Validate every new Okta response with zod at the boundary (no new `any`, ADR-0006).
+- Validate every new Okta response with zod at the boundary (no new `any`).
 - No raw `console.*`; never log tokens/bodies/PII ([development.md](./development.md)).
 - **Every mutation audits, and every destructive mutation confirms.** Capture prior
   state so undo can _restore_, not just log. Components < ~300 lines; logic in hooks.
@@ -89,7 +88,7 @@ The two primitives worth building **once** and reusing across C/D:
 ## Shipped (A + B)
 
 **A. Orphan / Clutter Remediation + Rule Consolidation — flagship** `[x]`
-All four sub-features landed; the _why_ is captured in the code and ADRs.
+All four sub-features landed; the _why_ is captured in the code's doc comments.
 
 - **A1 — Cleanup triage** (`groups/clutterAnalysis.ts::analyzeClutter`): a pure, tested
   classifier over the loaded `GroupSummary[]` fuses empty / duplicate-name / stale /
@@ -100,7 +99,7 @@ All four sub-features landed; the _why_ is captured in the code and ADRs.
   `shared/membership/groupSource.ts`): per-group "why does this exist / who feeds it" —
   feeding rules, app-push targets, and a gated manual-vs-rule split. Read-only. Its
   original `GroupSourceModal` shell has since been retired: the content now lives in the
-  Group Detail view pushed from the groups list (ADR-0016).
+  Group Detail view pushed from the groups list.
 - **A3 — Group merge** (`GroupMergeModal` + `useGroupMerge` +
   `shared/membership/mergePlan.ts`): membership consolidation from the selection bar —
   copy sources into a survivor, empty the sources, block sources fed by an active rule;
@@ -125,14 +124,13 @@ rule targets + exclusions and labeled as such inline.
 Mass-edit one profile field (department rename, title change) across many users, without
 fighting externally-mastered (AD/HR) profiles.
 
-The schema facts were banked first ([ADR-0033](./adr/0033-admin-authored-profile-display.md)):
+The schema facts were banked first:
 `getUserProfileSchema` → `cacheKeys.userSchema`, with `oktaUserSchemaPropertySchema`
 capturing `mutability`, `required`, `type`, `enum`/`oneOf` and the `master` block — the
 mastering signal this feature's differentiator turns on.
 
-**The single-user inline editor has since landed**
-([ADR-0035](./adr/0035-the-first-profile-write.md)), which is most of
-this item's machinery. What exists today:
+**The single-user inline editor has since landed**, which is most of this item's
+machinery. What exists today:
 
 - The write itself — `updateUserProfile` (`POST /api/v1/users/{id}`, sparse patch,
   zod-validated response) plus `getUserRaw`, in `useOktaApi/profileOperations.ts`. Its
@@ -143,8 +141,7 @@ this item's machinery. What exists today:
   `credentials.provider.type`, and a value-type gate, each lock naming its reason.
 - The prediction — `shared/membership/blastRadius.ts`, a pure zero-API engine
   answering "what does this edit do to their group access?", hedged (`likely-*`) or
-  withheld with a named reason
-  ([ADR-0036](./adr/0036-a-predicted-access-change-is-never-asserted.md)).
+  withheld with a named reason — a predicted access change is never asserted as fact.
 - The capture and the restore — `logProfileUpdateAction` with PII caps, and
   `useUndoAction`, the repo's **first undo executor**: re-read, refuse on drift, write
   the prior values, record a linked entry of its own.
@@ -152,8 +149,8 @@ this item's machinery. What exists today:
   of the two-user Compare view.
 
 **Superseded:** the "curated **allow-list**, no login/email footguns" line below was the
-original plan and ADR-0035 §3 replaces it. `login` is editable when Okta masters the
-account; the mastering signal locks exactly the accounts where a write would be
+original plan; the shipped per-attribute gate replaces it. `login` is editable when Okta
+masters the account; the mastering signal locks exactly the accounts where a write would be
 overwritten or is not ours to make, which is a narrower and more accurate lock than a
 blanket deny.
 
@@ -192,20 +189,19 @@ What remains for the bulk build:
    `MAX_UNDO_SIZE = 50`, so one entry per user means an 80-user run evicts its own
    early entries and most of the run stops being revertable. Bulk needs **one
    run-scoped entry** holding per-user before-values, which means a new `ActionType` —
-   and [ADR-0035](./adr/0035-the-first-profile-write.md) §5 built the forcing function
-   on purpose: `NOT_UNDOABLE` is an exhaustive `Record`, not a `switch` with a
-   `default:`, so adding the member **is a compile error until someone writes down what
-   undoing it means**. The existing caps (25 attributes × 1024 chars) are per _entry_,
-   so a run-scoped entry needs its own cohort cap — over-cap users recorded but marked
-   unrestorable, never silently truncated (ADR-0035 §4).
+   and the forcing function is deliberate: `NOT_UNDOABLE` is an exhaustive `Record`,
+   not a `switch` with a `default:`, so adding the member **is a compile error until
+   someone writes down what undoing it means**. The existing caps (25 attributes ×
+   1024 chars) are per _entry_, so a run-scoped entry needs its own cohort cap —
+   over-cap users recorded but marked unrestorable, never silently truncated.
 
-**The bulk write needs its own ADR.** ADR-0035 governs the _first_ profile write, of one
-user, from a field the admin is looking at. This is the first **many**-user write, driven
-by a client-side filter the admin cannot audit row by row. The ADR has to answer: what
-the confirm shows (exact `from → to` per user, capped and paginated); cancellation
-semantics mid-run; what lands in the undo log; and the hard refusal — **never write an
-attribute a feeding rule reads without naming the rule and the membership change it would
-cause** (ADR-0036).
+**The bulk write needs its own plan, agreed before any code.** The single-user write
+covers one user, from a field the admin is looking at. This is the first **many**-user
+write, driven by a client-side filter the admin cannot audit row by row. That plan has
+to answer: what the confirm shows (exact `from → to` per user, capped and paginated);
+cancellation semantics mid-run; what lands in the undo log; and the hard refusal —
+**never write an attribute a feeding rule reads without naming the rule and the
+membership change it would cause.**
 
 ---
 
@@ -272,12 +268,12 @@ Carried forward from the A/B build (surfaced while working, none blocking):
   the existing counts.
 - **`useGroupsLoader` mount-rehydrate races `loadAllGroups`** (characterized in its
   docstring) — relevant if A1/A2 start triggering loads.
-- **Finish the eyebrow migration.** `Eyebrow` (ADR-0030's recipe, finally extracted) is
-  the single uppercase section label, but roughly eighteen files still hand-roll
+- **Finish the eyebrow migration.** `Eyebrow` (the layout contract's recipe, finally
+  extracted) is the single uppercase section label, but roughly eighteen files still hand-roll
   `uppercase tracking-*` — `RuleCard`, `ContextBar`, `PolicyCard`, `StatCard`,
   `ColumnPicker`, `PresetControls` and the rest of
   `grep -rl "uppercase tracking" src/sidepanel/components`. Mechanical and exempt from
-  the plan gate (ADR-0024), but do it as its own PR: it is the only thing that stops the
+  the plan-and-approval gate, but do it as its own PR: it is the only thing that stops the
   four-recipe drift returning, and each swap is a visual diff worth seeing on its own.
 - **Dead-code pass over `src/shared/tabState/`.** `TabStateManager` writes
   `chrome.storage.local` directly, so the background's `saveTabState` / `loadTabState` /
@@ -285,23 +281,23 @@ Carried forward from the A/B build (surfaced while working, none blocking):
   anywhere in the codebase — three validated message actions maintained for nobody.
   `RulesTab` is the module's only consumer while its `TabName` union spans every tab.
   While there: the lone `chrome.storage.sync.set` at `src/background/index.ts:326` has no
-  reader either (ADR-0033 §2). Run `npm run knip` and remove what it confirms; removing a
+  reader either. Run `npm run knip` and remove what it confirms; removing a
   message action is a security-surface reduction, so review it as one.
 
 ---
 
-## Detail-page layout contract adoption — pending ADR-0030 migration
+## Detail-page layout contract adoption — pending migration
 
-ADR-0030 said Users and Groups adopt the contract first. Both have:
+Users and Groups adopt the contract first. Both have:
 
 - [x] **Groups** — the group detail view pushed from the list, with the header owning
-      identity (ADR-0032).
+      identity.
 - [x] **Users** — the detail rung is now `UserActionBar` above three tabbed panes of one
       card (`UserDetailPanel`), the header describes the user (`userIdentity`), and
       `UserProfileCard` / `userProfileSections.ts` are deleted rather than restyled.
 
 Four detail-page surfaces still need the `DetailSection` / `ActionBar` /
-`EntityLink` / `Badge` contract from [ADR-0030](./adr/0030-detail-page-layout-contract.md):
+`EntityLink` / `Badge` contract (see [components.md](./components.md)):
 
 - [ ] **Rules** (`src/sidepanel/components/RuleCard.tsx`) — hand-rolls an `<a>` with
       an inline `<svg>` instead of `OpenInOktaLink`; "THEN ADD TO GROUPS" chips are

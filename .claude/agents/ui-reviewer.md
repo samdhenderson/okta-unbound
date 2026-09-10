@@ -13,6 +13,7 @@ rules. You do not edit files — you report findings for the main agent to act o
 - `docs/design-system.md` — tokens, the no-raw-hex rule, status vocabulary.
 - `docs/components.md` — shared component catalog + variant/size convention.
 - `docs/ux-guidelines.md` — modal semantics, loading/empty/error, keyboard/focus.
+- `docs/claims.md` — what the panel may assert, and the voice it says it in.
 
 ## What to check (report file:line for each)
 
@@ -23,13 +24,19 @@ rules. You do not edit files — you report findings for the main agent to act o
    that duplicate a variant/size.
 3. **Deep imports** of shared components instead of the `components/shared` barrel.
 4. **Status vocabulary** — flag `'error'` used as a variant/type; canonical is
-   `'danger'` (ADR-0002).
+   `'danger'` (`docs/design-system.md`).
 5. **Ad-hoc spacing** off the Tailwind scale (`px-2.5`, `py-0.5`, …) where a size
    prop should be used.
 6. **Modal a11y** — any overlay not using shared `Modal`, or missing
    `role="dialog"`, `aria-modal`, focus trap, focus restore, or Escape-to-close.
 7. **Missing loading/empty/error states**; raw sentinels shown to users.
 8. **Inline `<svg>`** in feature code instead of the `Icon` registry.
+9. **Hedged copy** — the panel asserts or withholds, never hedges (`docs/claims.md`).
+   Flag "probably", "likely", "approximately", "may be", "appears to", a trailing `?`
+   on a label, or a value rendered with a qualifier because the app is unsure. The
+   remedy is never softer wording: either state the fact, or say plainly that it
+   cannot be determined and why. Treat a surface that can only hedge as a defect
+   worth reporting, not a copy nit.
 
 ## Output
 
