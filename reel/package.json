@@ -14,7 +14,13 @@
     "check-verbs": "node scripts/check-verbs.mjs",
     "vo:budget": "node scripts/vo-budget.mjs",
     "vo:measure": "node scripts/measure-vo.mjs",
-    "vo:check": "node scripts/check-vo.mjs"
+    "vo:check": "node scripts/check-vo.mjs",
+    "ad:studio": "remotion studio src/ad-entry.ts",
+    "ad": "remotion render src/ad-entry.ts ad-delivery ../clips/okta-unbound-ad.mp4 --crf=16 --pixel-format=yuv420p --timeout=120000",
+    "ad:draft": "remotion render src/ad-entry.ts ad ../clips/ad-draft.mp4 --image-format=jpeg --crf=28 --scale=0.5 --timeout=120000",
+    "ad:still": "remotion still src/ad-entry.ts",
+    "sfx": "node scripts/make-sfx.mjs",
+    "sfx:check": "node scripts/make-sfx.mjs --check"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.518",

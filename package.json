@@ -46,6 +46,12 @@
     "reel:vo:targets": "node reel/scripts/vo-budget.mjs --write",
     "reel:vo:measure": "npm --prefix reel run vo:measure",
     "reel:vo:check": "npm --prefix reel run vo:check",
+    "ad": "npm --prefix reel run ad",
+    "ad:draft": "npm --prefix reel run ad:draft",
+    "ad:studio": "npm --prefix reel run ad:studio",
+    "ad:look": "node .storybook/scripts/reel/ad-look.mjs",
+    "sfx": "npm --prefix reel run sfx",
+    "sfx:check": "npm --prefix reel run sfx:check",
     "storybook": "node .storybook/scripts/gen-doc-pages.mjs && storybook dev -p 6006",
     "build-storybook": "npm run docs && node .storybook/scripts/gen-doc-pages.mjs && storybook build"
   },

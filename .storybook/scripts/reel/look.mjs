@@ -36,12 +36,15 @@
  *
  * @module
  */
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { mkdirSync, rmSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import { readCut, findAct, actKeys } from '../../../reel/scripts/lib/cut.mjs';
+
+const execFileAsync = promisify(execFile);
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** The repo root: three levels up from `.storybook/scripts/reel/`. */
@@ -70,6 +73,9 @@ Look at the reel without rendering the reel.
   npm run reel:look -- --list                   compositions and act keys
 
 Options
+  --entry <path>     which Remotion entry to look in. Defaults to the film's
+                     \`src/index.ts\`; the advertisement lives in
+                     \`src/ad-entry.ts\` (or use \`npm run ad:look\`).
   --sheet            tile the stills into one image instead of leaving them loose
   --frames <n>       how many stills a sheet uses (default ${SHEET_DEFAULT})
   --scale <n>        render scale, default 0.5 (a sheet does not need full res)
@@ -101,14 +107,15 @@ function run(cmd, args, cwd) {
  * @param {number} frame
  * @param {string} out Absolute path.
  * @param {number} scale
+ * @param {string} entry The Remotion entry the composition is registered in.
  */
-async function still(composition, frame, out, scale) {
+async function still(composition, frame, out, scale, entry) {
   await run(
     'npx',
     [
       'remotion',
       'still',
-      'src/index.ts',
+      entry,
       composition,
       out,
       `--frame=${frame}`,
@@ -178,7 +185,7 @@ function list(cut) {
  * @param {string[]} argv
  */
 function parse(argv) {
-  const opts = { scale: 0.5, count: SHEET_DEFAULT, sheet: false };
+  const opts = { scale: 0.5, count: SHEET_DEFAULT, sheet: false, entry: 'src/index.ts' };
   const positional = [];
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -189,6 +196,7 @@ function parse(argv) {
     else if (arg === '--frames') opts.count = Number(argv[(i += 1)]);
     else if (arg === '--scale') opts.scale = Number(argv[(i += 1)]);
     else if (arg === '--out') opts.out = argv[(i += 1)];
+    else if (arg === '--entry') opts.entry = argv[(i += 1)];
     else if (arg === '--help' || arg === '-h') opts.help = true;
     else if (arg.startsWith('--')) throw new Error(`Unknown option "${arg}"`);
     else positional.push(arg);
@@ -201,7 +209,7 @@ function parse(argv) {
  *
  * @returns {{ composition: string, frames: number[], name: string, sheet: boolean }}
  */
-function target(cut, opts, positional) {
+async function target(cut, opts, positional) {
   if (opts.at) {
     const found = findAct(cut, opts.at);
     if (!found) {
@@ -241,7 +249,8 @@ function target(cut, opts, positional) {
     throw new Error('Name a composition, or use --at <act-key>. --list shows both.');
 
   if (opts.sheet || frameArg === undefined) {
-    const length = compositionLength(cut, composition);
+    const length =
+      compositionLength(cut, composition) ?? (await askRemotion(opts.entry, composition));
     if (length === null) {
       throw new Error(
         `Cannot work out how long "${composition}" runs, so it needs an explicit frame: ` +
@@ -285,6 +294,28 @@ function compositionLength(cut, composition) {
 }
 
 /**
+ * How long a composition runs when the cut has never heard of it.
+ *
+ * The advertisement (`src/ad-entry.ts`) is not in `plan.generated.json` and
+ * never will be: it has no acts, no chapters and no footage, so there is
+ * nothing for `emit-plan` to emit about it. Rather than teach the plan about a
+ * second film or hand-maintain a table of stab lengths here, this asks Remotion
+ * what it registered - which is the only answer that cannot go stale, because
+ * it comes from the same bundle the still will be rendered out of.
+ *
+ * @returns {Promise<number | null>}
+ */
+async function askRemotion(entry, composition) {
+  const { stdout } = await execFileAsync('npx', ['remotion', 'compositions', entry], { cwd: REEL });
+  for (const line of stdout.split('\n')) {
+    // `<id>  <fps>  <w>x<h>  <frames> (<n> sec)`
+    const match = line.trim().match(/^(\S+)\s+\d+\s+\d+x\d+\s+(\d+)\s/);
+    if (match && match[1] === composition) return Number(match[2]);
+  }
+  return null;
+}
+
+/**
  * `count` frames spread evenly across `[from, from + length)`, sampled at the
  * middle of each slice rather than its edge.
  *
@@ -317,12 +348,12 @@ async function main() {
     return;
   }
 
-  const plan = target(cut, opts, positional);
+  const plan = await target(cut, opts, positional);
   mkdirSync(LOOKS, { recursive: true });
 
   if (!plan.sheet) {
     const out = opts.out ? path.resolve(REPO, opts.out) : path.join(LOOKS, `${plan.name}.png`);
-    await still(plan.composition, plan.frames[0], out, opts.scale);
+    await still(plan.composition, plan.frames[0], out, opts.scale, opts.entry);
     console.log(`\n${plan.composition} frame ${plan.frames[0]}\n${out}`);
     return;
   }
@@ -341,6 +372,7 @@ async function main() {
       frame,
       path.join(dir, `look-${String(i).padStart(3, '0')}.png`),
       opts.scale,
+      opts.entry,
     );
   }
 
