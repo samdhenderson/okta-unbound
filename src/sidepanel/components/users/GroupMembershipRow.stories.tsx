@@ -40,7 +40,7 @@ const ruleExact: GroupMembership = {
   rules: [rule('0prFAKErule00001', 'Auto-add Engineers', 'user.department == "Engineering"')],
 };
 
-/** Two candidate rules and nothing to separate them. Verdict `Rule · 2?`. */
+/** Two candidate rules and nothing to separate them. Verdict `Rule · 2`. */
 const ruleAmbiguous: GroupMembership = {
   group: {
     id: '00gFAKE00000000000003',
@@ -63,7 +63,7 @@ const direct: GroupMembership = {
   rules: [],
 };
 
-/** A manual add the classifier only deduced. Verdict `Direct?` — never the plain `Direct`. */
+/** A manual add the classifier only deduced. Verdict `Direct`, in the `warning` treatment. */
 const directDeduced: GroupMembership = {
   group: { id: '00gFAKE00000000000005', type: 'OKTA_GROUP', profile: { name: 'Travel Policy' } },
   membershipType: 'DIRECT',
@@ -119,13 +119,13 @@ const meta = {
     docs: {
       description: {
         component:
-          'One membership, reduced to two statements: a **verdict badge** (`Rule`, `Rule?`, ' +
-          '`Rule · n?`, `Direct`, `Direct?`, `App`, `Unresolved` — from `membershipVerdict`) and ' +
+          'One membership, reduced to two statements: a **verdict badge** (`Rule`, ' +
+          '`Rule · n`, `Direct`, `App`, `Unresolved` — from `membershipVerdict`) and ' +
           'one **source line** worded by `shared/membership/sourceLine`.\n\n' +
           'The row this replaced stacked the raw membership enum, a second group-type badge, a ' +
-          'hedged caption and a "Prove it" strip on top of each other, and left the reader to ' +
+          'qualified caption and a "Prove it" strip on top of each other, and left the reader to ' +
           'decide which to believe. Everything past the two statements now lives behind the ' +
-          'disclosure, in one order: the full caveat, a card per attributed rule, any apps the ' +
+          'disclosure, in one order: the full explanation, a card per attributed rule, any apps the ' +
           'group also grants, the **Ask Okta** proof action (ADR-0031), and the Okta deep link.\n\n' +
           'The disclosure is closed by default and held `inert` while closed, which is what keeps ' +
           'the proof action — one API call per press — off a row nobody has opened. Expansion is ' +
@@ -202,14 +202,14 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 
 // ---------------------------------------------------------------------------
-// One story per verdict. Read the badges together: an answer is
-// `primary`/`success`, a deduction is `warning` and carries a `?`.
+// One story per verdict. Read the badges together: the label names the source,
+// and an answer is `primary`/`success` where a deduction is `warning`.
 // ---------------------------------------------------------------------------
 
 /** `Rule` — a single rule provably matches this user. */
 export const VerdictRule: Story = {};
 
-/** `Rule · 2?` — two candidates, none of them credited. The count is the candidate set. */
+/** `Rule · 2` — two candidates, none of them credited. The count is the candidate set. */
 export const VerdictRuleAmbiguous: Story = {
   args: { membership: ruleAmbiguous },
 };
@@ -219,7 +219,7 @@ export const VerdictDirect: Story = {
   args: { membership: direct },
 };
 
-/** `Direct?` — the classifier only *likely* thinks this was a manual add. */
+/** `Direct`, in `warning` — the classifier deduced the manual add rather than proving it. */
 export const VerdictDirectDeduced: Story = {
   args: { membership: directDeduced },
 };
@@ -234,7 +234,7 @@ export const VerdictUnresolved: Story = {
   args: { membership: unresolved },
 };
 
-/** Okta's own answer, attached: an unhedged `Rule` on a membership that was `Rule · 2?`. */
+/** Okta's own answer, attached: a proven `Rule` on a membership that was `Rule · 2`. */
 export const VerdictProven: Story = {
   args: { membership: proven },
 };
@@ -382,7 +382,7 @@ export const LongGroupName: Story = {
     const name = canvas.getByText(longName.group.profile.name);
     await expect(name).toBeInTheDocument();
     await expect(name).toHaveAttribute('title', longName.group.profile.name);
-    await expect(canvas.getByText('Rule · 2?')).toBeInTheDocument();
+    await expect(canvas.getByText('Rule · 2')).toBeInTheDocument();
     await expect(canvas.getByText('On page')).toBeInTheDocument();
   },
 };

@@ -65,7 +65,7 @@ const ExportPreviewTable: React.FC<ExportPreviewTableProps> = ({
     // validation" so an empty export explains itself instead of looking broken.
     const message =
       fetched > 0
-        ? `The server returned ${fetched} row${fetched === 1 ? '' : 's'}, but all were skipped as unrecognized. This is likely a schema mismatch — please report it.`
+        ? `The server returned ${fetched} row${fetched === 1 ? '' : 's'}, but all were skipped as unrecognized. Schema mismatch — please report it.`
         : 'The server returned no rows for this query.';
     return <AlertMessage message={{ type: fetched > 0 ? 'warning' : 'info', text: message }} />;
   }

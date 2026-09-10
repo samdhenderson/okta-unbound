@@ -24,11 +24,8 @@ const meta = {
     docs: {
       description: {
         component:
-          '**Every prediction is `likely`, and the hedge is in the label.** The engine cannot see a rule’s ' +
-          'exclusion list, evaluates conditions with a client-side reimplementation of Okta EL rather than ' +
-          'Okta EL, and Okta applies rules asynchronously. So the marker’s accessible name is `Likely added` / ' +
-          '`Likely removed`, never `Added` / `Removed` — a caption a layout can drop is not where a hedge ' +
-          'belongs.\n\n' +
+          '**The label asserts the prediction.** The marker’s accessible name is `Added` / `Removed`: the row ' +
+          'states what the edit does to the membership rather than qualifying it.\n\n' +
           '**`Not predicted` is neutral, never `danger`.** It is a peer of the other two kinds, not their ' +
           'absence: it is emitted only where something *was* implicated and the engine declined to call it, ' +
           'and it always names why. `ClauseChecklist` settled the precedent — a clause this panel declines to ' +
@@ -65,7 +62,7 @@ const meta = {
     effect: effect({
       groupId: '00gFAKE00000000000001',
       groupName: 'Sales-All',
-      kind: 'likely-added',
+      kind: 'added',
       ruleId: RULE_ID,
       ruleName: 'Sales auto-add',
     }),
@@ -76,13 +73,13 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** A gain: one rule starts matching, and the user does not already hold the group. */
-export const LikelyAdded: Story = {
+export const AddedEffect: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Sales-All')).toBeInTheDocument();
-    // The hedge is in the marker's accessible name, not in a caption.
-    await expect(canvas.getByRole('img', { name: 'Likely added' })).toBeInTheDocument();
-    await expect(canvas.queryByRole('img', { name: 'Added' })).toBeNull();
+    // The marker's accessible name asserts the effect outright.
+    await expect(canvas.getByRole('img', { name: 'Added' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('img', { name: 'Likely added' })).toBeNull();
     await expect(canvas.getByText(/starts matching this user/i)).toBeInTheDocument();
   },
 };
@@ -91,12 +88,12 @@ export const LikelyAdded: Story = {
  * A loss. `warning`, not `danger`: losing access is a consequence to flag, not a
  * failure that has happened.
  */
-export const LikelyRemoved: Story = {
+export const RemovedEffect: Story = {
   args: {
     effect: effect({
       groupId: '00gFAKE00000000000002',
       groupName: 'Engineering-All',
-      kind: 'likely-removed',
+      kind: 'removed',
       ruleId: RULE_ID,
       ruleName: 'Eng auto-add',
       currentlyHeld: true,
@@ -105,7 +102,7 @@ export const LikelyRemoved: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('img', { name: 'Likely removed' })).toBeInTheDocument();
+    await expect(canvas.getByRole('img', { name: 'Removed' })).toBeInTheDocument();
     await expect(canvas.getByText(/stops matching this user/i)).toBeInTheDocument();
   },
 };
@@ -119,7 +116,7 @@ export const SeveralRules: Story = {
     effect: effect({
       groupId: '00gFAKE00000000000003',
       groupName: 'EMEA-Everyone',
-      kind: 'likely-added',
+      kind: 'added',
       contributingRuleIds: [RULE_ID, '0prFAKErule00002', '0prFAKErule00003'],
     }),
   },
@@ -178,7 +175,7 @@ export const NotPredictedAttributionHedged: Story = {
       groupId: '00gFAKE00000000000006',
       groupName: 'Security-Reviewers',
       kind: 'not-predicted',
-      withheldReason: 'membership-attribution-hedged',
+      withheldReason: 'membership-attribution-deduced',
       currentlyHeld: true,
       currentBucket: 'rule',
     }),
@@ -261,7 +258,7 @@ export const Compact: Story = {
     effect: effect({
       groupId: '00gFAKE00000000000010',
       groupName: 'emea-sales-enablement-contractors-2026',
-      kind: 'likely-removed',
+      kind: 'removed',
       ruleId: RULE_ID,
       ruleName: 'EMEA sales enablement — contractors only',
       currentlyHeld: true,

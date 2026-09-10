@@ -54,16 +54,30 @@ describe('GroupSourceIndicator — attribution captions', () => {
     expect(shown({})).toHaveTextContent(/^Added by Rule: Contractors → VPN Access$/);
   });
 
-  it('hedges the same single rule for an `inferred` attribution', () => {
-    expect(shown({ attribution: 'inferred' })).toHaveTextContent(
-      /^Likely added by rule: Contractors → VPN Access$/,
-    );
+  it('gives the same single rule its own caption for an `inferred` attribution', () => {
+    const el = shown({ attribution: 'inferred' });
+
+    expect(el).toHaveTextContent(/^Added by rule: Contractors → VPN Access$/);
+    // RETARGETED (ADR-0022 §3): the caption used to hedge ("Likely added by
+    // rule:") and no longer does, so the caption alone no longer says this was a
+    // deduction. The hover explanation still does, and that is what is pinned —
+    // the case below proves it is absent from the `exact` line, so this cannot
+    // pass just because every description happens to say it.
+    expect(wording(el)).toMatch(/Not every rule condition could be evaluated/i);
   });
 
-  it('offers the rule only as a possibility for an `ambiguous` attribution', () => {
-    expect(shown({ attribution: 'ambiguous' })).toHaveTextContent(
-      /^Possible rule: Contractors → VPN Access$/,
-    );
+  it('does not tell an `exact` reader that anything went unevaluated', () => {
+    expect(wording(shown({}))).not.toMatch(/Not every rule condition could be evaluated/i);
+    expect(wording(shown({}))).toMatch(/provably matches this user/i);
+  });
+
+  it('gives the rule its own caption for an `ambiguous` attribution', () => {
+    const el = shown({ attribution: 'ambiguous' });
+
+    expect(el).toHaveTextContent(/^Rule: Contractors → VPN Access$/);
+    // The caption stopped saying "Possible"; the description still refuses to
+    // credit the rule, which is the claim this case was written to pin.
+    expect(wording(el)).toMatch(/candidate rather than the answer/i);
   });
 
   it('gives each attribution its own caption, so none reads as another', () => {
@@ -168,10 +182,24 @@ describe('GroupSourceIndicator — the three ways of not having a rule', () => {
     expect(marker(undefined)).toBeNull();
   });
 
-  it('softens DIRECT when the classification was a deduction', () => {
-    expect(
-      shown({ membershipType: 'DIRECT', rules: [], attribution: 'inferred' }),
-    ).toHaveTextContent(/^Likely added directly$/);
+  /**
+   * RETARGETED (ADR-0022 §3). This case asserted `^Likely added directly$`, and
+   * the two DIRECT captions have since converged on "Added directly" — so the
+   * caption can no longer tell a deduced manual add from a proven one, and
+   * re-pointing this at the new string would have made it pass for a reason that
+   * has nothing to do with softening. The disclosure that survives is the hover
+   * explanation, so both halves are asserted here: the deduction discloses that
+   * the classifier could not finish, and the proven line does not.
+   */
+  it('discloses on hover that a deduced DIRECT was not fully evaluated', () => {
+    const deduced = shown({ membershipType: 'DIRECT', rules: [], attribution: 'inferred' });
+    const proven = shown({ membershipType: 'DIRECT', rules: [] });
+
+    expect(deduced).toHaveTextContent(/^Added directly$/);
+    expect(proven).toHaveTextContent(/^Added directly$/);
+
+    expect(wording(deduced)).toMatch(/not every rule condition could be evaluated/i);
+    expect(wording(proven)).not.toMatch(/not every rule condition could be evaluated/i);
   });
 
   it('names an APP_GROUP as application-managed rather than as a nameless rule', () => {
@@ -221,7 +249,7 @@ describe('GroupSourceIndicator — caption parity with GroupMembershipsList', ()
     const { unmount } = render(
       <GroupMembershipsList memberships={[membership({ attribution })]} isLoading={false} />,
     );
-    const caption = ['Added by Rule:', 'Likely added by rule:', 'Possible rule:'].find(
+    const caption = ['Added by Rule:', 'Added by rule:', 'Rule:'].find(
       (text) => screen.queryByText(text) !== null,
     );
     unmount();

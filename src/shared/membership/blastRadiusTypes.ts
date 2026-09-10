@@ -8,16 +8,16 @@
  * it. Nothing here has behaviour; every rule in this file is a rule about what a
  * word is allowed to mean.
  *
- * ## Two words carry the whole design
+ * ## One word carries the whole design
  *
- * - **`likely`** — every prediction is hedged, and the hedge is in the name of
- *   the value ({@link GroupEffectKind}) rather than in a caption a caller might
- *   drop. Three things make certainty unavailable: a {@link RuleInventoryState}
- *   rule carries no exclusion list (a `FormattedRule` drops
- *   `conditions.people`), so an exclusion is invisible and can only ever make us
- *   over-predict; client-side evaluation is a reimplementation of Okta EL, not
- *   Okta EL; and rule application is asynchronous, so even a correct prediction
- *   describes a state Okta has not reached yet.
+ * - **`added` / `removed`** — a prediction is stated, not qualified. The value
+ *   name ({@link GroupEffectKind}) says what the draft does to the membership.
+ *   Three known gaps sit behind it and are being closed separately: a
+ *   {@link RuleInventoryState} rule carries no exclusion list (a `FormattedRule`
+ *   drops `conditions.people`), so an exclusion is invisible and can only ever
+ *   make us over-predict; client-side evaluation is a reimplementation of Okta
+ *   EL, not Okta EL; and rule application is asynchronous, so even a correct
+ *   prediction describes a state Okta has not reached yet.
  * - **`not-predicted`** — the first-class "we declined to say". It is never a
  *   quieter way of saying "no": it always carries a {@link WithheldReason}
  *   naming what stopped us. Collapsing it into "nothing happens" is exactly the
@@ -171,7 +171,7 @@ export interface RuleEffect {
  * only where something *was* implicated and we declined to call it, and it
  * always names why in {@link GroupEffect.withheldReason}.
  */
-export type GroupEffectKind = 'likely-added' | 'likely-removed' | 'not-predicted';
+export type GroupEffectKind = 'added' | 'removed' | 'not-predicted';
 
 /**
  * Why a prediction was withheld. Codes only — the sentences live in
@@ -188,9 +188,9 @@ export type GroupEffectKind = 'likely-added' | 'likely-removed' | 'not-predicted
  * - `membership-not-credited-to-rule` — the membership is not in the `rule`
  *   bucket at all (a manual add, an app-mastered group, or unresolved), so no
  *   rule's verdict changing can take it away.
- * - `membership-attribution-hedged` — the membership *is* rule-bucketed, but the
- *   attribution is a deduction (`Rule?`, `Rule · N?`) rather than an answer. A
- *   hedged cause cannot support an unhedged consequence.
+ * - `membership-attribution-deduced` — the membership *is* rule-bucketed, but
+ *   *which* rule feeds it was deduced (`inferred`, `ambiguous`) rather than
+ *   established. A deduced cause cannot support an asserted consequence.
  * - `rule-inactive` — the only implicated rules are `INACTIVE`. They place
  *   nobody, so their verdict flipping changes nothing.
  * - `app-mastered-group` — an `APP_GROUP` roster is managed by its application.
@@ -200,7 +200,7 @@ export type WithheldReason =
   | 'rule-unevaluable-after'
   | 'another-active-rule-still-matches'
   | 'membership-not-credited-to-rule'
-  | 'membership-attribution-hedged'
+  | 'membership-attribution-deduced'
   | 'rule-inactive'
   | 'app-mastered-group';
 
@@ -247,9 +247,9 @@ export interface GroupEffect {
 
 /** Per-kind and per-transition tallies, so a summary line needs no re-scan. */
 export interface BlastRadiusCounts {
-  /** Groups with `kind: 'likely-added'`. */
+  /** Groups with `kind: 'added'`. */
   readonly added: number;
-  /** Groups with `kind: 'likely-removed'`. */
+  /** Groups with `kind: 'removed'`. */
   readonly removed: number;
   /** Groups with `kind: 'not-predicted'`. */
   readonly notPredicted: number;
@@ -278,7 +278,7 @@ export interface BlastRadiusReport {
    */
   readonly status: 'not-computed' | 'unavailable' | 'computed';
   /**
-   * One entry per implicated group, ordered `likely-added` → `likely-removed` →
+   * One entry per implicated group, ordered `added` → `removed` →
    * `not-predicted`, then by name, then by id. Groups nothing implicates are
    * absent entirely.
    */

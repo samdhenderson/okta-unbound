@@ -292,7 +292,7 @@ describe('attribution parity between the group view and the user view', () => {
   it('never lets the two paths disagree about whether they are guessing, absent an Okta answer', () => {
     // A subtler regression than a flipped verdict: both screens could agree a
     // membership is rule-managed while only one of them admits it is a guess,
-    // so one shows "Added by Rule:" and the other "Possible rule:".
+    // so one shows "Added by Rule:" and the other "Rule:".
     for (const scenario of scenarios.filter((s) => !s.oktaAsserts)) {
       const identity = scenario.identity ?? GROUP;
       expect(groupViewVerdict(identity, scenario.rules, scenario.user).deduced).toBe(

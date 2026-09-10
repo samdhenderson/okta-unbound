@@ -133,16 +133,31 @@ describe('membershipSourceLine — a membership Okta answered about', () => {
   });
 
   it('outranks the classifier: Okta’s answer wins over the deduction it contradicts', () => {
+    const answered = lineFor({ state: 'no-rules' });
+    const deduced = membershipSourceLine(guessed);
+
     // The classifier guessed a rule; Okta says nobody's rule feeds this membership.
-    expect(sourceLineLabel(lineFor({ state: 'no-rules' }))).not.toMatch(/Contractors/);
-    // And the guess, unproven, still reads as a guess.
-    expect(sourceLineLabel(membershipSourceLine(guessed))).toMatch(/^Possible rule:/);
+    expect(sourceLineLabel(answered)).not.toMatch(/Contractors/);
+
+    // RETARGETED (ADR-0022 §3). This used to assert the guess still read
+    // `^Possible rule:` — but the captions no longer hedge, so a wording check
+    // is no longer what separates the two. Two properties still do, and neither
+    // is a rewording of the other: the deduced line does not credit Okta, and it
+    // does not claim to be proven. Asserting the caption alone would now pass
+    // even if the provenance branch were deleted.
+    expect(sourceLineLabel(deduced)).toMatch(/Contractors/);
+    expect(sourceLineLabel(deduced)).not.toMatch(/Okta confirms/);
+    expect(deduced.proven).toBe(false);
+    expect(answered.proven).toBe(true);
   });
 
-  it('leaves the hedged line in place when Okta said nothing', () => {
+  it('leaves the classifier’s own line in place when Okta said nothing', () => {
     const line = lineFor({ state: 'unknown' });
 
-    expect(sourceLineLabel(line)).toBe('Possible rule: Contractors → VPN');
+    // Silence adds nothing: the line is the classifier's, word for word, and it
+    // never acquires Okta's credit or its weight.
+    expect(sourceLineLabel(line)).toBe('Rule: Contractors → VPN');
+    expect(sourceLineLabel(line)).toBe(sourceLineLabel(membershipSourceLine(guessed)));
     expect(line.proven).toBe(false);
   });
 

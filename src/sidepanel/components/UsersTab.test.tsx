@@ -526,11 +526,11 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
     expect(within(await membershipRow('Engineering')).getByText('Direct')).toBeInTheDocument();
-    // The row now states this in the wording `membershipSourceLine` gives every
-    // surface, rather than a sentence unique to this one. It also stops
-    // overclaiming: a `DIRECT` the classifier only *inferred* reads "Likely
-    // added directly", where the old fixed sentence asserted it flatly — and the
-    // badge hedges with it, as `Direct?`.
+    // The row states this in the wording `membershipSourceLine` gives every
+    // surface, rather than a sentence unique to this one. A `DIRECT` the
+    // classifier only *inferred* reads the same caption; the difference between
+    // a deduction and a proven manual add is carried by the badge treatment and
+    // the hover explanation, both pinned in `GroupMembershipsList.test.tsx`.
     expect(screen.getByText('Added directly')).toBeInTheDocument();
   });
 
@@ -557,10 +557,14 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
     // Excluded from the only rule that targets the group, so the membership is a
-    // manual add — proven, not hedged, and the rule is not named as its source.
+    // manual add, and the rule is not named as its source.
     const engineering = await membershipRow('Engineering');
     expect(within(engineering).getByText('Direct')).toBeInTheDocument();
-    expect(within(engineering).queryByText('Rule?')).not.toBeInTheDocument();
+    // RETARGETED (ADR-0022 §3): this named the hedged badge `Rule?`, which no
+    // label produces any more — the negative had become unfailable. `/^Rule/`
+    // covers every badge the defect would now produce (`Rule`, `Rule · n`), the
+    // same shape as the `/^Direct/` negative in the UNKNOWN case below.
+    expect(within(engineering).queryByText(/^Rule/)).not.toBeInTheDocument();
   });
 
   // FLIPPED (ADR-0012): this case used to assert `expect(screen.getByText('DIRECT'))`
@@ -586,16 +590,16 @@ describe('membership classification (in-file heuristic)', () => {
     expect(within(engineering).getByText('Unresolved')).toBeInTheDocument();
     // Scoped to the row on purpose: the pane header now offers a `Direct` filter
     // pill, so an unscoped negative would match the pill and fail for a reason
-    // that has nothing to do with the classification. `/^Direct/` also covers the
-    // hedged `Direct?`, which would be the same overclaim wearing a question mark.
+    // that has nothing to do with the classification. `/^Direct/` covers the
+    // deduced badge too, which is the same overclaim in a warning colour.
     expect(within(engineering).queryByText(/^Direct/)).not.toBeInTheDocument();
     // ...and nothing claims the user was hand-added. RETARGETED — and it was
     // VACUOUS as written: the sentence this named ("This user was added directly
     // to the group (not through a rule)") exists in no state of the app any more,
     // so the negative could never have failed. Every claim of a manual add is
-    // worded by `membershipSourceLine` now — `Added directly` / `Likely added
-    // directly` — which the DIRECT case above asserts is what a real one looks
-    // like, so this negative can fail again.
+    // worded by `membershipSourceLine` now — `Added directly` — which the DIRECT
+    // case above asserts is what a real one looks like, so this negative can
+    // fail again.
     expect(within(engineering).queryByText(/added directly/i)).not.toBeInTheDocument();
     // the rules-fetch failure is swallowed — no error banner.
     expect(screen.queryByText('nope')).not.toBeInTheDocument();

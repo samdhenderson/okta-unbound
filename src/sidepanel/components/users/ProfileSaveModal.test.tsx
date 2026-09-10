@@ -40,7 +40,7 @@ const emptyReport = (status: BlastRadiusReportData['status']): BlastRadiusReport
 const SALES_GROUP: GroupEffect = {
   groupId: '00gFAKE00000000000001',
   groupName: 'Sales-All',
-  kind: 'likely-added',
+  kind: 'added',
   ruleId: '0prFAKErule00001',
   ruleName: 'Sales auto-add',
   contributingRuleIds: ['0prFAKErule00001'],
@@ -170,7 +170,7 @@ describe('ProfileSaveModal', () => {
     rerender(<ProfileSaveModal {...props} report={computedReport} />);
 
     expect(screen.getByText('Sales-All')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Likely added' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Added' })).toBeInTheDocument();
     // Asked and answered: the draft cannot change here, so the question is retired.
     expect(screen.queryByRole('button', { name: 'Analyze blast radius' })).toBeNull();
   });

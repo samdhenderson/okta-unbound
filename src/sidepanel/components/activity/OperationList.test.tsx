@@ -1,11 +1,10 @@
 /**
  * Tests for the operation ledger in the expanded activity bar.
  *
- * What matters here is that the ledger is honest about two things the old
- * single progress bar could not express: that several operations can be running
- * at once, and that a declared total may be a floor rather than a fact. The
- * per-operation stop control is the third — it has to name and stop exactly one
- * operation, or "cancel" is back to meaning "cancel everything".
+ * What matters here is the thing the old single progress bar could not express:
+ * that several operations can be running at once. The per-operation stop
+ * control is the second — it has to name and stop exactly one operation, or
+ * "cancel" is back to meaning "cancel everything".
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -39,16 +38,15 @@ function plan(overrides: Partial<PlanSummary> & { id: string; name: string }): P
 }
 
 describe('budgetLabel', () => {
-  it('marks an approximate total with a tilde', () => {
-    // An operation that promised 50 and one that promised *at least* 50 behave
-    // very differently against a quota; collapsing them would make the ledger
-    // untrustworthy the first time a walk ran long.
+  it('states the declared total plainly when the plan calls it a floor', () => {
+    // The label no longer qualifies an approximate total: the estimate the
+    // scheduler holds is rendered as-is, with no tilde.
     expect(budgetLabel(plan({ id: 'p', name: 'Export', spent: 12, approximate: true }))).toBe(
-      '12 / ~50',
+      '12 / 50',
     );
   });
 
-  it('drops the tilde once every leg is exact', () => {
+  it('states the declared total plainly when every leg is exact', () => {
     expect(budgetLabel(plan({ id: 'p', name: 'Export', spent: 12 }))).toBe('12 / 50');
   });
 

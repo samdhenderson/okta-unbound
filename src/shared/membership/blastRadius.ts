@@ -4,8 +4,8 @@
  *
  * A pure, synchronous, zero-API-call engine. It takes the user as Okta holds
  * them, a proposed patch, their complete membership list and the org's rule
- * inventory, and returns a {@link BlastRadiusReport}: the groups the edit is
- * likely to add or remove, the rules whose verdict moves, and — with equal
+ * inventory, and returns a {@link BlastRadiusReport}: the groups the edit adds
+ * or removes, the rules whose verdict moves, and — with equal
  * standing — everything it declined to predict and why.
  *
  * ## It logs nothing. At all.
@@ -28,9 +28,10 @@
  * "that other rule does not hold them". `rule-unevaluable-after` exists to make
  * that impossible (ADR-0017, ADR-0020).
  *
- * ## Everything is `likely`
+ * ## Three known gaps behind a prediction
  *
- * Three reasons certainty is unavailable, all of them structural:
+ * The report states its predictions. Three structural gaps sit behind that
+ * statement and are tracked as engine work, not as report copy:
  *
  * 1. A `MembershipRule` carries no exclusion list — a cache-served
  *    `FormattedRule` drops `conditions.people` entirely — so an exclusion is
@@ -48,10 +49,10 @@
  * possibility ({@link secondOrderScan}). It deliberately does not iterate to a
  * fixed point:
  *
- * - a `likely-added` group fed back into a round two is consumed by
+ * - an `added` group fed back into a round two is consumed by
  *   `isMemberOf*` as **fact** — those functions are two-valued over the list
- *   they are given (ADR-0021) — so three rounds of "likely" would compound into
- *   one confident claim with no vocabulary left to carry the accumulated doubt;
+ *   they are given (ADR-0021) — so each extra round compounds one round's error
+ *   into the next with nothing to bound it;
  * - rule application is scheduled per rule, not transactional, so there is no
  *   moment at which the round-two input state is guaranteed to exist.
  *
@@ -72,8 +73,8 @@ import { explainRuleExpression, type ClauseGroupReference } from '../rules/expla
 import { groupContextOf } from './groupContext';
 import { conditionExpressionOf } from './ruleExpression';
 import {
+  isMembershipAttributionDeduced,
   membershipBucket,
-  membershipVerdict,
 } from '../../sidepanel/components/users/membershipVerdict';
 import type { GroupMembership, MembershipRule, OktaUser } from '../types';
 import type {
@@ -259,7 +260,7 @@ function predicted(
   groupId: string,
   candidates: readonly RuleEvaluation[],
   context: GroupPassContext,
-  kind: Extract<GroupEffectKind, 'likely-added' | 'likely-removed'>,
+  kind: Extract<GroupEffectKind, 'added' | 'removed'>,
 ): GroupEffect {
   return { ...baseEffect(groupId, candidates, context), kind };
 }
@@ -277,7 +278,7 @@ function predicted(
  *    in states nothing.
  * 2. **No ACTIVE rule among the candidates → `rule-inactive`.** An `INACTIVE`
  *    rule places nobody, so its verdict flipping grants nothing.
- * 3. Otherwise → `likely-added`.
+ * 3. Otherwise → `added`.
  *
  * **The table's `app-mastered-group` row is deliberately absent here, and it is
  * a known gap rather than an omission.** A group's `type` reaches this module
@@ -299,7 +300,7 @@ function additionEffect(
   const active = candidates.filter((candidate) => candidate.effect.active);
   if (active.length === 0) return withheld(groupId, candidates, context, 'rule-inactive');
 
-  return predicted(groupId, active, context, 'likely-added');
+  return predicted(groupId, active, context, 'added');
 }
 
 /**
@@ -307,7 +308,7 @@ function additionEffect(
  * user-centric mirror of `ruleImpact.classifyGroupImpact`'s
  * `heldSolelyByRule`/`unaffected` split, asked one member at a time.
  *
- * **`likely-removed` requires all six gates to clear.** Each failure names its
+ * **`removed` requires all six gates to clear.** Each failure names its
  * own reason rather than falling through to a quiet "no change":
  *
  * 1. The user does not hold the group → nothing is emitted. A removal is
@@ -319,9 +320,19 @@ function additionEffect(
  *    `classifyGroupImpact` returns the identical answer from the rule side.
  * 4. `membershipBucket(m) !== 'rule'` → `membership-not-credited-to-rule`. A
  *    manual add is not taken away by a rule ceasing to match.
- * 5. `membershipVerdict(m).label !== 'Rule'` → `membership-attribution-hedged`.
- *    Past gate 4 the only other labels are `Rule?` and `Rule · N?`, both of them
- *    deductions. A hedged cause cannot carry an unhedged consequence (ADR-0020).
+ * 5. `isMembershipAttributionDeduced(m)` → `membership-attribution-deduced`.
+ *    Past gate 4 the membership is rule-bucketed, but its rule may only have been
+ *    *worked out* — `inferred` names a best guess and `ambiguous` names a
+ *    candidate set. A deduced cause cannot carry an asserted consequence
+ *    (ADR-0020).
+ *
+ *    **This gate asks the classifier a structural question and must keep doing
+ *    so.** It once read `membershipVerdict(m).label !== 'Rule'`, which made a
+ *    correctness decision out of badge copy: `inferred` declined only because
+ *    its badge then said `Rule?`, and the day that badge stopped hedging, the
+ *    gate started asserting removals it was written to withhold — silently,
+ *    because no test covered `inferred` here. `blastRadius.test.ts` §3 now pins
+ *    both deducing classes.
  * 6. Another ACTIVE rule targeting the group **still matches** the drafted user
  *    → `another-active-rule-still-matches`, naming it; or another ACTIVE rule
  *    targeting the group is **unevaluable** against the drafted user →
@@ -361,7 +372,7 @@ function removalEffect(
 
   if (held.group.type === 'APP_GROUP') return decline('app-mastered-group');
   if (membershipBucket(held) !== 'rule') return decline('membership-not-credited-to-rule');
-  if (membershipVerdict(held).label !== 'Rule') return decline('membership-attribution-hedged');
+  if (isMembershipAttributionDeduced(held)) return decline('membership-attribution-deduced');
 
   const stopping = new Set(active.map((candidate) => candidate.effect.ruleId));
   const others = context.evaluations.filter(
@@ -379,7 +390,7 @@ function removalEffect(
     return decline('rule-unevaluable-after');
   }
 
-  return predicted(groupId, active, context, 'likely-removed');
+  return predicted(groupId, active, context, 'removed');
 }
 
 // ---------------------------------------------------------------------------
@@ -424,12 +435,12 @@ const SECOND_ORDER_TRANSITIONS: ReadonlySet<RuleTransition> = new Set<RuleTransi
  * The rules that read membership of a group this draft is predicted to change.
  *
  * Single pass, by design — see the module header for why a round two would
- * launder "likely" into "certain".
+ * compound its own error.
  *
  * Two known blind spots, both inherited and both in the safe direction (they
  * under-report a possibility rather than inventing one): `isMemberOfGroupNameRegex`
  * carries no structured group references at all, because the evaluator declines
- * to run tenant-authored patterns; and a `likely-added` group whose id is absent
+ * to run tenant-authored patterns; and an `added` group whose id is absent
  * from {@link BlastRadiusInput.groupNames} is matched by id only, since its
  * `groupName` is then the id itself.
  *
@@ -468,8 +479,8 @@ function secondOrderScan(
 
 /** Report order for {@link BlastRadiusReport.groups}: what changed, then what we declined to call. */
 const KIND_ORDER: Record<GroupEffectKind, number> = {
-  'likely-added': 0,
-  'likely-removed': 1,
+  added: 0,
+  removed: 1,
   'not-predicted': 2,
 };
 
@@ -560,7 +571,7 @@ function push<T>(index: Map<string, T[]>, key: string, value: T): void {
  *   rules: ruleInventory,
  *   groupNames: await loadCachedGroupNames(),
  * });
- * report.counts.removed; // groups this edit likely takes away
+ * report.counts.removed; // groups this edit takes away
  * report.groups.filter((g) => g.kind === 'not-predicted'); // and what we would not call
  * ```
  */
@@ -653,8 +664,8 @@ export function analyzeBlastRadius(input: BlastRadiusInput): BlastRadiusReport {
     groups,
     rules,
     counts: {
-      added: countKind('likely-added'),
-      removed: countKind('likely-removed'),
+      added: countKind('added'),
+      removed: countKind('removed'),
       notPredicted: countKind('not-predicted'),
       starts: countTransition('starts-matching'),
       stops: countTransition('stops-matching'),

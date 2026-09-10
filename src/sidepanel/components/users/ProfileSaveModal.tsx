@@ -223,8 +223,7 @@ const ProfileSaveModal: React.FC<ProfileSaveModalProps> = ({
         <section className="space-y-2">
           <Eyebrow as="h3">Blast radius</Eyebrow>
           <p className="text-xs text-pretty text-neutral-600">
-            Group rules read profile attributes, so this edit can move group access. Anything shown
-            here is a prediction, not a guarantee.
+            Group rules read profile attributes, so this edit can move group access.
           </p>
           {!analyzed && (
             <Button

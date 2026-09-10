@@ -169,7 +169,7 @@ describe('UserComparisonView — the groups tab says how a membership was grante
     const row = rowFor('Finance Approvers');
 
     expect(
-      within(row).getByText('Possible rule: Legacy A, Legacy B (2 candidates, unresolved)'),
+      within(row).getByText('Rule: Legacy A, Legacy B (2 candidates, unresolved)'),
     ).toBeInTheDocument();
     expect(row.textContent).not.toMatch(/Added by Rule/);
   });
@@ -213,7 +213,10 @@ describe('UserComparisonView — the groups tab says how a membership was grante
     // row was a bare label span; the row now also carries the parity marker, which
     // is the comparison itself rather than a claim about how the group was granted.
     expect(row.querySelector('span[title]')?.textContent).toBe('All Employees');
-    expect(row.textContent).not.toMatch(/Added|Likely|Possible|Managed|Source/);
+    // `Rule:` is in the list because it is the current `ambiguous` caption — the
+    // hedged `Possible rule:` it replaced was caught by `Possible`, and dropping
+    // that alternative without adding this one would have opened a hole.
+    expect(row.textContent).not.toMatch(/Added|Rule:|Managed|Source/);
   });
 });
 
@@ -226,7 +229,7 @@ describe('UserComparisonView — the apps tab is unchanged by the groups source 
     expect(within(rowFor('Slack')).getByText('Source not compared')).toBeInTheDocument();
 
     const text = container.textContent ?? '';
-    expect(text).not.toMatch(/Added by Rule|Likely added by rule|Possible rule/);
+    expect(text).not.toMatch(/Added by Rule:|Added by rule:|Rule:/);
     expect(text).not.toMatch(/Added directly|Source not determined/);
   });
 });

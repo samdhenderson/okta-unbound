@@ -44,17 +44,16 @@ export function operationBuckets(operation: PlanSummary): string[] {
 }
 
 /**
- * How the budget reads: `12 / ~50` while it is a floor, `12 / 50` once exact,
- * and just the spent count when nothing has been estimated at all.
+ * How the budget reads: `12 / 50`, and just the spent count when nothing has
+ * been estimated at all.
  *
- * The tilde is doing real work. An operation that promised 50 requests and an
- * operation that has promised *at least* 50 behave very differently against a
- * quota, and collapsing the two would make the ledger untrustworthy the first
- * time a walk ran long.
+ * The row states the declared total plainly. A floor and a fact are rendered
+ * identically — the number shown is the estimate the scheduler currently holds,
+ * without a qualifier attached to it.
  */
 export function budgetLabel(operation: PlanSummary): string {
   if (operation.estimated === null) return `${operation.spent}`;
-  return `${operation.spent} / ${operation.approximate ? '~' : ''}${operation.estimated}`;
+  return `${operation.spent} / ${operation.estimated}`;
 }
 
 /**
@@ -95,10 +94,7 @@ const OperationRow: React.FC<OperationRowProps> = ({ operation, onCancel }) => {
       </div>
       <PipelineMeter
         counts={{ spent: operation.spent, active: 0, queued: 0, planned: remaining }}
-        approximate={operation.approximate}
-        label={`${operation.name}: ${operation.spent} requests spent, ${
-          operation.approximate ? 'at least ' : ''
-        }${remaining} to come`}
+        label={`${operation.name}: ${operation.spent} requests spent, ${remaining} to come`}
       />
     </div>
   );

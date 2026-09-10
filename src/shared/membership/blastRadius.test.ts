@@ -6,7 +6,7 @@
  * returned `not-predicted` for absolutely everything satisfies half of these
  * cases perfectly. So each case that expects a prediction to be *withheld* is
  * followed by a **mirror** that flips exactly one fixture field — the field the
- * gate reads, and nothing else — and expects `likely-removed`. If the mirror
+ * gate reads, and nothing else — and expects `removed`. If the mirror
  * fails the gate is over-eager; if the withhold fails the gate is missing; and
  * because the two fixtures differ in one field, a green pair localises the
  * behaviour to that field.
@@ -78,7 +78,7 @@ const DRAFT = { department: 'Sales' };
 
 /**
  * A membership. The defaults describe the *unhedged rule-fed* case — the only
- * one that can reach `likely-removed` — so every withhold fixture below is one
+ * one that can reach `removed` — so every withhold fixture below is one
  * named override away from its own mirror.
  */
 function membershipOf(group: OktaGroup, overrides: Partial<GroupMembership> = {}): GroupMembership {
@@ -182,7 +182,7 @@ describe('a second rule that still matches withholds the removal', () => {
 
     expect(onlyGroup(report)).toMatchObject({
       groupId: ENGINEERING.id,
-      kind: 'likely-removed',
+      kind: 'removed',
       ruleId: ENG_FEEDER.id,
       ruleName: ENG_FEEDER.name,
     });
@@ -219,16 +219,40 @@ describe('a membership not credited to a rule withholds the removal', () => {
     });
     const report = analyze({ rules: [ENG_FEEDER], memberships: [membership] });
 
-    expect(onlyGroup(report)).toMatchObject({ kind: 'likely-removed', currentBucket: 'rule' });
+    expect(onlyGroup(report)).toMatchObject({ kind: 'removed', currentBucket: 'rule' });
     expect(report.counts.removed).toBe(1);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3. A hedged attribution
+// 3. A deduced attribution
 // ---------------------------------------------------------------------------
 
-describe('a hedged attribution withholds the removal', () => {
+describe('a deduced attribution withholds the removal', () => {
+  // Both deducing classes are asserted, one case each, because the two reach the
+  // gate by different routes and only one of them used to be visible here. Gate 5
+  // once read `membershipVerdict(m).label !== 'Rule'`, so it was coupled to badge
+  // copy rather than to evidence: `ambiguous` declined only because its label
+  // happens to carry a count, and when the badges stopped hedging their wording
+  // `inferred` silently started passing the gate. The gate now reads
+  // `isMembershipAttributionDeduced`, and both cases are pinned so a copy change
+  // can never move a prediction again.
+  it('declines when the classifier merely inferred which rule fed it', () => {
+    const membership = membershipOf(ENGINEERING, {
+      rules: [ENG_FEEDER],
+      attribution: 'inferred',
+    });
+    const report = analyze({ rules: [ENG_FEEDER], memberships: [membership] });
+
+    expect(onlyGroup(report)).toMatchObject({
+      kind: 'not-predicted',
+      withheldReason: 'membership-attribution-deduced',
+      // Rule-bucketed — so gate 4 passed and gate 5 is genuinely what fired.
+      currentBucket: 'rule',
+    });
+    expect(report.counts.removed).toBe(0);
+  });
+
   it('declines while the classifier is only guessing which rule fed it', () => {
     const membership = membershipOf(ENGINEERING, {
       rules: [ENG_FEEDER, STAFF_FEEDER],
@@ -238,7 +262,7 @@ describe('a hedged attribution withholds the removal', () => {
 
     expect(onlyGroup(report)).toMatchObject({
       kind: 'not-predicted',
-      withheldReason: 'membership-attribution-hedged',
+      withheldReason: 'membership-attribution-deduced',
       // Rule-bucketed — so gate 4 passed and gate 5 is genuinely what fired.
       currentBucket: 'rule',
     });
@@ -252,7 +276,7 @@ describe('a hedged attribution withholds the removal', () => {
     });
     const report = analyze({ rules: [ENG_FEEDER], memberships: [membership] });
 
-    expect(onlyGroup(report)).toMatchObject({ kind: 'likely-removed' });
+    expect(onlyGroup(report)).toMatchObject({ kind: 'removed' });
     expect(report.counts.removed).toBe(1);
   });
 });
@@ -266,7 +290,7 @@ describe('an unevaluable sibling rule is never read as a no (ADR-0020)', () => {
     const report = analyze({ rules: [ENG_FEEDER, REGEX_FEEDER] });
 
     const effect = onlyGroup(report);
-    expect(effect.kind).not.toBe('likely-removed');
+    expect(effect.kind).not.toBe('removed');
     expect(effect).toMatchObject({
       kind: 'not-predicted',
       withheldReason: 'rule-unevaluable-after',
@@ -286,7 +310,7 @@ describe('an unevaluable sibling rule is never read as a no (ADR-0020)', () => {
   it('MIRROR: without the unevaluable rule, the same fixture loses the group', () => {
     const report = analyze({ rules: [ENG_FEEDER] });
 
-    expect(onlyGroup(report)).toMatchObject({ kind: 'likely-removed' });
+    expect(onlyGroup(report)).toMatchObject({ kind: 'removed' });
     expect(report.counts.removed).toBe(1);
   });
 });
@@ -468,7 +492,7 @@ describe('second-order cascades are reported, not resolved', () => {
       rules: [newHireFeeder, cascadeRule('isMemberOfGroupName("New Hires")')],
     });
 
-    expect(report.groups.map((g) => [g.groupId, g.kind])).toEqual([[NEW_HIRES.id, 'likely-added']]);
+    expect(report.groups.map((g) => [g.groupId, g.kind])).toEqual([[NEW_HIRES.id, 'added']]);
     expect(report.secondOrderPossible).toBe(true);
     expect(report.secondOrderRuleNames).toEqual(['Downstream feeder']);
   });
@@ -518,9 +542,9 @@ describe('report order is total and deterministic', () => {
     });
 
     expect(report.groups.map((g) => [g.kind, g.groupName])).toEqual([
-      ['likely-added', 'Alpha Access'],
-      ['likely-added', 'Zebra Access'],
-      ['likely-removed', 'Engineering'],
+      ['added', 'Alpha Access'],
+      ['added', 'Zebra Access'],
+      ['removed', 'Engineering'],
       ['not-predicted', 'Finance'],
     ]);
     expect(report.counts).toMatchObject({ added: 2, removed: 1, notPredicted: 1 });
@@ -598,7 +622,7 @@ describe('the rule inventory state decides the report status', () => {
     const report = analyze({ rules: asLocal });
 
     expect(report.status).toBe('computed');
-    expect(onlyGroup(report)).toMatchObject({ kind: 'likely-removed' });
+    expect(onlyGroup(report)).toMatchObject({ kind: 'removed' });
   });
 });
 

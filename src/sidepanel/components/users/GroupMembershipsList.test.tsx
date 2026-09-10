@@ -236,12 +236,17 @@ describe('GroupMembershipsList', () => {
     await openRow('Engineering');
 
     // The caption is stated ONCE, on the row's source line, rather than repeated
-    // per rule — the hedge belongs to the answer, not to each piece of evidence,
-    // and stacking it three times for one hedged answer was how this row used to
-    // read. Both rules are still named and still explained; none is credited.
-    expect(screen.getByText('Possible rule:')).toBeInTheDocument();
+    // per rule — the qualification belongs to the answer, not to each piece of
+    // evidence, and stacking it three times for one unresolved answer was how
+    // this row used to read. Both rules are still named and still explained;
+    // none is credited. The caption no longer says "Possible", so the count is
+    // where "none of these is the answer" survives in visible text — asserted
+    // here rather than dropped.
+    expect(screen.getByText('Rule:')).toBeInTheDocument();
     expect(screen.queryByText('Added by Rule:')).not.toBeInTheDocument();
-    expect(screen.getByText(/Auto-add Engineers, On-call rotation/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Auto-add Engineers, On-call rotation \(2 candidates, unresolved\)/),
+    ).toBeInTheDocument();
     expect(screen.getByText('Pass')).toBeInTheDocument();
     expect(screen.getByText('Not evaluated')).toBeInTheDocument();
   });
@@ -588,12 +593,23 @@ describe('GroupMembershipsList — memberships with no rule to name', () => {
     withSource({ membershipType: 'DIRECT', rules: [] });
 
     expect(screen.getByText('Added directly')).toBeInTheDocument();
+    // The proven case claims nothing about unevaluated conditions — the pair to
+    // the assertion in the deduced case below, so neither can pass vacuously.
+    expect(screen.queryByTitle(/not every rule condition could be evaluated/i)).toBeNull();
   });
 
-  it('softens a direct membership the classifier only deduced', () => {
+  /**
+   * RETARGETED (ADR-0022 §3). The two DIRECT captions converged on "Added
+   * directly", so the old assertion on "Likely added directly" has no string
+   * left to find and re-pointing it at the new caption would assert nothing
+   * about the deduction. What still distinguishes a deduced manual add is the
+   * explanation the verdict badge carries on hover.
+   */
+  it('discloses that a direct membership the classifier only deduced was not fully evaluated', () => {
     withSource({ membershipType: 'DIRECT', rules: [], attribution: 'inferred' });
 
-    expect(screen.getByText('Likely added directly')).toBeInTheDocument();
+    expect(screen.getByText('Added directly')).toBeInTheDocument();
+    expect(screen.getByTitle(/not every rule condition could be evaluated/i)).toBeInTheDocument();
   });
 
   /**
@@ -720,8 +736,8 @@ describe('GroupMembershipsList — proving one membership against Okta', () => {
 
     expect(await screen.findByText(/Okta did not answer/)).toBeInTheDocument();
     expect(screen.queryByText(/Okta confirms/)).not.toBeInTheDocument();
-    // The row's own hedged classification is untouched by the failure.
-    expect(screen.getAllByText('Possible rule:')).toHaveLength(1);
+    // The row's own unproven classification is untouched by the failure.
+    expect(screen.getAllByText('Rule:')).toHaveLength(1);
   });
 
   it('leaves the per-rule explanation standing beside Okta’s answer', async () => {
@@ -736,7 +752,7 @@ describe('GroupMembershipsList — proving one membership against Okta', () => {
     // The clause-by-clause explanation of the candidate rule is still there: the
     // proof adds Okta's answer, it does not delete the evidence behind the guess.
     expect(screen.getByText('user.department == "Engineering"')).toBeInTheDocument();
-    expect(screen.getByText('Possible rule:')).toBeInTheDocument();
+    expect(screen.getByText('Rule:')).toBeInTheDocument();
   });
 
   it('carries the full caveat about whose answer it is on hover', async () => {

@@ -19,8 +19,8 @@
  *    candidates, so none of them may be *credited* as the source. The row still
  *    lists them — enumerating the whole set is how the user-detail surface
  *    ({@link sidepanel/components/users/GroupMembershipsList}) presents the same
- *    evidence — but under the same "Possible rule:" caption, and with the count
- *    spelled out as candidates rather than as an answer.
+ *    evidence — but under the same "Rule:" caption, and with the count spelled
+ *    out as candidates rather than as an answer.
  * 2. **Collapse several rules into one.** Two rules really can both put the same
  *    user in the same group, so every attributed rule is named and a row with
  *    more than one says how many.
@@ -31,7 +31,7 @@
  *    at all rather than the weakest of the three answers.
  *
  * The captions are the vocabulary already shipped by `GroupMembershipsList`
- * ("Added by Rule:" / "Likely added by rule:" / "Possible rule:"), verbatim: the
+ * ("Added by Rule:" / "Added by rule:" / "Rule:"), verbatim: the
  * same evidence must not read two different ways on two screens.
  *
  * Rule and group names are end-user-controllable Okta data. They are rendered as
