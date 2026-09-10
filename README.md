@@ -142,7 +142,8 @@ Full detail: [`docs/architecture.md`](docs/architecture.md).
 
 This section is written for reviewers evaluating the extension before enterprise approval.
 Each control is enforced in code and covered by the repo's non-negotiable hardening rules
-([`CLAUDE.md`](CLAUDE.md)); the _why_ behind each decision lives in [`docs/adr/`](docs/adr/).
+([`CLAUDE.md`](CLAUDE.md)); the _why_ behind each control lives in the specs under
+[`docs/`](docs/README.md), with significant decisions recorded in [`docs/adr/`](docs/adr/).
 
 > **Full assessment:** [`docs/security.md`](docs/security.md) — trust model, threat model,
 > control-by-control evidence with links into the code, an honest residual-risk register,
@@ -153,10 +154,10 @@ Each control is enforced in code and covered by the repo's non-negotiable harden
 | **Session-based auth, no stored credentials** | The extension reuses the admin's existing Okta session; it never asks for, stores, or transmits API tokens or passwords.                                                                                           |
 | **XSRF token isolation**                      | The token is read from the page DOM per request in the content script only — never persisted (`chrome.storage`/IndexedDB/`localStorage`), never sent across messages, never logged.                                |
 | **No dynamic code execution**                 | `eval`, `new Function`, string-arg `setTimeout`, and remotely loaded scripts are banned; MV3 CSP enforces this and the manifest CSP is never weakened. Rule expressions are parsed with a real parser, not `eval`. |
-| **Boundary validation**                       | Every Okta response is treated as untrusted input and validated with [zod](https://zod.dev) at the content-script boundary before rendering or branching (ADR-0006).                                               |
+| **Boundary validation**                       | Every Okta response is treated as untrusted input and validated with [zod](https://zod.dev) at the content-script boundary before rendering or branching.                                                          |
 | **Validated message passing**                 | The background listener rejects foreign senders and tab-originated scheduling requests; the content script only fetches same-origin Okta paths with an allow-listed method.                                        |
 | **Hostname parsing, not substring matching**  | Every "is this Okta?" decision parses the hostname (`shared/utils/oktaUrl.ts`); substring URL matching is banned.                                                                                                  |
-| **Least-privilege manifest**                  | Only Okta domains are in scope; any new permission requires an ADR justifying why a narrower alternative is insufficient.                                                                                          |
+| **Least-privilege manifest**                  | Only Okta domains are in scope; any new permission requires a written decision record justifying why a narrower alternative is insufficient.                                                                       |
 | **Export safety**                             | Every CSV cell is escaped through `csvUtils.escapeCSV` (RFC 4180 quoting + spreadsheet-formula-injection guard).                                                                                                   |
 | **XSS-safe rendering**                        | React escaping only; `dangerouslySetInnerHTML` and hand-built HTML strings are banned. External links are built from a validated Okta origin plus a validated ID, with `rel="noopener noreferrer"`.                |
 | **Minimal, TTL'd storage**                    | `chrome.storage` and IndexedDB hold no credentials or session material; cached PII is minimal and time-limited, and audit retention is user-configurable.                                                          |
@@ -290,8 +291,8 @@ GitHub Pages ([`deploy-pages.yml`](.github/workflows/deploy-pages.yml)).
   controls, and residual risks for security reviewers.
 - **Specs & contributor docs:** [`docs/`](docs/README.md) — a routing index of small,
   single-purpose specs (architecture, design system, components, testing, UX, state).
-- **Architecture Decision Records:** [`docs/adr/`](docs/adr/README.md) — the _why_ behind
-  each convention.
+- **Architecture Decision Records:** [`docs/adr/`](docs/adr/) — the _why_ behind decisions
+  significant enough to be worth a dated record.
 - **Component explorer & API reference:** the Storybook site (built via `npm run
 build-storybook`, published to GitHub Pages).
 
@@ -305,8 +306,8 @@ build-storybook`, published to GitHub Pages).
 3. Changes touching messaging, the manifest, storage, exports, logging, or Okta-response
    handling must respect the security-hardening rules in [`CLAUDE.md`](CLAUDE.md) and should
    be reviewed accordingly.
-4. Any new permission, host permission, or broadened match pattern requires an ADR justifying
-   why the narrowest alternative is insufficient.
+4. Any new permission, host permission, or broadened match pattern requires a written
+   decision record justifying why the narrowest alternative is insufficient.
 5. New or changed shared/feature components ship a co-located `.stories.tsx`; exported
    modules carry TypeDoc comments.
 
@@ -315,7 +316,7 @@ build-storybook`, published to GitHub Pages).
 ## Project status & versioning
 
 Current release: **0.4.0 (beta)**. The project follows semantic versioning, with
-`package.json` as the single source of truth for the version (ADR-0007); the Chrome-compatible
+`package.json` as the single source of truth for the version; the Chrome-compatible
 numeric version in `manifest.json` is derived from it at build time.
 
 ---

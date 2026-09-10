@@ -10,7 +10,6 @@
  * @see `ADR-0060` — the declared-work ledger these segments render.
  */
 import React from 'react';
-import { PLANNED_HATCH } from './hatches';
 
 /** The four states a request in an operation can be in, in pipeline order. */
 export interface PipelineCounts {
@@ -27,12 +26,6 @@ export interface PipelineCounts {
 /** Props for {@link PipelineMeter}. */
 export interface PipelineMeterProps {
   counts: PipelineCounts;
-  /**
-   * Marks the total as a floor rather than a fact — some leg's estimate is
-   * `atLeast` or `unknown`. The planned segment is hatched instead of solid, so
-   * "we expect at least this much more" never reads as "we expect exactly this".
-   */
-  approximate?: boolean;
   /**
    * Accessible description of what the meter shows. Required: the meter is the
    * only rendering of these numbers in the collapsed-bucket case, so it cannot
@@ -57,7 +50,7 @@ function Segment({ fraction, style }: { fraction: number; style: React.CSSProper
  *
  * @param props - See {@link PipelineMeterProps}.
  */
-const PipelineMeter: React.FC<PipelineMeterProps> = ({ counts, approximate = false, label }) => {
+const PipelineMeter: React.FC<PipelineMeterProps> = ({ counts, label }) => {
   const total = counts.spent + counts.active + counts.queued + counts.planned;
   const share = (n: number) => (total > 0 ? n / total : 0);
 
@@ -66,7 +59,6 @@ const PipelineMeter: React.FC<PipelineMeterProps> = ({ counts, approximate = fal
       role="img"
       aria-label={label}
       data-testid="pipeline-meter"
-      data-approximate={approximate ? 'true' : undefined}
       className="flex h-1.5 w-full overflow-hidden rounded-full bg-neutral-100"
     >
       <Segment fraction={share(counts.spent)} style={{ backgroundColor: 'var(--color-primary)' }} />
@@ -77,11 +69,7 @@ const PipelineMeter: React.FC<PipelineMeterProps> = ({ counts, approximate = fal
       />
       <Segment
         fraction={share(counts.planned)}
-        style={
-          approximate
-            ? { backgroundImage: PLANNED_HATCH }
-            : { backgroundColor: 'var(--color-neutral-400)' }
-        }
+        style={{ backgroundColor: 'var(--color-neutral-400)' }}
       />
     </div>
   );

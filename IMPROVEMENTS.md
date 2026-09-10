@@ -37,8 +37,9 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Category:** feature-completeness
 - **Priority:** P2
 - **Size:** L
-- **Files:** `docs/adr/0055-what-the-evaluator-refuses-to-guess.md` (to be
-  created), `src/shared/ruleEvaluator.ts:298-320` (read-only, for reference)
+- **Files:** a new decision record under `docs/adr/`, numbered next in sequence
+  (never reserved in advance); `src/shared/ruleEvaluator.ts:298-320` (read-only,
+  for reference)
 - **Verified:** 2026-08-24 — `SUPPORTED_FUNCTIONS` still holds seven entries.
 - **Problem:** The evaluator implements seven `String.*` functions and nothing
   else — no `toString`, no `DateTime`, no `Instant`. A group rule whose
@@ -46,9 +47,9 @@ block says they mean — same vocabulary, one definition, defined there.
   "why is this person in this group" gets no answer for exactly the rules that
   are hardest to reason about by hand. Sam wants broader coverage both for
   rule-display fidelity and as groundwork for future policy evaluation.
-- **Done when:** `docs/adr/0055-what-the-evaluator-refuses-to-guess.md` exists
-  at Status: Proposed. **This item ships no code** — its PR touches `docs/`
-  only. The proposal must:
+- **Done when:** a Proposed-status decision record covering what the evaluator
+  refuses to guess exists under `docs/adr/`. **This item ships no code** — its
+  PR touches `docs/` only. The proposal must:
   1. Enumerate the OEL functions reachable inside a **group-rule condition**
      specifically, not the whole language surface — `SUPPORTED_FUNCTIONS`'
      doc comment already notes that `Arrays.*` helpers are unavailable there
@@ -63,18 +64,20 @@ block says they mean — same vocabulary, one definition, defined there.
   3. Propose arity and type handling for date/time semantics (`Instant`,
      `DateTime`), including timezone and the `UNRESOLVED` propagation the
      evaluator already uses.
-  4. State the ADR-0017 security argument for every addition. That ADR exists
-     precisely because ad hoc expression evaluation is a known risk, and rule
-     expressions are end-user-controllable input (ADR-0006).
+  4. State the security argument for every addition. The house rule banning
+     dynamic code execution — parse untrusted expressions with a real parser,
+     never `eval` — exists precisely because ad hoc expression evaluation is a
+     known risk, and rule expressions are end-user-controllable input that must
+     be validated at the boundary.
   5. Give a test plan, including the malformed and hostile inputs.
 - **Risk:** None to write. High if implemented without this scoping — it is a
   security-relevant evaluator.
 - **Status:** research:awaiting-review
-- **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
-  `docs/adr/0055-what-the-evaluator-refuses-to-guess.md`. The number this item reserved on 2026-08-24 had been taken by an
-  unrelated ADR before the item was picked up, so the proposal is **ADR-0055** — see
-  `D-072`. Status stays `research:awaiting-review` deliberately: only Sam's
-  acceptance moves it to `open`, never the session that wrote it.
+- **A proposal was written 2026-08-29** (`chore/unstick-backlog`) at Status:
+  Proposed, into the decision-record corpus that has since been deleted; the
+  deliverable above is therefore a fresh record, not an edit to an existing one.
+  Status stays `research:awaiting-review` deliberately: only Sam's acceptance
+  moves it to `open`, never the session that wrote it.
 
 ### I-009 · EntityLink's default copy-id label collides when two entities share a name
 
@@ -153,14 +156,15 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Category:** feature-completeness
 - **Priority:** P2
 - **Size:** L
-- **Files:** `docs/adr/0056-how-deep-the-snapshot-goes.md` (to be created);
-  read-only for reference: `docs/adr/0040-the-background-owns-the-org.md`,
+- **Files:** a new decision record under `docs/adr/`, numbered next in sequence
+  (never reserved in advance);
+  read-only for reference:
   `src/shared/snapshot/snapshotSync.ts` (the `CollectionSpec` / `ShardProvider`
   model), `src/shared/snapshot/types.ts:9-25`,
   `src/sidepanel/components/home/OrgSnapshotCard.tsx`
 - **Verified:** 2026-08-24 — four collections wired (`groups`, `apps`, `rules`,
   `appGroups`); no depth control exists.
-- **Problem:** ADR-0040 gave the org one background-owned store, and the
+- **Problem:** The background owns one org-wide snapshot store, and the
   collection model has since grown from "one paginated listing" to "a fan-out
   derived from another collection" (`appGroups`). Nothing yet says **how far**
   an org's snapshot should go, or lets an admin choose. Depth is currently an
@@ -176,21 +180,22 @@ block says they mean — same vocabulary, one definition, defined there.
   org actions**, which need breadth (several collections joined) far more than
   they need any single expensive call.
 
-- **Done when:** `docs/adr/0056-how-deep-the-snapshot-goes.md` exists at
-  Status: Proposed. **This item ships no code** — its PR touches `docs/` only.
+- **Done when:** a Proposed-status decision record defining how deep the
+  snapshot goes exists under `docs/adr/`. **This item ships no code** — its PR
+  touches `docs/` only.
   It must define named depth levels, what each level walks, what each level
   makes answerable, and how an admin moves between them, plus two hard
   constraints stated up front:
   1. **Every level is priced in both currencies** — requests to reach it, and
      rows stored to hold it — checked against `docs/security.md`'s "store no
      more than needed". Depth is the axis along which a snapshot stops being
-     org metadata and starts being a copy of the directory, and the ADR has to
+     org metadata and starts being a copy of the directory, and the record has to
      say where that line is rather than leaving it to whoever wires the next
      collection.
   2. **No level includes group membership without its own retention
      argument.** `src/shared/snapshot/types.ts:9-16` already commits to this —
-     membership is the largest and most personal collection in an org, and
-     ADR-0040's questions are served by `expand=stats` counts instead. A depth
+     membership is the largest and most personal collection in an org, and the
+     snapshot's questions are served by `expand=stats` counts instead. A depth
      proposal is exactly where that commitment would get eroded by accident.
 
   It must also say how a level interacts with `refreshIntervalMs`, and what
@@ -200,11 +205,11 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** None to write. Medium once implemented — the design commits the
   storage schema and the sync budget to a shape later levels must live inside.
 - **Status:** research:awaiting-review
-- **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
-  `docs/adr/0056-how-deep-the-snapshot-goes.md`. The number this item reserved on 2026-08-24 had been taken by an
-  unrelated ADR before the item was picked up, so the proposal is **ADR-0056** — see
-  `D-072`. Status stays `research:awaiting-review` deliberately: only Sam's
-  acceptance moves it to `open`, never the session that wrote it.
+- **A proposal was written 2026-08-29** (`chore/unstick-backlog`) at Status:
+  Proposed, into the decision-record corpus that has since been deleted; the
+  deliverable above is therefore a fresh record, not an edit to an existing one.
+  Status stays `research:awaiting-review` deliberately: only Sam's acceptance
+  moves it to `open`, never the session that wrote it.
 
 ### I-014 · Normalize an attribute across the filtered members
 
@@ -213,9 +218,9 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Size:** L
 - **Files:** `docs/features-plan.md` item C (the full inventory of what exists
   and what remains lives there, not duplicated here);
-  an ADR titled "The first many-user write" (not yet written, and deliberately
-  **not** naming a number — `D-072`: ADR-0044 was claimed by an unrelated decision
-  while this item held it in reserve);
+  a decision record titled "The first many-user write" (not yet written, and
+  deliberately **not** naming a number — a number is claimed by whoever writes a
+  record, so reserving one in advance always loses the race; see `D-072`);
   `src/shared/undoManager.ts`;
   `src/sidepanel/hooks/useOktaApi/profileOperations.ts`
 - **Verified:** 2026-08-24 — the Members tab's filter and the Insights tab's
@@ -227,7 +232,7 @@ block says they mean — same vocabulary, one definition, defined there.
   visible for the first time — and the Members tab can filter down to exactly
   the people holding a given value. Nothing can then fix them. The whole point
   of surfacing config drift is being able to correct it, and the single-user
-  editor (ADR-0035) already shipped every piece of machinery the many-user
+  profile editor already shipped every piece of machinery the many-user
   version needs.
 - **Done when:** An admin can pick an outlier value from the Insights attribute
   spread, review the affected users, and normalize the attribute across them,
@@ -350,7 +355,8 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Category:** ux
 - **Priority:** P2
 - **Size:** M
-- **Files:** `docs/adr/0057-a-keyboard-route-into-the-panel.md` (to be created);
+- **Files:** a new decision record under `docs/adr/`, numbered next in sequence
+  (never reserved in advance);
   read-only for reference: `src/sidepanel/hooks/useCommandPalette.ts`,
   `src/sidepanel/components/TabJumpPalette.tsx`, `manifest.json`
 - **Verified:** 2026-08-28 — `useCommandPalette` registers a plain `window`
@@ -362,21 +368,21 @@ block says they mean — same vocabulary, one definition, defined there.
   real autofocused input on a real tab — but the _shortcut_ is still a control
   that does nothing from the place a person would use it.
 
-  The fix is a `manifest.json` `commands` entry, which needs an ADR and Sam's
+  The fix is a `manifest.json` `commands` entry, which needs a decision record and Sam's
   explicit review: it is a new permission-shaped surface, it can collide with a
   user's own bindings, and Chrome's four-shortcut budget per extension makes it
   a decision about which single chord is worth spending.
 
-- **Done when:** A Proposed-status ADR exists under `docs/adr/` covering the
+- **Done when:** A Proposed-status decision record exists under `docs/adr/` covering the
   chord, the collision story, and what happens when the panel is closed. **Zero
   files under `src/`.**
 - **Risk:** n/a — research only.
 - **Status:** research:awaiting-review
-- **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
-  `docs/adr/0057-a-keyboard-route-into-the-panel.md`. The number this item reserved on 2026-08-28 had been taken by an
-  unrelated ADR before the item was picked up, so the proposal is **ADR-0057** — see
-  `D-072`. Status stays `research:awaiting-review` deliberately: only Sam's
-  acceptance moves it to `open`, never the session that wrote it.
+- **A proposal was written 2026-08-29** (`chore/unstick-backlog`) at Status:
+  Proposed, into the decision-record corpus that has since been deleted; the
+  deliverable above is therefore a fresh record, not an edit to an existing one.
+  Status stays `research:awaiting-review` deliberately: only Sam's acceptance
+  moves it to `open`, never the session that wrote it.
 - **Related:** the Home tab program (which made the jump bar the primary route)
 
 ### I-019 · MFA coverage for a group, from Home
@@ -414,7 +420,8 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Medium — the `initialPane` widening touches a component four
   surfaces mount.
 - **Status:** claimed:improve/2026-09-02-backlog-pass
-- **Related:** the Home reports commit, ADR-0018
+- **Related:** the Home reports commit; the tabs-stay-mounted rule (gate every
+  fetch, poll, and shared listener on `isActive`)
 
 ### I-020 · Home's reports as Export Engine descriptors
 
@@ -447,7 +454,7 @@ block says they mean — same vocabulary, one definition, defined there.
   become an export that quietly ships a partial list.
 - **Risk:** Medium — it widens a contract every existing descriptor implements.
 - **Status:** claimed:improve/2026-09-02-backlog-pass
-- **Related:** `I-019`, ADR-0030, ADR-0040
+- **Related:** `I-019`
 
 ### I-021 · Icon registry entries for the three glyphs `GroupCollections` still hand-rolls
 
@@ -482,32 +489,34 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Priority:** P3
 - **Size:** S
 - **Verified:** 2026-08-28
-- **Files:** `src/sidepanel/tailwind.css`,
-  `docs/adr/0048-spacing-roles-and-derived-density.md`,
+- **Files:** `src/sidepanel/tailwind.css`, `docs/design-system.md` (the spacing
+  roles),
   `src/sidepanel/components/GroupsTab.tsx`, `src/sidepanel/components/AppsTab.tsx`,
   `src/sidepanel/components/AuthPoliciesTab.tsx`
-- **Problem:** ADR-0048's six roles have no name for the gap inside a toolbar
+- **Problem:** The six spacing roles have no name for the gap inside a toolbar
   cluster — search field + filter toggle + filter panel + selection bar. It
   is not chips (`--sp-inline`), not form controls (`--sp-field`), not a card
   interior (`--sp-card`), and calling it `--sp-rung` would erase the
   deliberate distinction between the tighter toolbar zone and the roomier
   card stack below it. Three tab roots therefore keep a raw `space-y-3` /
   `space-y-2` with an inline comment explaining why, which is exactly the
-  per-component prose the ADR set out to eliminate — just honestly labelled.
+  per-component prose the role system set out to eliminate — just honestly
+  labelled.
 - **Done when:** either a seventh role exists (values across the three
-  density scopes, ADR amended, the three call sites converted), or ADR-0048
+  density scopes, `docs/design-system.md` amended, the three call sites
+  converted), or that doc
   gains a short section stating that toolbar rhythm is deliberately outside
   the role system and why, so the raw values stop reading as unfinished work.
 - **Risk:** Low — either outcome is additive or documentation-only.
 - **Status:** claimed:improve/2026-09-02-backlog-pass
 
-- **`RulesTab` is deliberately NOT converted (2026-09-02).** The ADR-0048
+- **`RulesTab` is deliberately NOT converted (2026-09-02).** The spacing-role
   amendment makes its conversion conditional on `RulesListActionBar` remaining a
   direct child of the rung. Checked, and it must: `RulesTab.tsx:607-612` already
   says so — _"First in the rung, and a direct child of it. `sticky` only travels
   inside its own parent's box, and the `.dock-sentinel` timeline hoists onto that
   same parent — nest this in a wrapper and the strip scrolls away instead of
-  docking (ADR-0051 §5)."_ Its toolbar panels share that one container with the
+  docking."_ Its toolbar panels share that one container with the
   sticky strip, so there is no separate wrapper to carry `--sp-toolbar`, and
   creating one is precisely the nesting that breaks docking. The conditional
   resolves to **no**, on structure rather than on doubt — do not reopen it as an
@@ -554,7 +563,7 @@ block says they mean — same vocabulary, one definition, defined there.
   single-item denominator reads "of 1 applications" and "of 1 group rules".
   Visible on the Home tab, which is the panel's landing surface and the first
   thing an admin sees — spotted by screenshotting it at 360px during the
-  ADR-0048 polish pass, not by any test.
+  spacing-role polish pass, not by any test.
 - **Done when:** the denominator pluralises on its count. Check whether a
   pluralisation helper already exists before adding one — several surfaces
   (`'N Policy/Policies'` in `AuthPoliciesTab`, the member counts in
@@ -597,7 +606,8 @@ block says they mean — same vocabulary, one definition, defined there.
   by some rule that does not re-film all nine for an unrelated commit. Whatever
   is chosen is recorded next to `SHARED_INPUTS`, since the current list reads as
   complete and is not.
-- **Related:** ADR-0045 (capture thin, compose in React), D-064
+- **Related:** the reel's capture-thin/compose-in-React split
+  (`.claude/skills/okta-reel/SKILL.md`), D-064
 - **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
@@ -634,7 +644,8 @@ block says they mean — same vocabulary, one definition, defined there.
   two agree, because the drift is invisible until something evaluates the rules
   rather than the predicates. Note this re-films every chapter and moves Home's
   `unruled` figure.
-- **Related:** ADR-0043 (memberships are derived, not asserted), ADR-0052
+- **Related:** the demo dataset's rule that memberships are derived, not
+  asserted
 - **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
@@ -673,8 +684,8 @@ block says they mean — same vocabulary, one definition, defined there.
   describe _what the app knows how to read_, not the DB layout, since
   `DB_VERSION` already covers the latter and does not need to move.
 - **Risk:** Medium. Getting it wrong in the eager direction re-walks every
-  collection on every release, which is exactly the cost ADR-0040 exists to
-  avoid. Wants an ADR before code.
+  collection on every release, which is exactly the cost the background-owned
+  snapshot exists to avoid. Wants a decision record before code.
 - **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
@@ -726,13 +737,13 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Category:** feature-completeness
 - **Priority:** P3
 - **Size:** M
-- **Files:** `docs/adr/0043-the-demo-is-a-stage-the-script-is-the-director.md`
-  (the held-out chapter), the reel's chapter sources under `src/sidepanel/demo/`,
+- **Files:** `.claude/skills/okta-reel/SKILL.md` (where the held-out chapter is
+  recorded), the reel's chapter sources under `src/sidepanel/demo/`,
   and whatever `npm run capture` re-shoots
 - **Verified:** 2026-08-30 — `D-052`'s **Related** note is the source: the
   chapter was deliberately held out of the reel "until this lands". It has now
   landed, so the block is gone and the item is actionable.
-- **Problem:** ADR-0043 pulled the rule-impact chapter from the demo reel
+- **Problem:** The rule-impact chapter was pulled from the demo reel
   because the product was making a claim that was not true — that deactivating
   a rule retracts membership. `D-052` fixed the claim, and nothing now records
   that the chapter is free to return; the knowledge lived only in `D-052`'s
@@ -747,7 +758,7 @@ block says they mean — same vocabulary, one definition, defined there.
   wrong.
 
 - **Done when:** the chapter is back in the reel, it shows both verbs and names
-  `removeUsers` as the irreversible choice, ADR-0043's held-out note is updated
+  `removeUsers` as the irreversible choice, the held-out note is updated
   to say it returned and why, and `npm run capture:check` passes on the new
   footage.
 - **Risk:** Low to the app — this is demo footage, not product code. Note that
@@ -755,7 +766,7 @@ block says they mean — same vocabulary, one definition, defined there.
   original defect went unnoticed for so long; the scene needs a fixture where
   the count is non-zero or it will demonstrate nothing.
 - **Status:** claimed:improve/2026-09-02-backlog-pass
-- **Related:** `D-052` (the defect that held it out), ADR-0043, ADR-0045
+- **Related:** `D-052` (the defect that held it out), the reel skill
 
 ### I-031 · Group Detail's rules section answers "what does it say?" by leaving the tab
 
@@ -774,7 +785,7 @@ block says they mean — same vocabulary, one definition, defined there.
   rule actually say? — could only be answered by leaving it."_
 
   Building the rule detail rung took that disclosure away, on purpose: four write
-  verbs flex-wrapped inside a list row's body is the ADR-0030 §2 failure the rung
+  verbs flex-wrapped inside a list row's body is exactly the failure the rung
   exists to fix, and the rung holds strictly more than the disclosure ever did. But
   the trade is real and worth naming rather than quietly banking. The row still
   carries the condition in human-readable form and the press now lands on a rung
@@ -802,7 +813,8 @@ block says they mean — same vocabulary, one definition, defined there.
   tab and would need `RuleDetailView` to render without an `ActionBar`, which no
   caller needs today.
 - **Status:** claimed:improve/2026-09-02-backlog-pass
-- **Related:** ADR-0030 §2, ADR-0039, ADR-0016, `docs/features-plan.md` §H
+- **Related:** the action-bar rules in `docs/components.md`,
+  `docs/features-plan.md` §H
 
 ### I-032 · A created feeding rule does not appear until the group is reopened
 
@@ -863,7 +875,7 @@ block says they mean — same vocabulary, one definition, defined there.
   `useHomeReports`, the jump bar) reads through the same object, so the
   provider's identity stability is load-bearing in three more places.
 - **Status:** claimed:improve/2026-09-02-backlog-pass
-- **Related:** ADR-0040, ADR-0062
+- **Related:** the background-owned org snapshot
 
 ### I-036 · `RuleDetailView` keeps a private copy of the condition renderer
 
@@ -887,7 +899,7 @@ block says they mean — same vocabulary, one definition, defined there.
   genuinely needs something the shared component refuses — the shared component
   gains that as a documented prop and the rung uses it. A local copy is not an
   outcome. Existing rung tests keep passing unchanged; if the badge markup
-  differs, the assertions are retargeted per `ADR-0022`, not relaxed.
+  differs, the assertions are retargeted assertion-by-assertion, not relaxed.
 - **Risk:** Low — same input, same intended output, covered by existing tests.
 - **Status:** open
 - **Related:** `I-016` (promoted the shared renderer), `I-031` (found this)
@@ -910,7 +922,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Done when:** the resolver is stable across renders (`useCallback`, or a
   `useMemo` over the name map it closes over), so the tokenisation memo actually
   holds. No behaviour changes; no new test is warranted for a pure-performance
-  fix that `ADR-0023` would call untestable through the DOM.
+  fix the house test rules would call untestable through the DOM.
 - **Risk:** Low.
 - **Status:** open
 - **Related:** `I-016` (promoted the component and found this)
@@ -940,7 +952,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low, but it moves demo membership numbers, so it re-films any
   chapter that shows the interns cohort.
 - **Status:** open
-- **Related:** `I-026` (found it), `ADR-0043`
+- **Related:** `I-026` (found it)
 
 ### I-039 · The demo org seeds a snapshot with no parse version
 
@@ -950,9 +962,9 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Files:** `src/sidepanel/demo/control.ts` (the `patchMeta` calls),
   `src/sidepanel/components/HomeTab.stories.tsx`,
   `src/sidepanel/components/AppsTab.stories.tsx`
-- **Verified:** 2026-09-02 — found by the `I-027` writer; ADR-0066 names it
-  directly ("must stamp the current versions, or a demo will try to walk a fake
-  origin").
+- **Verified:** 2026-09-02 — found by the `I-027` writer, who named it directly:
+  seeded demo data must stamp the current versions, or a demo will try to walk a
+  fake origin.
 - **Problem:** `I-027` made an absent `parseVersion` mean "not knowable", which
   resolves to one full walk of the collection. The demo's seeded snapshot and the
   two tab stories all `patchMeta` without stamping a version, so they describe a
@@ -966,7 +978,7 @@ block says they mean — same vocabulary, one definition, defined there.
   written against. One line per call site.
 - **Risk:** Low — demo and story fixtures only, no production path.
 - **Status:** open
-- **Related:** `I-027` (created the field and found this), `ADR-0066`
+- **Related:** `I-027` (created the field and found this)
 
 ### I-040 · Browser globals are undeclared for `src/shared`, so lint warns on them
 
@@ -1003,12 +1015,13 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Problem:** `I-020` made every Home report exportable, but only by finding it
   again in the Export tab's entity hub. The reader looking at a finding — the
   person who actually wants the CSV — still has to leave, recall the report's
-  name, and re-select it. `ADR-0065` wants hub discoverability independently, so
+  name, and re-select it. The Export tab's hub wants discoverability independently, so
   that route is correct and stays; what is missing is the pre-scoped jump from
   the surface that raised the question. `I-020` did not wire it because
   `ReportsCard` is mounted only by `HomeTab`: a required prop breaks the card's
-  type-check, and an optional one ships a verb with no wire, which `ADR-0039`
-  bans.
+  type-check, and an optional one ships a verb with no wire, which the
+  action-bar rules ban (an unimplemented verb is omitted, not shipped
+  `disabled` forever).
 - **Done when:** `HomeTabProps` carries `onExportReport: (reportKey: string) =>
 void`, passed through to `ReportsCard`, and `App` routes it into the existing
   `handleNavigateToExport({ descriptorId })` — the same shape `group-rules`
@@ -1019,8 +1032,8 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
   be omitted, never rendered disabled, for a report whose resolution is
   `unavailable`.
 - **Status:** open
-- **Related:** `I-020` (built the descriptors and left this), `ADR-0065`,
-  `ADR-0039`
+- **Related:** `I-020` (built the descriptors and left this),
+  `docs/components.md`
 
 ### I-042 · The snapshot-row projection is written twice
 
@@ -1062,7 +1075,7 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
   hover, `.press`, row-spacing tokens and a chevron — `ListRow`'s `body`-slot
   disclosure, rebuilt. Both are internally consistent and their comments
   explicitly compare themselves to `ListRow`, which is the tell: the author knew
-  the primitive existed and could not use it. `ADR-0029` bans hand-rolled row
+  the primitive existed and could not use it. The house rules ban hand-rolled row
   containers precisely so a fourth recipe cannot accrete, and this is the third.
 - **Done when:** `ListRow` grows the two variants that were missing — a dense or
   nested size, and an `as="button"` disclosure mode — and both call sites
@@ -1073,7 +1086,7 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
   renders through, so land it tests-first, one call site at a time, per the
   working agreement.
 - **Status:** open
-- **Related:** `I-019` (added both), `ADR-0029`, `I-016`, `I-017`
+- **Related:** `I-019` (added both), `docs/components.md`, `I-016`, `I-017`
 
 ### I-044 · Raw spacing values in three rows that otherwise use the roles
 
@@ -1118,7 +1131,7 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
   a keyboard user tabbing the strip never lands on it and never hears the
   reason. It is reachable by pointer hover and in a screen reader's browse
   mode, and nowhere else. The explanation exists precisely because the control
-  stays visible rather than vanishing at the boundary (`ADR-0068`), so the one
+  stays visible rather than vanishing at the boundary, so the one
   group of users who cannot reach it are the ones the visible-but-disabled
   decision was partly made for.
 - **Done when:** shared `Button` offers an `aria-disabled` form — focusable,
@@ -1131,7 +1144,7 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
   fire. Do not convert existing `disabled` call sites wholesale — add the form,
   adopt it where a reason exists.
 - **Status:** open
-- **Related:** `ADR-0068`, `ADR-0051`, `docs/ux-guidelines.md`
+- **Related:** `docs/ux-guidelines.md`, `docs/components.md`
 
 ## Archive
 

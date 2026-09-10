@@ -174,9 +174,25 @@ this for non-dialog navigation: `docs/ux-guidelines.md`.
 Never a blank panel while data is in flight or absent. `LoadingSpinner` for
 loading, `EmptyState` for no content (icon + title + description + optional
 `Button` actions), `AlertMessage` with `type="danger"` for errors — status
-vocabulary is `danger`, never `error` (ADR-0002), and the `AlertMessageData.type`
+vocabulary is `danger`, never `error` (`docs/design-system.md`), and the `AlertMessageData.type`
 field is typed to the shared `StatusType` union (`success | warning | danger |
 info`) so passing anything else is a type error, not a lint nit.
+
+## Copy: assert or withhold, never hedge
+
+Every user-facing string a component renders — a label, an empty-state
+description, a tooltip, a count, a status line — either states something the
+panel can stand behind or says plainly that it does not know, and why. There is
+no third register. **No "probably", "likely", "approximately"; no trailing `?` on
+a label the component is unsure of; no "may", "might", or "roughly" softening a
+number.**
+
+Uncertainty is a defect, not a disclosure. If the only honest copy for a state is
+hedged, the component is not finished: the fix is upstream — fetch the field that
+was missing, or narrow the question until it is answerable — not a better
+sentence. A withheld answer is legitimate and gets an `EmptyState` or an
+`AlertMessage` saying what is missing; a qualifier is not. Full rule and its
+rationale: `docs/claims.md`.
 
 ## Stories: required, and they're a real test
 
@@ -187,7 +203,7 @@ browser render test (`npm run test:storybook`, `@storybook/addon-vitest`), and
 the a11y addon runs in **`test: 'error'`** mode: a story with an axe violation
 fails the suite and fails CI. (`docs/component-explorer.md`'s "Story
 documentation contract" section still describes the addon as report-only
-`'todo'` mode from before the ADR-0011 cleanup pass — that line is stale
+`'todo'` mode from before the a11y cleanup pass that made it blocking — that line is stale
 prose; `.storybook/preview.tsx`'s actual `a11y.test` setting, and that same
 doc's later "Coverage expectation" section, both say `'error'`. Follow the
 code.)
@@ -198,9 +214,9 @@ What a plain story (no `play` function) asserts, and doesn't:
   give a `Story` export, and is axe-clean in that state.
 - **Does not** assert: any specific text, prop wiring to a mocked child, or
   behavior on interaction — that needs a `play` function or a `.test.tsx`
-  (ADR-0023 already bans testing CSS classes, referential identity, or props
+  (the house already bans testing CSS classes, referential identity, or props
   brokered to a mocked child; don't add a story _and_ a test that both just
-  pin a pure render).
+  pin a pure render — `docs/testing.md`).
 
 Two templates, both documented in `docs/component-explorer.md`: **Template
 A** for pure primitives/leaf components (props only, `layout: 'centered'`).

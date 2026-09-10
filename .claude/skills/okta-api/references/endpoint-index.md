@@ -28,7 +28,7 @@ Marker legend lives in `../SKILL.md`.
 merge behaviour — it ships a sparse `{ profile }` patch — but nobody has checked it
 against a live org. `useOktaApi/profileOperations.ts` owns the write and documents the
 full-profile fallback (strip every `mutability !== 'READ_WRITE'`) at the one function
-that would implement it. See ADR-0035 (`0035-the-first-profile-write.md`); flip this row to `V` only after a real org
+that would implement it. The row stays unimplemented; flip it to `V` only after a real org
 confirms unlisted attributes survive.
 
 ## Groups
@@ -123,7 +123,8 @@ Types: `ACCESS_POLICY`, `OKTA_SIGN_ON`, `MFA_ENROLL`, `PASSWORD`, `IDP_DISCOVERY
 > app row already returned by
 > `GET /api/v1/apps?filter=user.id eq "{id}"&expand=user/{id}`: an app whose
 > `features` contain `PROFILE_MASTERING`. See `users-and-mfa.md` § Profile
-> sourcing, and ADR-0037 for the bug that came of getting this wrong.
+> sourcing for the bug that came of getting this wrong — a `PROFILE_MASTER`
+> block never carries `master.priority`, so walking it always finds nothing.
 
 ## Auth
 

@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 import manifest from './manifest.json' with { type: 'json' };
 import pkg from './package.json' with { type: 'json' };
 
-// package.json is the single source of truth for version (ADR-0007). The Chrome
+// package.json is the single source of truth for version. The Chrome
 // manifest requires a dotted-numeric version, so strip any prerelease suffix
 // (e.g. "0.4.0-beta.1" -> "0.4.0").
 const manifestVersion = pkg.version.split('-')[0];

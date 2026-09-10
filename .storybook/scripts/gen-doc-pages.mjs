@@ -71,17 +71,25 @@ function main() {
     n++;
   }
 
-  // Documentation/ADRs/* from docs/adr/*.md
-  for (const file of readdirSync(path.join(REPO, 'docs/adr')).filter(
-    (f) => f.endsWith('.md') && !DOC_SKIP.has(f),
-  )) {
-    const slug = file.replace(/\.md$/, '');
-    const title = `Documentation/ADRs/${titleCase(slug)}`;
-    writeFileSync(
-      path.join(OUT, `adr-${slug}.mdx`),
-      page(title, `../../../docs/adr/${file}`, `Renders docs/adr/${file}.`),
-    );
-    n++;
+  // Documentation/ADRs/* from docs/adr/*.md, when any have been written.
+  //
+  // Guarded rather than assumed: the record corpus was reset, so the directory
+  // legitimately holds nothing but its README until the first new decision is
+  // filed. An unguarded readdirSync would take the whole docs site down over an
+  // empty shelf — same reason the Internals block below checks before reading.
+  const adrDir = path.join(REPO, 'docs/adr');
+  if (existsSync(adrDir)) {
+    for (const file of readdirSync(adrDir).filter(
+      (f) => f.endsWith('.md') && !DOC_SKIP.has(f),
+    )) {
+      const slug = file.replace(/\.md$/, '');
+      const title = `Documentation/ADRs/${titleCase(slug)}`;
+      writeFileSync(
+        path.join(OUT, `adr-${slug}.mdx`),
+        page(title, `../../../docs/adr/${file}`, `Renders docs/adr/${file}.`),
+      );
+      n++;
+    }
   }
 
   // Internals/* from the bundled TypeDoc markdown (if generated).

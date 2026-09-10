@@ -37,7 +37,7 @@ const ruleExact: GroupMembership = {
   rules: [rule('0prFAKErule00001', 'Auto-add Engineers', 'user.department == "Engineering"')],
 };
 
-/** `inferred`: a clause could not be evaluated, so the rule is plausible only. Verdict `Rule?`. */
+/** `inferred`: a clause could not be evaluated, so the rule is deduced. Verdict `Rule`, in `warning`. */
 const ruleInferred: GroupMembership = {
   group: {
     id: '00gFAKE00000000000002',
@@ -55,7 +55,7 @@ const ruleInferred: GroupMembership = {
   ],
 };
 
-/** `ambiguous`: two candidates and nothing to separate them. Verdict `Rule · 2?`. */
+/** `ambiguous`: two candidates and nothing to separate them. Verdict `Rule · 2`. */
 const ruleAmbiguous: GroupMembership = {
   group: {
     id: '00gFAKE00000000000003',
@@ -78,7 +78,7 @@ const direct: GroupMembership = {
   rules: [],
 };
 
-/** A manual add the classifier only deduced. Verdict `Direct?` — never the plain `Direct`. */
+/** A manual add the classifier only deduced. Verdict `Direct`, in the `warning` treatment. */
 const directDeduced: GroupMembership = {
   group: { id: '00gFAKE00000000000005', type: 'OKTA_GROUP', profile: { name: 'Travel Policy' } },
   membershipType: 'DIRECT',
@@ -144,19 +144,19 @@ const meta = {
           'The pane follows the rung’s shared spine — summary line → filter → source pills → rows → ' +
           'empty state. The summary names every bucket that has rows in it and omits the ones that ' +
           'do not; dropping a category silently would be worse than showing no summary at all.\n\n' +
-          'A row says exactly two things: one **verdict badge** (`Rule`, `Rule?`, `Rule · n?`, ' +
-          '`Direct`, `Direct?`, `App`, `Unresolved` — see `membershipVerdict`) and one **source ' +
+          'A row says exactly two things: one **verdict badge** (`Rule`, `Rule · n`, ' +
+          '`Direct`, `App`, `Unresolved` — see `membershipVerdict`) and one **source ' +
           'line** worded by `shared/membership/sourceLine`. The raw membership enum and the second ' +
           'group-type badge are gone: group type only matters when it explains the source, which ' +
           'the `App` verdict already does.\n\n' +
-          'Everything else is behind the row’s disclosure, in one order: the full caveat, a card per ' +
+          'Everything else is behind the row’s disclosure, in one order: the full explanation, a card per ' +
           'attributed rule (the rule, the profile attributes its condition **reads**, and the ' +
           'condition explained clause by clause against the user), any apps the group also grants, ' +
           'the **Ask Okta** proof action (ADR-0031 — one API call, and never on a collapsed row), ' +
           'and the Okta deep link.\n\n' +
           'Every badge here is a *deduction*: `GET /api/v1/users/{id}/groups` carries no attribution ' +
           'embed (ADR-0020). A row carrying `provenance` is the exception — that is Okta’s own ' +
-          'answer, and it is the only way a hedged row loses its `?`.',
+          'answer, and it is the only way a deduced row becomes a proven one.',
       },
     },
   },

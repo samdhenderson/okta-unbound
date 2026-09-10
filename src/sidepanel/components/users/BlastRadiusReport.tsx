@@ -4,7 +4,7 @@
  * **"if I make this change, what happens to this user's group access?"**
  *
  * Two views of one answer, switched by a pill. *Groups* is the consequence —
- * what access is likely gained, likely lost, and what we decline to call.
+ * what access is gained, what is lost, and what we decline to call.
  * *Rules* is the cause — which rules move, and which could not be judged at all.
  * The same report backs both; nothing is recomputed by the switch.
  *
@@ -21,14 +21,10 @@
  * - `computed` renders the report, and a computed report with zero effects says
  *   so explicitly rather than rendering as an absence.
  *
- * ## Everything is `likely`
+ * ## Second-order effects
  *
- * The vocabulary is fixed in the row components and repeated in the footnote
- * here, because three structural facts make certainty unavailable: a cached rule
- * carries no exclusion list, the evaluator is a client-side reimplementation of
- * Okta EL rather than Okta EL, and rule application is asynchronous. Second-order
- * effects are **named, not resolved** — one quiet line saying how many other
- * rules read membership of a group this edit would move.
+ * Second-order effects are **named, not resolved** — one quiet line saying how
+ * many other rules read membership of a group this edit would move.
  *
  * ## Security
  *
@@ -97,19 +93,6 @@ const RuleSection: React.FC<{ title: string; effects: readonly RuleEffect[] }> =
   );
 
 /**
- * The standing caveat. It is not dismissible and it is not a tooltip: it
- * qualifies every line above it, so it must stay true for as long as they are on
- * screen.
- */
-const Footnote: React.FC = () => (
-  <p className="text-xs text-neutral-500">
-    Predictions are likely, not certain: this panel cannot see a rule&rsquo;s exclusion list,
-    evaluates conditions with its own implementation of Okta&rsquo;s expression language, and Okta
-    applies rules asynchronously.
-  </p>
-);
-
-/**
  * The blast-radius report for one proposed profile edit.
  *
  * @param props - See {@link BlastRadiusReportProps}.
@@ -119,8 +102,8 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({ report, className
 
   const { added, removed, notPredicted } = useMemo(
     () => ({
-      added: report.groups.filter((effect) => effect.kind === 'likely-added'),
-      removed: report.groups.filter((effect) => effect.kind === 'likely-removed'),
+      added: report.groups.filter((effect) => effect.kind === 'added'),
+      removed: report.groups.filter((effect) => effect.kind === 'removed'),
       notPredicted: report.groups.filter((effect) => effect.kind === 'not-predicted'),
     }),
     [report.groups],
@@ -163,7 +146,6 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({ report, className
           title="No group changes predicted"
           description="No group rule's verdict about this user moves under this edit, so no membership is predicted to change."
         />
-        <Footnote />
       </div>
     );
   }
@@ -191,8 +173,8 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({ report, className
             </p>
           ) : (
             <>
-              <GroupSection title="Likely added" effects={added} />
-              <GroupSection title="Likely removed" effects={removed} />
+              <GroupSection title="Added" effects={added} />
+              <GroupSection title="Removed" effects={removed} />
               <GroupSection title="Not predicted" effects={notPredicted} />
             </>
           )}
@@ -228,8 +210,6 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({ report, className
           What they do next is not predicted here.
         </p>
       )}
-
-      <Footnote />
     </div>
   );
 };

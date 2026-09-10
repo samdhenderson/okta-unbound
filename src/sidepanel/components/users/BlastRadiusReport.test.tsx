@@ -30,7 +30,7 @@ const groups: GroupEffect[] = [
   {
     groupId: '00gFAKE00000000000001',
     groupName: 'Sales-All',
-    kind: 'likely-added',
+    kind: 'added',
     ruleId: SALES_RULE,
     ruleName: 'Sales auto-add',
     contributingRuleIds: [SALES_RULE],
@@ -122,19 +122,21 @@ describe('BlastRadiusReport', () => {
     expect(screen.getByText('And 2 rules are unaffected by this edit.')).toBeInTheDocument();
 
     await userEvent.click(groupsPill);
-    expect(screen.getByRole('heading', { name: 'Likely added' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Added' })).toBeInTheDocument();
   });
 
-  it('keeps the caveats that qualify both views across a switch', async () => {
+  it('keeps the second-order caveat across a switch, and hedges nothing else', async () => {
     render(<BlastRadiusReport report={computed} />);
 
     expect(screen.getByText(/1 rule tests membership of a group/i)).toBeInTheDocument();
-    expect(screen.getByText(/Predictions are likely, not certain/i)).toBeInTheDocument();
+    // The standing "predictions are likely, not certain" footnote is gone: the
+    // report asserts its predictions rather than qualifying them.
+    expect(screen.queryByText(/Predictions are likely, not certain/i)).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: 'Rules 1' }));
 
     expect(screen.getByText(/1 rule tests membership of a group/i)).toBeInTheDocument();
-    expect(screen.getByText(/Predictions are likely, not certain/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Predictions are likely, not certain/i)).toBeNull();
   });
 
   it('names why a prediction was withheld instead of omitting the group', () => {
@@ -167,7 +169,7 @@ describe('BlastRadiusReport', () => {
     render(<BlastRadiusReport report={emptyOf('computed')} />);
 
     expect(screen.getByText('No group changes predicted')).toBeInTheDocument();
-    // The hedge still applies: "no change predicted" is itself a prediction.
-    expect(screen.getByText(/Predictions are likely, not certain/i)).toBeInTheDocument();
+    // The empty state carries no standing hedge either.
+    expect(screen.queryByText(/Predictions are likely, not certain/i)).toBeNull();
   });
 });

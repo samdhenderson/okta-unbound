@@ -59,7 +59,7 @@ most embarrassing one.
 
 ### Failure mode 3: counting comments and docs as code
 
-Doc comments, TypeDoc blocks, ADR quotations, and `.stories.tsx` files all match the
+Doc comments, TypeDoc blocks, quotations inside house docs, and `.stories.tsx` files all match the
 same patterns as production code. This repo documents heavily, so the inflation is
 large. Exclude explicitly, or classify per item (`claim-types.md`, count claims).
 
@@ -120,9 +120,13 @@ for commits where the _count_ of the string changed, so it finds the removal rat
 than every commit that touched the file.
 
 Note that a doc's claim may be a _correct description of a past state_. That is
-especially true of ADRs, which `docs/adr/README.md` holds immutable precisely so they
-keep describing the moment they were written. "The ADR is wrong" and "the ADR has been
-overtaken" are different findings and get different write-ups.
+especially true of this repo's dated records — `NIGHTLY.md`, an append-only session log,
+and the `## Archive` sections of `DEBT.md` and `IMPROVEMENTS.md` — which are never
+rewritten, precisely so they keep describing the moment they were written.
+`scripts/check-cited-paths.mjs` exempts the log from path checking for that reason: one
+of its entries cites a path that does not resolve, and that _is_ the finding the entry
+records. "The record is wrong" and "the record has been overtaken" are different
+findings and get different write-ups.
 
 ---
 
@@ -161,8 +165,8 @@ it does match other agents' runners, so with parallel writers use
 See `docs/testing.md`.
 
 **Never** edit the assertion to see whether it matters. Rewriting an assertion to
-observe its behaviour is indistinguishable from weakening it, and ADR-0012 forbids it
-outright.
+observe its behaviour is indistinguishable from weakening it, and the house rule against
+weakening a test to make it pass forbids it outright (`docs/testing.md`).
 
 ---
 
@@ -175,7 +179,8 @@ or handler wiring. Six of 115 story files have a `play` function.
 So "there is a story for it" is not evidence that behaviour is covered, and a
 test+story pair is almost never redundant. Any claim of the form "the story already
 covers this" is an equivalence claim and gets checked as one — read the `play`
-function, or there is nothing to read. `docs/testing.md`, ADR-0022, ADR-0023.
+function, or there is nothing to read. The removal rules and the list of what this repo
+deliberately does not test both live in `docs/testing.md`.
 
 ---
 
@@ -193,8 +198,9 @@ node scripts/check-control-chars.mjs   # npm run lint:control-chars
 `check-cited-paths.mjs` fails on any backticked or markdown-linked `src/…` path, in a
 tracked `.md` file, that does not resolve on disk — because 5 of 44 cited paths pointed
 at files that had been deleted or renamed. It deliberately skips globs, directory
-references (no trailing extension), fenced code blocks, and everything under
-`docs/adr/`.
+references (no trailing extension), fenced code blocks, and the append-only session log
+`NIGHTLY.md` — a dated record's paths describe the repo as it was that night, so
+"correcting" one would erase the finding it documents.
 
 Both scan **tracked** files only. A new, uncommitted file is not yet in `git ls-files`,
 so a clean run does not mean your new file passed — check it by hand, or stage it, before

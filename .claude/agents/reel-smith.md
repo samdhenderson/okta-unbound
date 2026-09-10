@@ -36,7 +36,10 @@ no walk records, stop and say so: that is a re-shoot, and it is not your call.
 
 - **Every number comes from `figure(manifest, key)`.** Never a literal, never
   invented, never a plausible-looking placeholder. A figure exists only because
-  a capture measured it (ADR-0045).
+  a capture measured it — the rig captures thin and composes in React, so a
+  number the walk did not record does not exist (`docs/reel.md`). A figure is
+  stated or it is absent; never approximated, never prefixed with `~`
+  (`docs/claims.md`).
 - **A synthetic component must never be mistakable for a screenshot.** It is a
   recreation at 2x–6x, stylised on the dark stage. If it could pass for the
   product, it is wrong.

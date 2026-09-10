@@ -15,7 +15,7 @@ npm run lint:cited-paths     # every cited src/ path still exists (see below)
 
 ## Why `lint:cited-paths` sits with the dead-code tools
 
-Docs, ADRs, and `.claude/` skills/agents cite `src/…` paths as evidence — "see
+Docs and `.claude/` skills/agents cite `src/…` paths as evidence — "see
 `shared/utils/oktaUrl.ts`" — so a reader, human or agent, can go check. Deleting or
 renaming the file doesn't delete the citation; nothing forced the two to stay in
 sync. A one-week audit found 5 of 44 cited paths pointing at files that no longer
@@ -85,7 +85,8 @@ never a CI gate. Three legitimate reasons an export appears there:
    symmetry. Check the barrel; an unexported sibling is usually the bug.
 3. **Genuinely dead** — nothing reaches it, and the only thing keeping it alive is its
    own test. Delete both. Deleting a test whose subject is deleted is not test
-   tampering: no failure is being silenced, and ADR-0012 does not apply.
+   tampering: no failure is being silenced, and the no-tampering rule does not apply
+   (see [testing.md](./testing.md)).
 
 ### Accepted findings — do not "clean these up"
 
@@ -93,8 +94,8 @@ never a CI gate. Three legitimate reasons an export appears there:
   production caller and is expected to keep appearing in `knip:production`. It is
   category 2 above: a four-line wrapper that is the reason-carrying twin of
   `tryEvaluateRuleExpression`, kept deliberately so the next caller does not
-  hand-roll `parseRuleExpression` + `evaluateParsedRule`. Removing it needs
-  [adr/0025](./adr/0025-retire-boolean-rule-evaluation-apis.md) revisited.
+  hand-roll `parseRuleExpression` + `evaluateParsedRule`. Removing it reopens a
+  decision that was made deliberately — don't do it as cleanup.
 
 ### Known false positives
 
@@ -153,8 +154,8 @@ Also worth noting from the baseline run:
   file was renamed to `fixtures.ts` in the process.
 - Three `ruleEvaluator.ts` exports — `evaluateRuleExpression`,
   `canEvaluateClientSide`, `tryEvaluateRuleExpressionDetailed` — were reachable only
-  from tests. **Resolved by [adr/0025](./adr/0025-retire-boolean-rule-evaluation-apis.md):**
-  the first two are deleted; the third is kept and is now a permanent accepted
-  finding (see below).
+  from tests. **Resolved:** the boolean-returning first two are deleted in favour of
+  the parse-then-evaluate pair; the third is kept and is now a permanent accepted
+  finding (see above).
 - `package.json`'s `"main": "index.js"` points at a file that does not exist (this is
   an extension, not a library) — knip reports it as a configuration hint.

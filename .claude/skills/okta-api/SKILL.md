@@ -182,12 +182,12 @@ in `references/internal-apis.md`. Output that depends on an internal API says so
 Every factual claim in this skill carries a marker. The marker states where the
 claim comes from, so a reader can weigh it and a maintainer can re-check it.
 
-| Marker                        | Means                                                        | Required companion                            |
-| ----------------------------- | ------------------------------------------------------------ | --------------------------------------------- |
-| `[verified]`                  | Proven by running code and tests in the okta-unbound repo    | Module name + ADR number, plus a `src/…` path |
-| `[docs]`                      | Stated by Okta's public documentation                        | A `developer.okta.com` URL                    |
-| `[private:T1]`–`[private:T4]` | Undocumented or admin-console-only; may break without notice | Risk tier **and** a stated fallback           |
-| `[unverified]`                | Believed true; not tested here and no supporting doc found   | Nothing, but the marker is mandatory          |
+| Marker                        | Means                                                        | Required companion                             |
+| ----------------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
+| `[verified]`                  | Proven by running code and tests in the okta-unbound repo    | Module name, plus a `src/…` path or owning doc |
+| `[docs]`                      | Stated by Okta's public documentation                        | A `developer.okta.com` URL                     |
+| `[private:T1]`–`[private:T4]` | Undocumented or admin-console-only; may break without notice | Risk tier **and** a stated fallback            |
+| `[unverified]`                | Believed true; not tested here and no supporting doc found   | Nothing, but the marker is mandatory           |
 
 Rules that keep the markers meaningful:
 
@@ -196,8 +196,9 @@ Rules that keep the markers meaningful:
 - `[verified]` cites paths, never copied code. This skill states the _contract_; the
   repo holds the _implementation_. Copying code creates a second source of truth
   that drifts.
-- Repo citations name the module and ADR first, the `src/…` path second — the path
-  is a convenience pointer and may move.
+- Repo citations name the module first, the `src/…` path second — the path is a
+  convenience pointer and may move. A `[verified]` tag with no evidence behind it
+  is not verified; downgrade it to `[unverified]` rather than leaving a bare claim.
 - Any reference file that is more than half `[unverified]` is paraphrased
   documentation. Shrink it to index rows plus links in `references/doc-sources.md`.
 

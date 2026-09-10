@@ -19,15 +19,12 @@ const meta = {
       description: {
         component:
           'The four-state pipeline bar used by the expanded activity bar.\n\n' +
-          'Segments run in pipeline order: **spent** → **in flight** → **queued** → **planned**. When any leg of the plan is a floor rather than a fact (`atLeast`, or an unsized `unknown`), the planned segment is hatched instead of solid — state is encoded in form as well as colour, so "at least this much more" never reads as "exactly this much more" (ADR-0060).',
+          'Segments run in pipeline order: **spent** → **in flight** → **queued** → **planned**. Each segment is a solid fill sized by its share of the declared total; the planned share is rendered the same way whether the plan sized it exactly or estimated it (ADR-0060).',
       },
     },
   },
   argTypes: {
     counts: { description: 'Requests in each pipeline state.' },
-    approximate: {
-      description: 'Marks the total as a floor rather than a fact; hatches the planned segment.',
-    },
     label: { description: 'Accessible description — the meter is content, not decoration.' },
   },
 } satisfies Meta<typeof PipelineMeter>;
@@ -48,15 +45,6 @@ export const PartlySpent: Story = {
   args: {
     counts: { spent: 312, active: 4, queued: 26, planned: 470 },
     label: '312 spent, 4 in flight, 26 queued, 470 planned',
-  },
-};
-
-/** The same shape, but the remaining total is a floor — note the hatching. */
-export const ApproximateTotal: Story = {
-  args: {
-    counts: { spent: 312, active: 4, queued: 26, planned: 470 },
-    approximate: true,
-    label: '312 spent, 4 in flight, 26 queued, at least 470 more planned',
   },
 };
 

@@ -280,10 +280,8 @@ async function resolveGrantingGroups({
       ),
     {
       message: ({ completed, total }) => `Naming granting groups (${completed}/${total})`,
-      // A floor, not a total: each app costs at least one request, and an app
-      // with more than 200 assigned groups costs more. `toWalk` has already
-      // excluded the apps a cache hit will serve for free.
-      plan: { endpoint: '/api/v1/apps', method: 'GET', approximate: true },
+      // `toWalk` has already excluded the apps a cache hit will serve for free.
+      plan: { endpoint: '/api/v1/apps', method: 'GET' },
     },
   );
 

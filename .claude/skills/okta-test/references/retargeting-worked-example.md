@@ -8,20 +8,20 @@
 
 # Worked example: retiring the boolean rule-evaluation APIs
 
-Source of record: `docs/adr/0025-retire-boolean-rule-evaluation-apis.md`, applied in
-commit `refactor(rules): remove the boolean rule-evaluation APIs`. Files:
-`src/shared/ruleEvaluator.ts`, `src/shared/ruleEvaluator.test.ts`.
+Applied in commit `refactor(rules): remove the boolean rule-evaluation APIs`. Files:
+`src/shared/ruleEvaluator.ts`, `src/shared/ruleEvaluator.test.ts`. The house rules
+this case turns on live in `docs/testing.md`.
 
 ## The situation
 
-ADR-0017 had fixed two defects in `shared/ruleEvaluator.ts` — a boolean
+An earlier change had fixed two defects in `src/shared/ruleEvaluator.ts` — a boolean
 `evaluateRuleExpression` that conflated "did not match" with "could not tell," and
 a substring-grep `canEvaluateClientSide` gate — by introducing a three-valued
 `tryEvaluateRuleExpression` (`'match' | 'no-match' | 'unevaluable'`) plus a real
 AST-walking gate, `checkRuleNodeSupport`. It kept the old two functions exported
 for their existing callers.
 
-By the time of ADR-0025, `npm run knip:production` showed zero production callers
+By the time of the retirement, `npm run knip:production` showed zero production callers
 of either old function. The unit under test — "how do you get a yes/no answer for
 whether a user matches a rule" — hadn't disappeared; it had _moved_ onto the
 three-valued API. That's carve-out (3), not carve-out (1): the module still has an
@@ -87,12 +87,15 @@ Both produced `false` under the old boolean API — the old test's own name for 
 second case, `"stays unresolved (-> false)"`, concedes the API was lying about the
 distinction. Retargeted onto `tryEvaluateRuleExpression`, they now assert
 `{ resolved: true, value: false }` for the first and `{ resolved: false }` for the
-second — exactly the distinction ADR-0017 and ADR-0020 exist to make representable,
-now visible in the test rather than papered over by it.
+second — exactly the distinction the three-valued API and its AST-walking gate exist
+to make representable (rule expressions are parsed with a real parser, never
+evaluated, because they are end-user-controllable input — `docs/security.md`), now
+visible in the test rather than papered over by it.
 
-## The correction this forced onto ADR-0022 itself
+## The correction this forced onto the written-down claim
 
-ADR-0022's own Context section had listed `ruleEvaluator.parity.test.ts` (863 LOC)
+The document that established the four removal carve-outs had itself listed
+`src/shared/ruleEvaluator.parity.test.ts` (863 LOC)
 as a second retirable suite, on the theory that it pinned only the two boolean
 APIs being removed. That was wrong: the parity suite's table 1 pins
 `tryEvaluateRuleExpression` — the live, safety-critical API with two production
@@ -100,9 +103,11 @@ call sites — not the retired ones. Deleting it would have removed the primary
 outcome-parity coverage for the one function whose wrong answer becomes a wrong
 access decision.
 
-ADR-0025 records the correction rather than silently editing ADR-0022 (ADRs are
-immutable once accepted — see `docs/adr/README.md` and the `check-cited-paths.mjs`
-rationale for why). The lesson generalizes: **before deleting a suite because a
-sibling ADR or PR description called it retirable, re-derive that claim yourself**
-by reading what it actually pins, the same way the ten-case audit above did. A
-claim about a test's coverage is not itself coverage.
+The correction was recorded as a new, separately dated entry rather than by silently
+editing the old one: a dated record describes the repo as it was at the time it was
+written, not as it is now, and quietly rewriting it destroys the evidence that the
+claim was ever wrong. The lesson generalizes: **before deleting a suite because a
+published document or a PR description called it retirable, re-derive that claim
+yourself** by reading what it actually pins, the same way the ten-case audit above
+did. Being written down in a published document is not evidence of being true today.
+A claim about a test's coverage is not itself coverage.

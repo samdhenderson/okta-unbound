@@ -15,7 +15,7 @@ const GROUPS: GroupEffect[] = [
   {
     groupId: '00gFAKE00000000000001',
     groupName: 'Sales-All',
-    kind: 'likely-added',
+    kind: 'added',
     ruleId: SALES_RULE,
     ruleName: 'Sales auto-add',
     contributingRuleIds: [SALES_RULE],
@@ -24,7 +24,7 @@ const GROUPS: GroupEffect[] = [
   {
     groupId: '00gFAKE00000000000002',
     groupName: 'Engineering-All',
-    kind: 'likely-removed',
+    kind: 'removed',
     ruleId: ENG_RULE,
     ruleName: 'Eng auto-add',
     contributingRuleIds: [ENG_RULE],
@@ -159,17 +159,16 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * The groups view: what access is likely gained, likely lost, and what the engine
+ * The groups view: what access is gained, what is lost, and what the engine
  * declined to call — the third with equal standing and a stated reason.
  */
 export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // Every prediction is hedged in the words themselves, and each block is a
-    // real section heading rather than a decorative label.
-    await expect(canvas.getByRole('heading', { name: 'Likely added' })).toBeInTheDocument();
-    await expect(canvas.getByRole('heading', { name: 'Likely removed' })).toBeInTheDocument();
+    // Each block is a real section heading rather than a decorative label.
+    await expect(canvas.getByRole('heading', { name: 'Added' })).toBeInTheDocument();
+    await expect(canvas.getByRole('heading', { name: 'Removed' })).toBeInTheDocument();
     await expect(canvas.getByRole('heading', { name: 'Not predicted' })).toBeInTheDocument();
 
     await expect(canvas.getByText('Sales-All')).toBeInTheDocument();
@@ -229,8 +228,8 @@ export const NoEffects: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('No group changes predicted')).toBeInTheDocument();
-    // Even here the caveat stands: "no change predicted" is still a prediction.
-    await expect(canvas.getByText(/Predictions are likely, not certain/i)).toBeInTheDocument();
+    // No standing hedge accompanies it — the report asserts its predictions.
+    await expect(canvas.queryByText(/Predictions are likely, not certain/i)).toBeNull();
   },
 };
 

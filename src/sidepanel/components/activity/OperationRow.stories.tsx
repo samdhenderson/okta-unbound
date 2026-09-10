@@ -21,7 +21,7 @@ const meta = {
       description: {
         component:
           'One operation and its declared request budget.\n\n' +
-          'The budget reads `spent / estimated`, with a **tilde** while the total is a floor rather than a fact — an operation that promised 50 requests and one that promised *at least* 50 behave very differently against a quota. The meter beneath encodes the same thing in form: an approximate remainder is hatched, not solid. The ✕ stops this operation alone; requests it has already dispatched are left to settle, because they have spent their budget and killing them would cost the quota without saving anything.',
+          'The budget reads `spent / estimated`, stated plainly — the number shown is the total the scheduler currently holds, with no qualifier attached. The meter beneath renders the same figures as solid fills. The ✕ stops this operation alone; requests it has already dispatched are left to settle, because they have spent their budget and killing them would cost the quota without saving anything.',
       },
     },
   },
@@ -74,7 +74,10 @@ export const ExactBudget: Story = {
   },
 };
 
-/** The same walk before the first `Link` header — the total is a floor. */
+/**
+ * The same walk before the first `Link` header. The scheduler still flags the
+ * total as a floor; the row renders it as a plain number all the same.
+ */
 export const ApproximateBudget: Story = {
   args: {
     operation: plan({

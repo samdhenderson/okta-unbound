@@ -5,7 +5,7 @@
  * whole hedged sentence into one or two words, so a wrong mapping does not look
  * wrong — it looks confident. Every row of the design's table is pinned here,
  * plus the two invariants that are not in the table: a proven membership
- * (ADR-0031) never wears a hedge, and the badge's caveat is
+ * (ADR-0031) never wears the deduction variant, and the badge's hover text is
  * `membershipSourceLine`'s own sentence rather than a rewrite of it.
  */
 import { describe, it, expect } from 'vitest';
@@ -42,10 +42,10 @@ describe('membershipVerdict — the design table, row by row', () => {
     expect(verdict.variant).toBe('primary');
   });
 
-  it('hedges an inferred rule attribution — same word, visibly qualified', () => {
+  it('names the rule for an inferred attribution, marked by variant rather than wording', () => {
     const verdict = membershipVerdict(membership({ attribution: 'inferred' }));
 
-    expect(verdict.label).toBe('Rule?');
+    expect(verdict.label).toBe('Rule');
     expect(verdict.variant).toBe('warning');
   });
 
@@ -57,7 +57,7 @@ describe('membershipVerdict — the design table, row by row', () => {
       }),
     );
 
-    expect(verdict.label).toBe('Rule · 2?');
+    expect(verdict.label).toBe('Rule · 2');
     expect(verdict.variant).toBe('warning');
   });
 
@@ -100,9 +100,10 @@ describe('membershipVerdict — the design table, row by row', () => {
 });
 
 /**
- * Not in the table, and forced by it: the table's fourth row says `DIRECT`,
- * **not deduced**. A membership the classifier only thinks was probably a manual
- * add may not wear the same badge as one it proved.
+ * The table's fourth row says `DIRECT`, **not deduced**. A membership the
+ * classifier deduced was a manual add now says `Direct` in the same words as one
+ * it proved, so the badge *variant* is the only thing left carrying the
+ * difference — which is what these pin.
  */
 describe('membershipVerdict — a deduced direct membership', () => {
   const deducedDirect = membership({
@@ -110,15 +111,21 @@ describe('membershipVerdict — a deduced direct membership', () => {
     rules: [],
     attribution: 'inferred',
   });
+  const provenDirect = membership({
+    membershipType: 'DIRECT',
+    rules: [],
+    attribution: 'exact',
+  });
 
-  it('never wears the same badge as a proven direct membership', () => {
-    expect(membershipVerdict(deducedDirect).label).not.toBe('Direct');
+  it('says Direct, but not with a proven membership’s badge variant', () => {
+    expect(membershipVerdict(deducedDirect).label).toBe('Direct');
     expect(membershipVerdict(deducedDirect).variant).toBe('warning');
+    expect(membershipVerdict(provenDirect).variant).toBe('success');
   });
 
   it('stays in the direct bucket rather than being swept into unresolved', () => {
-    // Its own source line says "Likely added directly"; a badge saying
-    // "Unresolved" beside that sentence would contradict the row it sits on.
+    // Its own source line says "Added directly"; a badge saying "Unresolved"
+    // beside that sentence would contradict the row it sits on.
     expect(membershipBucket(deducedDirect)).toBe('direct');
   });
 });
@@ -150,12 +157,12 @@ describe('membershipVerdict — a membership Okta answered for', () => {
     expect(proven.variant).toBe('success');
   });
 
-  it('carries no `?` in any proven label', () => {
+  it('never wears the deduction variant, whichever answer Okta gave', () => {
     for (const rules of [[], [{ id: '0prFAKErule00001', name: 'By title' }]]) {
       const proven = membershipVerdict(
         membership({ attribution: 'ambiguous', provenance: { source: 'okta', rules } }),
       );
-      expect(proven.label).not.toContain('?');
+      expect(proven.variant).not.toBe('warning');
     }
   });
 });

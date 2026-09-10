@@ -1,6 +1,7 @@
 # The reel's architecture
 
-Enough to work in the system without reading 1,700 lines of ADR.
+Enough to work in the system without reading 15,000 lines of it. The rules
+themselves are owned by `docs/reel.md`; this page is the map.
 
 ## The pipeline
 
@@ -11,7 +12,7 @@ walk (Playwright)  ->  clip.mp4 + manifest.json  ->  composition (Remotion)  -> 
 ```
 
 **The camera films only the walk.** No captions, no diagrams, no cursor, no
-chrome — those are all composed afterwards in React (ADR-0045). This is the
+chrome — those are all composed afterwards in React. This is the
 single most useful fact about the system: it means almost every change to the
 film is free of the camera.
 
@@ -53,7 +54,7 @@ SCRIPT  ->  Scene (chapter)  ->  Act  ->  { plan: BeatPlan[], marks: Mark[] }
 ```
 
 - A **chapter** is one tab, visited once. Every act in it must film the same
-  tab; `chapterTab()` throws otherwise (ADR-0053).
+  tab; `chapterTab()` throws otherwise.
 - An **act** is one capture, retimed. Its key is `<capture|piece-id>-<index>`,
   and that key is the narration filename, the `NARRATION.md` heading, and what
   `reel:look --at` resolves. One definition, in `reel/src/actKey.ts`.
@@ -79,7 +80,7 @@ generated `Target:` line, and `>` blockquote lines to read aloud. WAVs land at
 
 Narration is written **to fit the picture**, never the other way round: act
 lengths come from `buildRamp` at module scope, so a length that stretched to
-fit audio could throw and take the studio down (ADR-0073).
+fit audio could throw and take the studio down.
 
 ## The generated cut
 
@@ -92,38 +93,42 @@ directory, requires them, and runs the **real** `SCRIPT` through the **real**
 This replaced three text parsers and a hand-written port of `buildRamp` that
 carried the comment "This must be updated by hand." Those existed only because
 `script.ts` used to import React and could not be evaluated outside a bundler
-(ADR-0074).
+and could not be evaluated outside a bundler.
 
-## The five ADRs, as operative rules
+## The six rules the whole system rests on
 
-Read the records themselves only when changing one of these decisions.
+`docs/reel.md` owns these; they are restated here because every one of them
+explains a piece of the layout above. Break one and something fails in a way
+that looks like success.
 
-**ADR-0043** — the demo is a stage, the script is the director. Origin of the
-demo stage and the **em/en dash ban** (they read as a hitch in the voice as
-much as a kern problem); `check-verbs.mjs` enforces it.
+**The demo is a stage, the script is the director.** A demo story seeds state,
+mounts `App`, and stops — it carries no `play` function, and everything that
+moves is commanded from outside the browser by a walk. Origin also of the
+**em/en dash ban** (they read as a hitch in the voice as much as a kern
+problem); `check-verbs.mjs` enforces it.
 
-**ADR-0044** — a reel that can fail. Guards must be able to fail; a check
-nobody has watched fail is not evidence. `check.fixture.mjs` exists to prove
-the footage judge can fail.
+**A guard must be able to fail.** A check nobody has watched fail is not
+evidence, only a green light. `check.fixture.mjs` exists solely to prove the
+footage judge can fail.
 
-**ADR-0045** — capture thin, compose in React. The load-bearing one:
+**Capture thin, compose in React.** The load-bearing one:
 
 1. Playwright films only the walk; everything else is composed.
 2. Nothing in `reel/` is a capture-cache input.
 3. Every figure on screen was read off the live panel — the honesty rule.
 4. A synthetic component must never be mistakable for a screenshot.
 
-**ADR-0053** — a chapter is several acts on one tab. Why `users` is six acts
-and `rules` is two. `kind: 'tour' | 'deep'` survives on the manifest but the
-composition no longer reads it.
+**A chapter is several acts on one tab.** Why `users` is six acts and `rules`
+is two. `kind: 'tour' | 'deep'` survives on the manifest but the composition
+no longer reads it.
 
-**ADR-0073** — the reel speaks. Narration is Sam's own voice. The film must
-still work **muted**, so the margin marks stay. No spoken digit that is not a
-`figure:` reference.
+**The reel speaks, and must still work muted.** Narration is Sam's own voice,
+so the margin marks stay and carry the argument alone. No spoken digit that is
+not a `figure:` reference.
 
-**ADR-0074** — the cut is data, the vocabulary is a registry. The script names
-visuals by id and imports no components; `PIECES`/`DIAGRAMS`/`CARDS` share one
-shape; `Root.tsx` derives its compositions; the cut is emitted, not parsed.
+**The cut is data, the vocabulary is a registry.** The script names visuals by
+id and imports no components; `PIECES`/`DIAGRAMS`/`CARDS` share one shape;
+`Root.tsx` derives its compositions; the cut is emitted, not parsed.
 
 ## Where things are
 

@@ -29,6 +29,12 @@ You build and edit React components for this Chrome MV3 side panel to spec.
 - Status props use the shared `StatusType` (`success|warning|danger|info`).
 - Type props with a local `interface XProps`. Compose primitives; split large UIs
   into subcomponents.
+- **Copy asserts or withholds — it never hedges** (`docs/claims.md`). No "probably",
+  "likely", "approximately", no trailing `?` on a label the component is unsure of.
+  A value is either backed by evidence, in which case state it plainly, or it is
+  not, in which case say that it is not and why. Uncertainty is a defect, not a
+  disclosure: if a component can only render a qualified answer, the fix is to
+  refine what feeds it until it can state the answer — not to ship the qualifier.
 
 - Document with TypeDoc: a `@module`/`@description` header on the file, a summary
   comment on the component, and doc comments on each `XProps` field (they render as
@@ -45,9 +51,10 @@ for a search input done correctly — `Input` + `Icon`, no raw `<input>`, no inl
 
 ## Testing a component
 
-**A pure-render component gets a story, not a story and a test** (ADR-0023). Add a
-`.test.tsx` only when there is interaction, conditional state, or logic worth naming
-— every story already runs as a headless-browser render test (ADR-0011).
+**A pure-render component gets a story, not a story and a test** — never ship both
+for the same pure render (`docs/testing.md`). Add a `.test.tsx` only when there is
+interaction, conditional state, or logic worth naming — every story already runs as
+a headless-browser render test.
 
 Never assert on Tailwind class strings, inline styles, or props brokered to a mocked
 child. Assert the user-visible consequence: a role, a label, an `aria-*` state.
@@ -57,7 +64,7 @@ child. Assert the user-visible consequence: a role, a label, an `aria-*` state.
 `npm run type-check` and `npm run lint` are clean; the component is exported from the
 barrel; it carries its TypeDoc header + prop-level comments; a co-located
 `.stories.tsx` exists (Template A/B per `docs/component-explorer.md`) for a new or
-changed `shared`/leaf component, and it is axe-clean (ADR-0014 fails CI on a
-violation); a Testing Library test exists **if the component has behavior worth
+changed `shared`/leaf component, and it is axe-clean (an a11y violation fails CI);
+a Testing Library test exists **if the component has behavior worth
 testing** — delegate to `test-writer` via the Agent tool, or write it. Run
 `npx prettier --write` on touched files.

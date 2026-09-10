@@ -35,7 +35,8 @@ failure in this repo.
 - "3 structurally twin filter modules, 366 LOC" — the 366 is exact. One of the three is
   36 lines, has no sort and no count.
 - "20 hand-rolled error states, 10 loading" — actually 15 and 17, wrong in _both_
-  directions, and most of the 15 were mutation state that ADR-0009's batch runner owns.
+  directions, and most of the 15 were mutation state that the shared batch runner
+  owns (`docs/scheduler.md`).
 
 Two directions of error in one claim is the tell that nobody enumerated. A count off by
 a little in one direction is a stale number; a count off in both directions is a number
@@ -147,10 +148,10 @@ One production line survives: `src/shared/utils/membershipAnalysis.ts` calls it 
 attribute group membership. So `src/shared/ruleEvaluator.parity.test.ts` — proposed for
 retirement as "a superseded pin from the shared-AST refactor" — holds the primary
 coverage of the function on which every membership attribution depends. Its second table
-genuinely did migrate when ADR-0025 retired `canEvaluateClientSide`; its _first_ table
-never did. Retiring the file for the reason given would have deleted the coverage that
-matters most, and ADR-0022 requires a PR note saying what stays covered — which nobody
-could have written truthfully here.
+genuinely did migrate when a later decision retired `canEvaluateClientSide`; its _first_
+table never did. Retiring the file for the reason given would have deleted the coverage
+that matters most, and the house rule on test removal (`docs/testing.md`) requires a PR
+note saying what stays covered — which nobody could have written truthfully here.
 
 ### The general trap
 
@@ -184,15 +185,18 @@ propagated by name rather than re-read.
 
 ### Worked example
 
-ADR-0018 assigned `src/sidepanel/hooks/useAppsData.ts` and
+A published two-pattern taxonomy of visibility gating assigned
+`src/sidepanel/hooks/useAppsData.ts` and
 `src/sidepanel/components/AuthPoliciesTab.tsx` to "deferred re-arm". Both hold a ref to
 the last-loaded target and return early when it is unchanged — the defining behaviour of
-the _other_ pattern. The ADR's own warning under pattern 2 ("without the latch, 'gate on
-`isActive`' silently turns every tab revisit into a refetch") describes exactly the bug
-these two hooks avoid _by having a latch_. The document contradicted itself, and a
-refactor was about to be built on the wrong half.
+the _other_ pattern. That document's own warning under pattern 2 ("without the latch,
+'gate on `isActive`' silently turns every tab revisit into a refetch") describes exactly
+the bug these two hooks avoid _by having a latch_. The document contradicted itself, and
+a refactor was about to be built on the wrong half.
 
-A full audit then found **five** patterns, not two. ADR-0026 records them.
+A later audit corrected it: there are **five** patterns, not two. The two the house docs
+name — deferred re-arm and owed-load latch — are in `docs/state-management.md`; the rest
+you derive by reading the guards.
 
 ### The general trap
 

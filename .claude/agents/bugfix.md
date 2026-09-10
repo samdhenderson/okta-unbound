@@ -46,13 +46,18 @@ wrong to right.
   second, unrelated area, stop and note that in the PR rather than pulling
   it in — file a new backlog item instead (`CLAUDE.md`'s "where new items
   get filed" rule).
-- Never weaken an existing test's assertion to make it pass (ADR-0012). If
+- Never weaken an existing test's assertion to make it pass (`docs/testing.md`). If
   an existing test encoded the _wrong_ behavior your item is fixing, that's
   expected — update it to the correct expectation and say so explicitly in
   the PR description; that is not the same as silencing an unrelated
   failure.
 - No new `any`; validate any Okta response you touch with zod at the
-  content-script boundary (ADR-0006).
+  content-script boundary — every Okta response is untrusted (`docs/security.md`).
+- **A fix that can only produce a hedged answer is not finished** (`docs/claims.md`).
+  If the item's **Done when** would be satisfied by rendering "probably", "likely",
+  or a `?`-suffixed label, that is the defect restated, not the fix. Refine the
+  fix until the panel can assert the answer, or make it withhold explicitly and
+  say why — there is no third register.
 - If the bug is in security-sensitive territory (auth, session, messaging,
   logging, audit trail — several `DEBT.md` items are), the session script
   routes your diff through `security-logging-reviewer` before it's included

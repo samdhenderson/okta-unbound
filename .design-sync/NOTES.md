@@ -215,7 +215,7 @@ done; this section is what the _next_ run should distrust.
   `Input` 6/18 (the tail holds the `icon`/`trailing` adornment slots and the sm/md/lg
   size scale — **still the most worthwhile cap to raise**), `PageHeader` 6/15 (the tail
   holds every identity-region variant — back button, breadcrumbs, `identity`,
-  `identityNarrow`, `withoutIdentity` — i.e. most of ADR-0032's surface; **the second
+  `identityNarrow`, `withoutIdentity` — i.e. most of the page-header identity surface (`docs/page-shell.md`); **the second
   most worthwhile**), `IconButton` 6/11, `LoadingSpinner` 6/11, `EntityLink` 6/10 (tail
   is the whole copy-id feature added in #68), `Modal` 6/10, `Button` 6/9,
   `ScrollableList` 6/9, `CopyButton` 6/8, `SearchDropdown` 6/8, `ActionBar` 6/7,
@@ -267,7 +267,7 @@ done; this section is what the _next_ run should distrust.
 
 - **`ActionBar`'s scroll-driven merge is NOT verified by this sync, by construction.**
   The strip merges into the header over the first `--merge-range` (64px) of scroll
-  (`.dock-band`, ADR-0032). Compare cannot see it: captures force reduced motion, which
+  (`.dock-band`; see `docs/page-shell.md`). Compare cannot see it: captures force reduced motion, which
   is precisely what clears `.dock-band`'s `animation-name`, and neither panel is ever
   scrolled — so both sides show the strip's **resting** geometry and grade `match`
   honestly while saying nothing about the merge. Same blind-spot class as
@@ -280,7 +280,7 @@ done; this section is what the _next_ run should distrust.
 - **`[overflow-anchor:none]` ships only because a story happens to use it.** The
   conventions header instructs the design agent to put that class on the scroller (it
   is load-bearing — without it the pinned header's identity collapse fights Chrome's
-  scroll anchoring and the page loops; ADR-0032 §3b). The design project ships
+  scroll anchoring and the page loops; see `docs/page-shell.md`). The design project ships
   **static** compiled CSS scraped from the storybook build (`[CSS_FROM_STORYBOOK]`), so
   the class exists there only while something in `src/` or the stories still emits it —
   today `ActionBar.stories.tsx`'s `StickyInAScroller` and `App.tsx`. If both stop using

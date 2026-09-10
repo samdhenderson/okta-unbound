@@ -214,14 +214,14 @@ describe('carried forward from the bucket suite', () => {
         rows={[row()]}
         renderContextAction={() => <button type="button">Add</button>}
         renderMeta={() => (
-          <span>Likely added by rule: Contractors → VPN Access, Remote Access Baseline</span>
+          <span>Added by rule: Contractors → VPN Access, Remote Access Baseline</span>
         )}
       />,
     );
 
     const li = rowFor('VPN Access');
     const action = within(li).getByRole('button', { name: 'Add' });
-    const detail = within(li).getByText(/Likely added by rule/);
+    const detail = within(li).getByText(/Added by rule/);
 
     // The detail shares the label's column — that column is what truncates — and
     // the action lives outside it, so no length of rule name can push it away.

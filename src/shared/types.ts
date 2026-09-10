@@ -203,7 +203,7 @@ export interface FormattedRule {
    * the raw rule). Carried through the formatter because the user-path
    * membership classifier only ever sees this shape: without it,
    * `membershipAnalysis.isUserExcludedFromRule` cannot tell that a rule excludes
-   * the very user it is being credited for, and the row hedges `Rule?` where the
+   * the very user it is being credited for, and the row credits a rule where the
    * truth is `Direct` (D-048).
    */
   excludedUserIds?: string[];

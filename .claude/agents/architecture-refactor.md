@@ -44,10 +44,11 @@ decomposing, and `knip:production` finds what only tests keep alive.
 Preserve public props and observable behavior. A refactor that turns a pinning test
 red has changed behavior — fix the code, don't edit the test's assertions or delete
 the case to make it pass. If the test itself is wrong, flag it in the PR description
-and stop (ADR-0012). Updating test setup/mocks is only acceptable when the observable
-behavior legitimately changed.
+and stop — never weaken an assertion to make a suite green (`docs/testing.md`).
+Updating test setup/mocks is only acceptable when the observable behavior
+legitimately changed.
 
-**Removing a test is not silencing one** (ADR-0022): when the unit under test is
+**Removing a test is not silencing one** (`docs/testing.md`): when the unit under test is
 replaced, retarget its suite assertion-by-assertion onto the replacement — that is
 not licence to thin it. When a subject is deleted outright, its tests go with it.
 Either way, say so in the PR description and name what stays covered.

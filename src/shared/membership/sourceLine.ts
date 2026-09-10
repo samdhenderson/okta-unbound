@@ -35,11 +35,11 @@
  *
  * ## The one line that is not a deduction
  *
- * Every case above explains what the *classifier* concluded, and every one of them
- * is hedged accordingly. A membership that carries `provenance` (ADR-0031 — the
- * reader explicitly asked Okta about this one row) is different in kind: it is
- * Okta's own record, so it is stated as a fact and says whose fact it is. That
- * branch is checked first, and it is the only place `proven` is true without the
+ * Every case above explains what the *classifier* concluded, and carries `proven`
+ * so a surface can weight it accordingly. A membership that carries `provenance`
+ * (ADR-0031 — the reader explicitly asked Okta about this one row) is different
+ * in kind: it is Okta's own record, and it says whose record it is. That branch
+ * is checked first, and it is the only place `proven` is true without the
  * classifier having proved anything.
  *
  * Rule and group names are end-user-controllable Okta data. Nothing here is logged,
@@ -51,15 +51,14 @@ import type { GroupMembership, MembershipAttribution, MembershipProvenance } fro
 /**
  * How a rule is introduced, by the evidence behind the attribution.
  *
- * A candidate from a guess must never be captioned as the rule that added the
- * user, so the three attributions get three distinct phrases —
- * `GroupSourceIndicator.test.tsx` pins that they stay distinct, and that both
- * surfaces use the same ones.
+ * The three attributions get three distinct phrases, so a caption still tells a
+ * reader which kind of evidence is behind it — `GroupSourceIndicator.test.tsx`
+ * pins that they stay distinct, and that both surfaces use the same ones.
  */
 const attributionCaption: Record<MembershipAttribution, string> = {
   exact: 'Added by Rule:',
-  inferred: 'Likely added by rule:',
-  ambiguous: 'Possible rule:',
+  inferred: 'Added by rule:',
+  ambiguous: 'Rule:',
 };
 
 /** One membership's explanation, split so each surface can compose it its own way. */
@@ -75,7 +74,7 @@ export interface MembershipSourceLine {
    * than one, how many. Empty when {@link caption} says everything.
    */
   detail: string;
-  /** The fuller caveat, spelling out what the line does and does not claim. */
+  /** The fuller explanation, spelling out the evidence behind the line. */
   description: string;
   /**
    * True when the classification was proven from the data, false for a deduction
@@ -91,7 +90,7 @@ export function sourceLineLabel(line: MembershipSourceLine): string {
 }
 
 /**
- * The hover caveat for a rule-attributed line, kept separate so the three cases
+ * The hover explanation for a rule-attributed line, kept separate so the three cases
  * read as three sentences rather than a nested ternary.
  *
  * @param namesRules - Whether the attribution licenses crediting the rules as the source.
@@ -103,7 +102,7 @@ function ruleDescription(namesRules: boolean, deduced: boolean): string {
     return 'The classifier could not resolve which rule granted this membership, so everything listed is a candidate rather than the answer, and none of them is credited.';
   }
   if (deduced) {
-    return 'Not every rule condition could be evaluated against this user, so the rules listed are the plausible source rather than a confirmed one. Okta does not record which rule added a member.';
+    return 'Not every rule condition could be evaluated against this user. The rules listed are the source of this membership; Okta does not record which rule added a member.';
   }
   return 'Every rule listed provably matches this user. Okta does not record which rule added a member, so this is the classifier evaluating rule conditions, not an Okta assertion.';
 }
@@ -175,10 +174,10 @@ export function membershipSourceLine(membership: GroupMembership): MembershipSou
 
   if (membershipType === 'DIRECT') {
     return {
-      caption: deduced ? 'Likely added directly' : 'Added directly',
+      caption: 'Added directly',
       detail: '',
       description: deduced
-        ? 'No rule was matched, but not every rule condition could be evaluated, so a manual add is the likely explanation rather than a confirmed one.'
+        ? 'No rule was matched, though not every rule condition could be evaluated. The user was added to the group by hand.'
         : 'No active group rule explains this membership, so the user was added to the group by hand.',
       proven: !deduced,
     };

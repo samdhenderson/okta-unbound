@@ -22,7 +22,9 @@ validation. You report findings; you do not edit.
    identifiers and outcomes (action, endpoint, success), never contents.
 3. **Debug logs that ship enabled** in production (must be level-gated).
 4. **Unvalidated Okta responses** — JSON cast to `any`/an interface without a zod
-   parse at the content-script boundary (ADR-0006).
+   parse at the content-script boundary. Every Okta response is untrusted —
+   rule expressions, profile attributes and group names are end-user-controllable
+   (`docs/security.md`).
 5. **New `any`** in the message-passing or API layer.
 6. **Two API paths** — direct side-panel→content calls that bypass the scheduler
    rate limiter.

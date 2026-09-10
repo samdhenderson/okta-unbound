@@ -51,10 +51,13 @@ There is no backend and no telemetry, so these are task-shaped, not dashboards.
   tabs and a hand-read rule expression to one panel and under a minute.
 - **O2 — No blind writes.** Every mutating verb shows a preflight or predicted
   impact before it commits. This is an invariant, not a per-feature choice.
-- **O3 — Every answer is defensible.** No claim on screen without a named source,
-  or an explicit `unevaluable` / `likely-*` hedge. Already enforced in code by
-  ADR-0020, ADR-0031 and ADR-0036 — this is the moat. Anyone can list groups;
-  nobody else refuses to guess.
+- **O3 — Every answer is defensible.** No claim on screen without evidence behind
+  it. Where the evidence is missing or was deduced, the panel names the absence
+  and its reason rather than qualifying the claim: it **asserts or withholds, and
+  never hedges**. Enforced in code, and the evidence is carried in the type rather
+  than in the wording, so copy can be edited without moving a correctness gate.
+  See `claims.md` — this is the moat. Anyone can list groups; nobody else refuses
+  to guess.
 - **O4 — Zero trust cost.** Passes an enterprise extension review cold. See
   `security.md`. Already true; protect it.
 - **O5 — Sprawl reduction.** The only outcome measurable in-product: clutter
@@ -67,8 +70,8 @@ There is no backend and no telemetry, so these are task-shaped, not dashboards.
 > sentence that no other tab answers, it is not a tab.
 
 > **Rule 2 — An action lives on the ActionBar of the entity it mutates, and
-> nowhere else.** ADR-0039 says this. A verb reachable only from a
-> context-detected surface is a bug, not a shortcut.
+> nowhere else.** A verb reachable only from a context-detected surface is a
+> bug, not a shortcut.
 
 ### The tab map
 
@@ -88,25 +91,26 @@ There is no backend and no telemetry, so these are task-shaped, not dashboards.
 entities that already have proper detail rungs — same member explorer, fewer
 sections, plus two buttons that duplicate `GroupActionBar`. Home replaces it with
 the one thing a detail rung structurally cannot duplicate: an org-scoped report.
-ADR-0040 was written to unblock exactly this and says so in its own Context
-section; `I-012` (tiered snapshot depth) is the gate.
+The background-owned org snapshot exists to unblock exactly this; `I-012`
+(tiered snapshot depth) is the gate.
 
 ## Write verbs — the Unbind bar
 
-A write earns its place by clearing this bar. State each answer in the feature's
-ADR:
+A write earns its place by clearing this bar. Answer all four before building —
+in the PR description, or in an ADR if the approach is one a reviewer could
+reasonably disagree with:
 
 1. **What the console does instead, and why ours is better.** If the console does
    it well, we do not build it.
 2. **The preflight** — what the admin sees before committing (O2).
 3. **The reversal** — what is captured so undo can _restore_, not just log.
 4. **The blast radius** — never write an attribute a feeding rule reads without
-   naming the rule and the membership change it would cause (ADR-0036).
+   naming the rule and the membership change it would cause.
 
 ### Three reversibility classes
 
-ADR-0039 sorts verbs into reversible-on-the-row and destructive-behind-More. A
-third class exists and needs its own treatment:
+Verbs sort into reversible-on-the-row and destructive-behind-More
+(`action-bars.md`). A third class exists and needs its own treatment:
 
 - **Reversible** — defaults to the action row.
 - **Destructive but restorable** — behind **More**, confirm modal, prior state
@@ -139,7 +143,7 @@ Recorded so it is not re-litigated. See also the parked lists in
   surface that cannot be preflighted, explained, audited meaningfully, or undone,
   because it has no known semantics. It breaks O2 and O3 by construction. If the
   Explorer ever writes, it replays documented operations; it does not accept
-  arbitrary bodies. (ADR-0041 keeps it GET-only today.)
+  arbitrary bodies. It is GET-only today.
 - **Anything that sends data to a third party.** Kills O4 outright.
 - **Cross-tenant work.** The single-tab session model cannot address two tenants,
   and persisting credentials to fix that is not on the table.

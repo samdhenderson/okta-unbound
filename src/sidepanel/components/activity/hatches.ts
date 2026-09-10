@@ -18,7 +18,6 @@
  * | {@link QUEUED_DASHES}      | 90°    | work waiting its turn                 |
  * | {@link COOLDOWN_HATCH}     | 135°   | this bucket is gated                  |
  * | {@link UNKNOWN_HATCH}      | 135°   | there is no budget reading to draw    |
- * | {@link PLANNED_HATCH}      | 135°   | declared but not yet enqueued         |
  *
  * ## Why they live here
  *
@@ -34,7 +33,7 @@
  *
  * ## Motion
  *
- * All four are static. There is no marching-ants animation to suppress under
+ * All three are static. There is no marching-ants animation to suppress under
  * `prefers-reduced-motion`, which is why the rack has exactly one form rather
  * than a reduced-motion variant (ADR-0027).
  */
@@ -76,13 +75,3 @@ export const COOLDOWN_HATCH =
  */
 export const UNKNOWN_HATCH =
   'repeating-linear-gradient(135deg, var(--color-neutral-200) 0 1px, transparent 1px 5px)';
-
-/**
- * Diagonal hatch for the **planned** share of an operation's pipeline meter —
- * requests a plan has declared but not yet enqueued (ADR-0060).
- *
- * Hatched rather than tinted because "provisional" is the thing being said, and
- * a fourth solid fill on a six-pixel meter would not survive the reader.
- */
-export const PLANNED_HATCH =
-  'repeating-linear-gradient(135deg, var(--color-neutral-400) 0 3px, transparent 3px 6px)';

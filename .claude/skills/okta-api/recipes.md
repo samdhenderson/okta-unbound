@@ -64,7 +64,7 @@ rule lookup each): **501**. Embed unavailable: 4 + rules pages.
 
 **Verified.** `shared/membership/memberRuleAttribution` (three-state read),
 `shared/membership/groupSource` (counting modes), `useOktaApi/groupMembers`
-(the preserved-parameter walk). ADR-0020, ADR-0021.
+(the preserved-parameter walk).
 
 ---
 
@@ -240,7 +240,7 @@ assignment view. The effective-membership expansion in step 4 is what costs.
 - Cache step 3 across users; it is the same payload for every user in the org.
 
 **Verified.** `shared/utils/membershipAnalysis`, `shared/ruleEvaluator`,
-`useOktaApi/getUserGroupsRequest`. ADR-0021.
+`useOktaApi/getUserGroupsRequest`.
 
 ---
 

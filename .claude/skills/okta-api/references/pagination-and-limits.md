@@ -143,7 +143,7 @@ A working strategy, proven on large scans: `[verified: shared/scheduler/apiSched
   `/api/v1/{first resource segment}` — coarser than Okta's real buckets, which is the
   safe direction: merging two observations that share a bucket costs precision,
   splitting two that do not lets a budget be spent twice.
-  `[verified: shared/scheduler/rateLimitDetector → bucketOf, ADR-0059]`
+  `[verified: shared/scheduler/rateLimitDetector → bucketOf]` (`docs/scheduler.md`)
 - A family you have **not** observed has no budget of its own to plead. Fall back to
   the most restrictive observation anywhere rather than letting it run unthrottled.
 - Enter a cooldown when the projected remainder after in-flight requests falls below
@@ -156,7 +156,7 @@ A working strategy, proven on large scans: `[verified: shared/scheduler/apiSched
   below it so your traffic is not what trips the org's own alarm. It is a Super Admin
   surface, so **403 is an ordinary answer**: fall back to your default rather than
   treating it as an error. `[docs]`
-  `[verified: shared/scheduler/rateLimitSettings, ADR-0059]`
+  `[verified: shared/scheduler/rateLimitSettings]` (`docs/scheduler.md`)
 - **A 429 is a non-ok response, and its headers are the ones that matter most.** If
   your transport drops headers on the error path, your throttling is steered only by
   the requests that succeeded — the one response telling you when to come back

@@ -35,7 +35,7 @@ cannot be planned, and adding one is a camera change. Say so and stop.
 - **A beat you plan must exist in the footage.** Check `captures/<id>.json`'s
   `beats` first. A plan naming a beat the manifest lacks fails the render.
 - **A chapter is one tab, visited once.** Every act in a chapter must film the
-  same tab; `chapterTab()` throws otherwise (ADR-0053).
+  same tab; `chapterTab()` throws otherwise (`docs/reel.md`).
 - **An act key carries its index**, so inserting or removing an act renames
   every act after it — and an act key is a narration WAV filename. Expect
   `check-vo.mjs` to report the old names as dead audio, and update
@@ -44,7 +44,7 @@ cannot be planned, and adding one is a camera change. Say so and stop.
   builds one, and `script.ts` imports no components.
 - **Narration fits the picture, never the reverse.** Act lengths come from
   `buildRamp`; a length that stretched to fit audio could throw at module scope
-  and take the studio down (ADR-0073).
+  and take the studio down (`docs/reel.md`).
 
 ## The two commands you must run after any cut change
 
@@ -66,7 +66,13 @@ acts before this was automated.
   line.
 - **No em or en dashes.** They read as a hitch in the voice.
 - **The film must work muted.** The margin marks carry the argument on their
-  own; narration is additional, never load-bearing (ADR-0073).
+  own; narration is additional, never load-bearing (`docs/reel.md`). A feed
+  autoplay, a phone on silent and a screen reader are all real audiences.
+- **A slide asserts or withholds; it never hedges** (`docs/claims.md`). The film
+  argues the same way the panel does: state the fact, or do not put it on screen.
+  No "roughly", "about", "probably", no `~` on a figure. If a mark can only be
+  written with a qualifier, the figure behind it is the problem — get the number
+  the walk should have recorded, or cut the mark.
 
 ## Look at it
 
