@@ -26,7 +26,7 @@
  * exception is gone, and the ordinary equality check below covers the group.
  */
 import { describe, expect, it } from 'vitest';
-import { tryEvaluateRuleExpression } from '../../shared/ruleEvaluator';
+import { tryEvaluateRuleExpression, type RuleGroupContext } from '../../shared/ruleEvaluator';
 import { GROUP, RULE_FED_GROUPS, demoGroupMembers } from './memberships';
 import { fakeId } from './org';
 import { currentGroupsById, demoRules } from './snapshot';
@@ -92,6 +92,27 @@ describe('every rule-fed demo group states its reason', () => {
   });
 });
 
+/**
+ * Every user's complete group list, in the shape `isMemberOf*` matches against.
+ *
+ * Built once, from the derived memberships — which is the same thing the panel
+ * hands the evaluator at runtime, and the thing it used to omit. `isMemberOf*`
+ * is two-valued over the list it is given (ADR-0021), so a partial list here
+ * would not weaken the assertion below, it would invert it.
+ */
+const groupContextByUser = ((): ReadonlyMap<string, RuleGroupContext> => {
+  const byUser = new Map<string, { id: string; name: string }[]>();
+  for (const [id, members] of demoGroupMembers()) {
+    const name = currentGroupsById().get(id)?.profile?.name ?? id;
+    for (const userId of members) {
+      const held = byUser.get(userId) ?? [];
+      held.push({ id, name });
+      byUser.set(userId, held);
+    }
+  }
+  return byUser;
+})();
+
 describe('the declared expression selects the derived membership', () => {
   for (const entry of declared) {
     const name = groupName(entry.ordinal);
@@ -101,7 +122,11 @@ describe('the declared expression selects the derived membership', () => {
       const derived = new Set(demoGroupMembers().get(groupId(entry.ordinal)) ?? []);
       const evaluated = new Set(
         demoUsers
-          .filter((user) => tryEvaluateRuleExpression(expression, user) === 'match')
+          .filter(
+            (user) =>
+              tryEvaluateRuleExpression(expression, user, groupContextByUser.get(user.id) ?? []) ===
+              'match',
+          )
           .map((user) => user.id),
       );
 

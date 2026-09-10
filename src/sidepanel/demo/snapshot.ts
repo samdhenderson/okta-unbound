@@ -157,6 +157,11 @@ const groupTemplates: readonly RawOktaGroup[] = [
   ),
   group(GROUP.salesEmeaLegacy, 'Sales - EMEA legacy', 'Superseded by Sales - All'),
   group(GROUP.verifyRollout, 'Okta Verify Rollout', 'Pilot cohort for the Okta Verify rollout'),
+  group(
+    GROUP.contractorsAll,
+    'Contractors - All',
+    'Rule-assigned: everyone in either regional contractor group',
+  ),
 ];
 
 /**
@@ -257,6 +262,15 @@ export const demoRules: OktaGroupRule[] = [
   // declaration was missing, so correcting a department moved a group the
   // preview had no way to predict.
   rule(21, 'Engineering → Datadog', 'user.department == "Engineering"', [fakeId('00g', 34)]),
+  // The org's one group-membership rule. A condition that asks about another
+  // group cannot be answered from the profile, only from the user's group list —
+  // so this row is what proves the evaluation is given one. See `RULE_FED`.
+  rule(
+    22,
+    'Regional contractors → Contractors - All',
+    `isMemberOfAnyGroup("${fakeId('00g', 15)}", "${fakeId('00g', 16)}")`,
+    [fakeId('00g', 38)],
+  ),
 ];
 
 /**
