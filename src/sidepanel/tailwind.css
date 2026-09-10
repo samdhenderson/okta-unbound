@@ -411,13 +411,13 @@
 @media (width >= 560px) {
   :root {
     --sp-gutter: 20px;
-    --sp-rung: 24px;
+    --sp-rung: 16px; /* holds at the default step: 24px read as drift, not breathing */
     --sp-card: 20px;
     --sp-row-y: 12px;
     --sp-row-x: 16px;
     --sp-inline: 10px;
     --sp-field: 12px;
-    --sp-toolbar: 16px;
+    --sp-toolbar: 12px;
     --merge-range: 13px;
   }
 }
@@ -448,13 +448,13 @@
 
 [data-density='comfortable'] {
   --sp-gutter: 20px;
-  --sp-rung: 24px;
+  --sp-rung: 16px; /* holds at the default step: 24px read as drift, not breathing */
   --sp-card: 20px;
   --sp-row-y: 12px;
   --sp-row-x: 16px;
   --sp-inline: 10px;
   --sp-field: 12px;
-  --sp-toolbar: 16px;
+  --sp-toolbar: 12px;
   --merge-range: 13px;
 }
 
