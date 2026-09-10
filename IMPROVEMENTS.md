@@ -78,6 +78,19 @@ block says they mean — same vocabulary, one definition, defined there.
   deliverable above is therefore a fresh record, not an edit to an existing one.
   Status stays `research:awaiting-review` deliberately: only Sam's acceptance
   moves it to `open`, never the session that wrote it.
+- **The record now exists:**
+  [ADR-0001](docs/adr/0001-rule-assessment-certainty.md), on
+  `fix/2026-09-09-rule-assessment-certainty`. Two deliberate departures from
+  the scoping above, both needing Sam's ruling:
+  1. It is `Status: Accepted`, not `Proposed`, and its PR **does** touch `src/`.
+     Sam directed the implementation and the record in one branch, and
+     `docs/adr/README.md` is explicit that a record sitting at `Proposed` while
+     its code ships is worse than no record.
+  2. It resolves date/time semantics by **refusing** them rather than proposing
+     an arity, because the org's timezone is not readable from where the panel
+     evaluates. Point 3 above asked for a proposal; the answer is that there
+     isn't one that can be made certain, which the never-guess principle the
+     same point insists on turns into a refusal.
 
 ### I-009 · EntityLink's default copy-id label collides when two entities share a name
 
@@ -901,7 +914,7 @@ block says they mean — same vocabulary, one definition, defined there.
   outcome. Existing rung tests keep passing unchanged; if the badge markup
   differs, the assertions are retargeted assertion-by-assertion, not relaxed.
 - **Risk:** Low — same input, same intended output, covered by existing tests.
-- **Status:** open
+- **Status:** claimed:fix/2026-09-09-rule-assessment-certainty
 - **Related:** `I-016` (promoted the shared renderer), `I-031` (found this)
 
 ### I-037 · A resolver rebuilt each render defeats the memo it feeds
@@ -924,7 +937,9 @@ block says they mean — same vocabulary, one definition, defined there.
   holds. No behaviour changes; no new test is warranted for a pure-performance
   fix the house test rules would call untestable through the DOM.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** claimed:fix/2026-09-09-rule-assessment-certainty — the private map
+  is gone entirely; `useGroupNameResolver` returns a `useCallback` resolver, so
+  the memo holds for every consumer rather than being fixed at one call site.
 - **Related:** `I-016` (promoted the component and found this)
 
 ### I-038 · The demo's intern cohort is refilled by an inactive rule

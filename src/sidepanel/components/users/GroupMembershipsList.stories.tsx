@@ -152,7 +152,9 @@ const meta = {
           'Everything else is behind the row’s disclosure, in one order: the full explanation, a card per ' +
           'attributed rule (the rule, the profile attributes its condition **reads**, and the ' +
           'condition explained clause by clause against the user), any apps the group also grants, ' +
-          'the **Ask Okta** proof action (ADR-0031 — one API call, and never on a collapsed row), ' +
+          'the **Ask Okta** proof action (ADR-0031 — one API call, and never on a collapsed row; ' +
+          'the pane also fires it automatically for anything it could not settle itself, which is ' +
+          'the last rung of ADR-0001’s certainty ladder), ' +
           'and the Okta deep link.\n\n' +
           'Every badge here is a *deduction*: `GET /api/v1/users/{id}/groups` carries no attribution ' +
           'embed (ADR-0020). A row carrying `provenance` is the exception — that is Okta’s own ' +
@@ -205,7 +207,7 @@ const meta = {
     },
     onProveMembershipSource: {
       description:
-        'Asks Okta which rules manage one membership (`GET /api/v1/groups/{groupId}/users/{userId}/group-rules`). Supplied, each opened row gains an "Ask Okta" action. **One API call per row**, so it only ever runs from that click.',
+        'Asks Okta which rules manage one membership (`GET /api/v1/groups/{groupId}/users/{userId}/group-rules`). Supplied, each opened row gains an "Ask Okta" action, **and** the pane asks automatically for every row whose `attribution` is not `exact` — the backstop rung of ADR-0001’s certainty ladder. **One API call per row**, once per row, and never for a membership already settled.',
     },
   },
 } satisfies Meta<typeof GroupMembershipsList>;
@@ -366,6 +368,9 @@ export const WithAppGrants: Story = {
  */
 export const ProvableAgainstOkta: Story = {
   args: {
+    // Rendered off screen so the automatic backstop stays inert and this story
+    // shows what the *click* does. `AskedAutomatically` covers the other path.
+    isActive: false,
     memberships: [ruleAmbiguous, direct],
     onProveMembershipSource: async () => ({
       state: 'rules',
@@ -395,6 +400,9 @@ export const ProvableAgainstOkta: Story = {
  */
 export const ProvenManualAdd: Story = {
   args: {
+    // Rendered off screen so the automatic backstop stays inert and this story
+    // shows what the *click* does. `AskedAutomatically` covers the other path.
+    isActive: false,
     memberships: [ruleAmbiguous],
     onProveMembershipSource: async () => ({ state: 'no-rules' }),
   },
@@ -414,6 +422,9 @@ export const ProvenManualAdd: Story = {
  */
 export const ProofUnanswered: Story = {
   args: {
+    // Rendered off screen so the automatic backstop stays inert and this story
+    // shows what the *click* does. `AskedAutomatically` covers the other path.
+    isActive: false,
     memberships: [ruleAmbiguous],
     onProveMembershipSource: async () => ({ state: 'unknown' }),
   },
@@ -424,6 +435,33 @@ export const ProofUnanswered: Story = {
     );
     await userEvent.click(canvas.getByRole('button', { name: /Ask Okta/ }));
     await expect(await canvas.findByText(/Okta did not answer/)).toBeInTheDocument();
+  },
+};
+
+/**
+ * The ladder's last rung, with nobody clicking anything.
+ *
+ * A membership the panel could not settle for itself is not left hedged until a
+ * reader happens to open its row — uncertainty is a defect, not a disclosure. So
+ * the pane asks Okta on arrival, once per unsettled row, and the row is already
+ * carrying Okta's own answer by the time it is opened. A settled row spends
+ * nothing.
+ */
+export const AskedAutomatically: Story = {
+  args: {
+    memberships: [ruleAmbiguous, ruleExact],
+    onProveMembershipSource: async () => ({
+      state: 'rules',
+      rules: [{ id: '0prFAKErule00003', name: 'Reviewers — by title' }],
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Show how Security Reviewers was granted' }),
+    );
+    // No click on "Ask Okta" anywhere above: the answer is already there.
+    await expect(await canvas.findByText(/Okta confirms/)).toBeInTheDocument();
   },
 };
 

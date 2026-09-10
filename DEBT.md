@@ -1192,9 +1192,10 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
   `no-match`. That is the honest reading and the reason the change is worth
   making, but it is a visible behaviour change on live data, so it wants the
   `okta-claim-check` skill run over a real org's rules before it lands.
-- **Status:** open
+- **Status:** claimed:fix/2026-09-09-rule-assessment-certainty
 - **Related:** `I-026` (found it); the parse-never-guess rule for untrusted
-  expressions
+  expressions, and [ADR-0001](docs/adr/0001-rule-assessment-certainty.md) §4,
+  which states the resulting absent/null/false distinction as a house rule.
 
 ### D-115 · One `error` field serves two independent loads
 
@@ -1574,6 +1575,19 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
   correct rather than accidental. Until that lands, do **not** invent a visible
   difference — it would be re-hedging under another name. If the refinement is
   abandoned, this item reopens as a copy decision.
+- **The refinement is landing on `fix/2026-09-09-rule-assessment-certainty`,
+  which changes this item's premise rather than closing it.** The memberships
+  pane now evaluates with the user's full group list, reads rule-level group
+  exclusions, and asks Okta automatically about anything it still cannot settle
+  (the certainty ladder,
+  [ADR-0001](docs/adr/0001-rule-assessment-certainty.md)). A `deduced`
+  attribution therefore becomes rare rather than routine — but it does not
+  become impossible: `isMemberOfGroupNameRegex` is a permanent refusal, and a
+  rung-4 request Okta declines leaves the deduction standing. Re-verify against
+  a real org once that branch merges: if `deduced` survives only in those two
+  cases, the near-identical captions are correct and this closes; if it is still
+  common, the ladder has a hole and the finding belongs in a new item, not in a
+  restored qualifier.
 - **Risk:** Low to change, high to change _wrongly_. The obvious fix — put a
   qualifier back on the deduced caption — is the thing the de-hedging pass
   deliberately removed.

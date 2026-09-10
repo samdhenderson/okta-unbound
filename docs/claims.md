@@ -60,6 +60,59 @@ The three shapes this takes:
 | Evidence is missing or deduced | A named absence: `Not predicted`, `Unresolved`, and the reason |
 | The fact was never loaded      | Nothing at all — see **Absent is not zero**                    |
 
+### Going and finding out has a written cost
+
+"Make it certain" would be an unbounded instruction without a stopping point, so
+rule assessment states its own. An attribution claim comes from the first rung
+that can answer, and no rung may be skipped:
+
+1. **Okta's own embed** — `_embedded['group-rules']` where the roster carried it.
+   Free.
+2. **The evaluator, given the user's complete group list.** No API traffic, and
+   where nearly every answer should come from. A miss here is a defect _here_.
+3. **The org rules listing** — one paginated `GET /api/v1/groups/rules`, shared
+   org-wide through the entity cache, so the org pays once.
+4. **`GET /groups/{gid}/users/{uid}/group-rules`, automatically**, for what
+   survives rungs 1–3 unsettled. One call per unsettled row, once per row, only
+   while the surface is on screen.
+
+Rung 4 is the only one that scales with the row count. **If it fires often, fix
+rung 2** — the cost is a symptom, never a budget to spend. The reasoning behind
+each rung, and the API budget it commits to, is
+[ADR-0001](adr/0001-rule-assessment-certainty.md).
+
+### Absent, null, and false are three facts, not one
+
+The evaluator keeps them apart, and so must anything reading it:
+
+| The attribute is…             | The answer is                     |
+| ----------------------------- | --------------------------------- |
+| Present, holding a value      | That value                        |
+| Present and explicitly `null` | `null`                            |
+| Absent from the profile       | `unevaluable`, `attribute-absent` |
+| Present but not a scalar      | `unevaluable`, `operand-type`     |
+
+Reading an absent attribute as `null` is how `user.status == "ACTIVE"` came to
+return `no-match` for every user in an org where it matches nearly everyone. A
+top-level Okta user field (`status`, `created`, `lastLogin`, …) resolves from the
+user root through an explicit allow-list, because it is real Okta EL and is not
+on the profile.
+
+### Never guess a function's semantics
+
+Expression coverage grows only where Okta's behaviour is exactly pinnable. A
+function whose contract we would have to infer is not a gap to fill: a guess
+produces a confident wrong answer, which is strictly worse than the
+`unevaluable` it replaces. `shared/ruleEvaluator.ts`'s allow-list carries the
+reason for each refusal beside it, so a settled refusal stays distinguishable
+from a stale one.
+
+`isMemberOfGroupNameRegex` is refused permanently and on security grounds: the
+pattern is tenant-authored, JS `RegExp` backtracking cannot be bounded, and
+evaluating one hands an expression author a denial-of-service lever inside the
+admin's own browser. The reason sentence says the check was not performed. It
+never says the user failed it.
+
 ## Evidence is structural, never lexical
 
 **A decision about correctness never reads a string meant for a human.**
@@ -179,14 +232,20 @@ of three, taken because the first two were not available _yet_ — so it comes w
 an obligation: file the gap, so that the feature gets refined into one that can
 guarantee its answer rather than sitting behind a reason code forever.
 
-Two are open now, and both are tracked in `DEBT.md`:
+Both of the gaps this section used to list are now closed, which is what the
+obligation is for:
 
-- Blast radius cannot see a rule's exclusion list, because a cache-served
-  `FormattedRule` drops `conditions.people`. Fetching it removes one of the three
-  reasons the engine can be wrong.
-- A deduced membership attribution can be established on demand — that is what
-  the per-membership proof path already does. Running it automatically turns a
-  withheld prediction into an asserted one, honestly.
+- Blast radius could not see a rule's exclusion list, because a cache-served
+  `FormattedRule` dropped `conditions.people`. `FormattedRule` now carries
+  `excludedGroupIds` beside `excludedUserIds`, and both routes are read.
+- A deduced membership attribution was established only on demand, behind a
+  per-row click. It is now the ladder's fourth rung and runs automatically for
+  anything the first three could not settle.
+
+What remains withheld is `isMemberOfGroupNameRegex`, and that one is not
+scheduled work — it is a stated permanent refusal on security grounds. It is the
+only entry allowed to sit here indefinitely, and the reason is written down
+rather than implied.
 
 Closing a gap is always the better answer than loosening a rule here. The rule is
 not the obstacle — it is the thing that keeps the gap visible until someone
