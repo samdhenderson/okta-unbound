@@ -1,7 +1,7 @@
 /**
  * @module sidepanel/components/activity/CondensedBar
- * @description The activity bar's condensed line, for a panel too narrow to fit
- * the full row.
+ * @description The activity bar's condensed line — the bar's default state at
+ * every width.
  *
  * Status, rate-limit headroom, and a processed/progress tally — and **no bars**.
  * The rack, the reset timeline and the operation ledger are expanded-only, not
@@ -9,6 +9,12 @@
  * as anything, and the bucket rack is the one section of the bar whose height
  * grows with what the org has been doing. The condensed line is a fixed height
  * by construction.
+ *
+ * That height is **36px**: `py-1` (8px) around a 24px control row, plus the
+ * bar's 4px progress track. It was 60px, on `py-2.5` around a 36px `sm` button.
+ * Every figure on this line is one short string, so the row's height was set
+ * entirely by its own chrome — and this band is docked over the content for the
+ * whole session, which makes its height the most expensive thing about it.
  *
  * This is a **separate tree** from the full layout, swapped rather than
  * cross-faded (ADR-0008) — see {@link module:sidepanel/components/activity/barParts}.
@@ -31,7 +37,7 @@ export interface CondensedBarProps {
  * @param props - See {@link CondensedBarProps}.
  */
 const CondensedBar: React.FC<CondensedBarProps> = ({ view, actions }) => (
-  <div className="flex items-center gap-(--sp-inline) px-(--sp-gutter) py-2.5 text-xs">
+  <div className="flex items-center gap-(--sp-inline) px-(--sp-gutter) py-1 text-xs">
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <StatusDot busy={view.busy} colorVar={view.statusColorVar} />
       {view.operationActive && view.operationName ? (

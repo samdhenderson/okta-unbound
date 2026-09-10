@@ -23,7 +23,7 @@ const meta = {
         component:
           'Pure presentation of the unified activity bar — a fixed bottom bar with a deliberately stable layout.\n\n' +
           'The status region, the one-line summary (queue · rate · ETA) and the action area stay mounted, so values coming and going swap text in place instead of reflowing the row. Four boxed metric tiles used to sit where the summary line is; **Active** is gone from them entirely, because the in-flight count changes several times a second and the bucket rack below already draws it.\n\n' +
-          'Beneath the row sits the rack: one lane per rate-limit family that has been exercised, with badges and cooldown hatching folded onto the lane. On a narrow panel the bar collapses to a condensed line — status + rate + a processed/progress tally, and **no bars at all** — behind a chevron toggle. All state arrives as an already-merged `ActivityView`; timers and context wiring live in `useActivityBar`.',
+          'Beneath the row sits the rack: one lane per rate-limit family that has been exercised, with badges and cooldown hatching folded onto the lane. Behind a chevron toggle — offered at **every** panel width, because the bar is docked over the content whatever the width — it collapses to a 36px condensed line: status + rate + a processed/progress tally, and **no bars at all**. That condensed line is the state the bar boots into. All state arrives as an already-merged `ActivityView`; timers and context wiring live in `useActivityBar`.',
       },
     },
   },
@@ -36,13 +36,9 @@ const meta = {
     onCancelOperation: {
       description: 'Stops one declared operation, leaving every other one running.',
     },
-    collapsible: {
-      description:
-        'Whether the panel is narrow enough to offer collapsing; when `true` the chevron toggle is shown.',
-    },
     collapsed: {
       description:
-        'Whether the bar is currently condensed to its essentials. Only meaningful when `collapsible`.',
+        'Whether the bar is currently condensed to its essentials. The chevron that toggles it is always rendered — there is no width or prop that withdraws it.',
     },
     onToggleCollapse: { description: 'Toggles between the condensed and full layouts.' },
   },
@@ -185,12 +181,12 @@ export const ProcessedWithFailures: Story = {
 };
 
 /**
- * Narrow panel, condensed to essentials — status, rate and the processed tally,
- * with a chevron to reveal the rest. This is the idle small-screen default.
+ * Condensed to essentials — status, rate and the processed tally, with a chevron
+ * to reveal the rest. This is the bar's default state at every panel width, and
+ * the 36px line the scroll root reserves space for.
  */
 export const CollapsedIdle: Story = {
   args: {
-    collapsible: true,
     collapsed: true,
     view: {
       ...idleView,
@@ -201,10 +197,9 @@ export const CollapsedIdle: Story = {
   },
 };
 
-/** Narrow panel, condensed, with an operation running — progress shows in place of the tally. */
+/** Condensed, with an operation running — progress shows in place of the tally. */
 export const CollapsedOperation: Story = {
   args: {
-    collapsible: true,
     collapsed: true,
     view: {
       ...idleView,
@@ -227,10 +222,9 @@ export const CollapsedOperation: Story = {
   },
 };
 
-/** Narrow panel with the user expanded — the full stats show and wrap onto multiple lines. */
-export const NarrowExpanded: Story = {
+/** Expanded by the reader — the full stats show, wrapping onto multiple lines in a narrow panel. */
+export const Expanded: Story = {
   args: {
-    collapsible: true,
     collapsed: false,
     view: {
       ...idleView,

@@ -63,7 +63,7 @@ const base: ActivityView = {
 };
 
 const actions = (
-  <Button variant="danger" size="sm" disabled>
+  <Button variant="danger" size="xs" disabled>
     Cancel
   </Button>
 );
@@ -89,7 +89,7 @@ export const Running: Story = {
       canCancel: true,
     },
     actions: (
-      <Button variant="danger" size="sm">
+      <Button variant="danger" size="xs">
         Cancel
       </Button>
     ),

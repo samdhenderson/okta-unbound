@@ -223,7 +223,7 @@ const OverActivityBar: React.FC<React.ComponentProps<typeof Modal>> = (args) => 
       <Modal {...args} isOpen={open} onClose={() => setOpen(false)} />
       <div
         data-testid="activity-bar-stand-in"
-        className="fixed bottom-0 left-0 right-0 z-50 border-t border-neutral-200 bg-white px-5 py-2.5 text-xs text-neutral-700"
+        className="fixed bottom-0 left-0 right-0 z-50 border-t border-neutral-200 bg-white px-5 py-1 text-xs text-neutral-700"
       >
         Idle · 0 queued — stands in for the fixed ActivityBar band
       </div>

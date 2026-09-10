@@ -9,11 +9,27 @@
  * made the old two-bar design reflow). All state comes in as props; timers and
  * context wiring live in {@link useActivityBar}.
  *
- * On a narrow side panel the full row does not fit, so the bar can collapse to a
- * condensed line — status, rate-limit and a processed/progress tally, and **no
- * bars at all** ({@link CondensedBar}). Whether it is currently condensed
- * (`collapsed`) and whether the toggle is offered (`collapsible`) are decided by
- * the container from the panel width; this view just renders them.
+ * The bar collapses to a condensed line — status, rate-limit and a
+ * processed/progress tally, and **no bars at all** ({@link CondensedBar}). That
+ * toggle is offered at **every** width: the bar is docked chrome, and a wide
+ * panel having room for the full row is not a reason to deny the reader the
+ * space back. `collapsed` comes from the container; this view just renders it.
+ *
+ * ## The bar publishes its own height
+ *
+ * It is `position: fixed`, so it is out of flow and would otherwise sit on top
+ * of the last rung of whatever is scrolling behind it — most visibly at the
+ * bottom of a long list, where the final row is the one a reader has scrolled
+ * all the way down to reach. Rather than have the shell reserve a hard-coded
+ * strip of padding that drifts the moment this bar's padding, wrapping or
+ * bucket rack changes, the bar measures itself and publishes `--activity-h` on
+ * the document root, exactly as `PageHeader` publishes `--header-h` for the
+ * sticky stack above. The app scroll root consumes it as bottom padding. One
+ * owner, always measured, so the reserve cannot drift.
+ *
+ * It publishes to the document root rather than to a scope because — unlike a
+ * `PageHeader`, of which seven are mounted at once — there is exactly one
+ * activity bar in the panel.
  *
  * ## What the expanded bar is, top to bottom
  *
@@ -64,13 +80,14 @@
  * clusters consumes `--sp-inline` (ADR-0048), so the docked band narrows and
  * widens with the same rule the scrolling content follows.
  */
-import React from 'react';
+import React, { useRef } from 'react';
 import { Button, IconButton } from './shared';
 import BucketList from './activity/BucketList';
 import CondensedBar from './activity/CondensedBar';
 import OperationList from './activity/OperationList';
 import ResetTimeline from './activity/ResetTimeline';
 import { CollapseChevron, ProgressTrack, StatusDot } from './activity/barParts';
+import { usePublishedHeight } from '../hooks/usePublishedHeight';
 import type { ActivityView } from '../hooks/useActivityBar';
 
 /** Props for {@link ActivityBarView}. */
@@ -85,14 +102,8 @@ export interface ActivityBarViewProps {
    */
   onCancelOperation?: (planId: string) => void;
   /**
-   * Whether the panel is narrow enough to offer collapsing. When `true` the
-   * chevron toggle is shown; when `false` the bar always renders its full row.
-   * Defaults to `false`.
-   */
-  collapsible?: boolean;
-  /**
    * Whether the bar is currently condensed to its essentials (status + rate +
-   * processed/progress). Only meaningful when `collapsible`. Defaults to `false`.
+   * processed/progress). Defaults to `false`.
    */
   collapsed?: boolean;
   /** Toggles between the condensed and full layouts. */
@@ -110,10 +121,12 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
   view,
   onCancel,
   onCancelOperation,
-  collapsible = false,
   collapsed = false,
   onToggleCollapse,
 }) => {
+  const barRef = useRef<HTMLDivElement>(null);
+  usePublishedHeight(barRef, '--activity-h');
+
   // Once the ledger shows more than one operation, each with its own ✕, a bare
   // "Cancel" no longer says which. It becomes "Cancel all" — the button's
   // behaviour has always been to drain the whole queue.
@@ -133,20 +146,25 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
 
   const actions = (
     <>
-      {collapsible && (
-        <IconButton
-          label={collapsed ? 'Show all activity stats' : 'Hide extra activity stats'}
-          variant="subtle"
-          size="sm"
-          active={!collapsed}
-          onClick={onToggleCollapse}
-        >
-          <CollapseChevron collapsed={collapsed} />
-        </IconButton>
-      )}
+      <IconButton
+        label={collapsed ? 'Show all activity stats' : 'Hide extra activity stats'}
+        variant="subtle"
+        size="sm"
+        active={!collapsed}
+        onClick={onToggleCollapse}
+      >
+        <CollapseChevron collapsed={collapsed} />
+      </IconButton>
+      {/*
+        `xs` (24px) rather than the strip's `sm` (36px). The bar is docked
+        chrome sitting under the content for the whole session, and its own
+        height is the thing being paid for — a 36px control set the condensed
+        line's floor at 60px. See `Button`'s size docblock, which names this as
+        the second sanctioned use of the recessed tier.
+      */}
       <Button
         variant="danger"
-        size="sm"
+        size="xs"
         disabled={!view.canCancel || view.isCancelling}
         onClick={onCancel}
         title={
@@ -163,6 +181,7 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
   if (collapsed) {
     return (
       <div
+        ref={barRef}
         role="status"
         aria-live="polite"
         className={BAR_CLASSES}
@@ -176,14 +195,13 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
 
   return (
     <div
+      ref={barRef}
       role="status"
       aria-live="polite"
       className={BAR_CLASSES}
       style={{ fontFamily: 'var(--font-primary)' }}
     >
-      <div
-        className={`flex items-center gap-(--sp-inline) px-(--sp-gutter) py-2.5 text-xs ${collapsible ? 'flex-wrap' : ''}`}
-      >
+      <div className="flex flex-wrap items-center gap-(--sp-inline) px-(--sp-gutter) py-1.5 text-xs">
         {/* Identity: what is happening, and how far through it we are. */}
         <div className="flex min-w-0 items-baseline gap-2">
           <StatusDot busy={view.busy} colorVar={view.statusColorVar} />

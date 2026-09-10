@@ -61,8 +61,10 @@ contract and deliberately drops the other half:
 ### Verifying the sticky stack
 
 The page header and a detail view's `ActionBar` park below one another by publishing a
-measured height (`--header-h`). The tab rail is not part of that stack — it sits outside
-the scroller entirely, so the scroller's top edge already begins beneath it.
+measured height (`--header-h`), and the scroll root keeps clear of the docked
+`ActivityBar` the same way (`--activity-h`). The tab rail is not part of that stack — it
+sits outside the scroller entirely, so the scroller's top edge already begins beneath
+it.
 **None of this is checkable in jsdom or in a story** — neither has a scroller. It is a
 manual pass in the loaded extension:
 

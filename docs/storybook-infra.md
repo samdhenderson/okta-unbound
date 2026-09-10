@@ -8,12 +8,16 @@ docs-site build. Writing a story is the other half —
 ## Side-panel viewport presets
 
 `preview.tsx` registers three side-panel width presets under the toolbar's
-**Viewport** control: `sidepanelCompact` (360px, below the 640px `useIsNarrow`
-breakpoint), `sidepanelDefault` (480px) and `sidepanelWide` (720px). The
-extension lives in a Chrome side panel the user drags freely, and `ActivityBar`
-condenses below 640px — switch a story to the compact preset to preview that
-collapse in the explorer. No preset is the default, so stories fill the canvas as
-before.
+**Viewport** control: `sidepanelCompact` (360px), `sidepanelDefault` (480px) and
+`sidepanelWide` (720px). The extension lives in a Chrome side panel the user
+drags freely, so a layout that only holds at one width is a defect — switch a
+story between the presets to check. No preset is the default, so stories fill the
+canvas as before.
+
+Nothing in the panel branches on a width breakpoint any more: the `ActivityBar`'s
+collapse used to be gated on a 640px `useIsNarrow` read and is now offered at
+every width, so the presets are for looking, not for reaching a second code
+path.
 
 The presets resize the explorer preview only. The headless test runner renders at
 its own window size, so exercise width-dependent logic through the presentational

@@ -134,6 +134,7 @@ fill, on an element between a sticky band and the header it merges into, will br
 that merge in exactly this way — and it will look like a CSS-border bug, not a
 paint-order one, because the merge itself still runs perfectly.
 
-Sticky bands publish their heights as custom properties (`--rail-h`, `--header-h`), and
-the timeline inset above is computed from `--header-h`. Never hard-code a sticky offset
-in this stack — a literal de-syncs the docking line from the header that defines it.
+Bands out of flow publish their heights as custom properties (`--rail-h`, `--header-h`,
+`--activity-h`), and the timeline inset above is computed from `--header-h`. Never
+hard-code an offset around one — a literal de-syncs the docking line from the band that
+defines it.

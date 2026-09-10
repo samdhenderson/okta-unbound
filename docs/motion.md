@@ -210,8 +210,8 @@ A blanket rule in `@layer components`, with an opt-in exemption:
   `scrollIntoView({ behavior: 'smooth' })` call** — the JS option always wins.
   Components that scroll programmatically (`useTabRail`, `useScrollPreservation`)
   read [`useReducedMotion`](../src/sidepanel/hooks/useReducedMotion.ts) and pass
-  `'auto'` themselves. That hook mirrors `useIsNarrow.ts`: a `matchMedia` + `change`
-  listener, guarded on `matchMedia`'s existence. There is no `matchMedia` stub in
+  `'auto'` themselves. That hook is a `matchMedia` + `change` listener, guarded on
+  `matchMedia`'s existence. There is no `matchMedia` stub in
   `src/test/setup.ts`, so jsdom always reports `matches: false` and every existing
   test runs the motion-on path.
 

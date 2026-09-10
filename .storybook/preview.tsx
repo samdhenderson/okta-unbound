@@ -92,9 +92,9 @@ const preview: Preview = {
       test: 'error',
     },
     // Side-panel width presets. The extension lives in a Chrome side panel the
-    // user drags freely; `useIsNarrow(640)` condenses the ActivityBar below 640px.
-    // These let a reviewer preview the compact vs. full layouts in the explorer
-    // (toolbar → Viewport). No default is set, so stories still fill the canvas.
+    // user drags freely, so these let a reviewer check a layout at the widths it
+    // actually gets (toolbar → Viewport). No default is set, so stories still
+    // fill the canvas.
     viewport: {
       options: {
         sidepanelCompact: {

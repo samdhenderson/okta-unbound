@@ -377,7 +377,7 @@
  *
  * The design brief specifies a container query on the panel root. In a Chrome side
  * panel the panel root *is* the viewport — there is no larger page around it, which is
- * why `useIsNarrow` has always been able to read `window.innerWidth` and be right. A
+ * why reading `window.innerWidth` has always been enough to be right. A
  * container query would additionally require an ancestor declaring `container-type`,
  * and an element cannot respond to a container query on itself, so it would force a
  * wrapper element to exist for no behavioural gain. The media query resolves against

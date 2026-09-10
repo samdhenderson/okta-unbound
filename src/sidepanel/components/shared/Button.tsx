@@ -33,8 +33,17 @@ export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'succ
  * than a verb acting on the page — the selection register's `Select all (M)` and
  * its neighbours (ADR-0051). It is deliberately the only size that reads as
  * *smaller than a button*, so a register full of them cannot out-weigh the
- * page's own verbs sitting on the row above. Do not reach for it to fit more
- * chrome into a tight row; that is what the `ActionBar` overflow tier is for.
+ * page's own verbs sitting on the row above.
+ *
+ * There are exactly two sanctioned callers, and the second is the reason this
+ * paragraph exists. The `ActivityBar`'s Cancel is `xs` because that bar is
+ * **docked chrome**: it is pinned over the content for the whole session, and
+ * the panel reserves its measured height as dead space at the bottom of every
+ * scroller. A `sm` control there set the condensed line's floor at 60px. So the
+ * test is not "does this row feel tight" — a tight row is what the `ActionBar`
+ * overflow tier is for, and reaching for `xs` to win a few pixels back inside
+ * one is still wrong. The test is whether the control is permanent furniture
+ * whose own height is a standing cost to everything else on screen.
  */
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 

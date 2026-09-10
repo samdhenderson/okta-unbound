@@ -614,10 +614,21 @@ const App: React.FC = () => {
             to absorb *unintended* reflow above the fold; every height change in this
             scroller is intentional and driven by scroll position, so there is nothing here
             for it to usefully protect. */}
+            {/* The bottom reserve is the `ActivityBar`'s own measured height, which it
+            publishes as `--activity-h` (the same mechanism `PageHeader` uses for
+            `--header-h`). The bar is `fixed`, so without a reserve it paints over the
+            last rung of every list — worst exactly where a reader has deliberately
+            scrolled to the end. This used to be a hard-coded `pb-14`, which was the
+            magic-number offset ADR-0030 declined to introduce: it was already wrong
+            for the 60px bar it was reserving 56px for, and it would go wrong again
+            every time the bar's padding or its bucket rack changed. The fallback
+            matches the condensed bar's 36px, which is what the variable resolves to
+            in any environment without a `ResizeObserver` (jsdom) and the state the
+            bar boots into everywhere else. */}
             <div
               ref={scrollRootRef}
               data-testid="app-scroll-root"
-              className="flex flex-col flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] pb-14"
+              className="flex flex-col flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] pb-[var(--activity-h,36px)]"
             >
               {/* Each tab mounts on first activation and is hidden — never unmounted —
               thereafter, so its local state survives leaving the tab. */}

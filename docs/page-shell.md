@@ -142,21 +142,35 @@ The panel has no router. A tab shell instantiates **one `useViewStack`** and get
   `react-hooks/refs` rule treats an object carrying a ref as a ref and would reject
   every `nav.<field>` read during render.
 
-## A sticky band publishes its measured height
+## A band out of flow publishes its measured height
 
-**Nothing hard-codes a sticky offset.** A band measures itself and publishes its
-height as a custom property; the band below consumes it. One owner per variable,
-every value measured.
+**Nothing hard-codes an offset around a band.** A band measures itself and publishes
+its height as a custom property; whatever has to keep clear of it consumes that. One
+owner per variable, every value measured.
 
-| Band            | Position                                | Publishes                      | Consumes     |
-| --------------- | --------------------------------------- | ------------------------------ | ------------ |
-| `TabNavigation` | static, outside the scroller            | —                              | —            |
-| `PageHeader`    | `sticky top-0 z-20`                     | `--header-h` on its `TabPanel` | —            |
-| `ActionBar`     | `sticky top-[var(--header-h,0px)] z-30` | —                              | `--header-h` |
+| Band            | Position                                | Publishes                      | Consumes       |
+| --------------- | --------------------------------------- | ------------------------------ | -------------- |
+| `TabNavigation` | static, outside the scroller            | —                              | —              |
+| `PageHeader`    | `sticky top-0 z-20`                     | `--header-h` on its `TabPanel` | —              |
+| `ActionBar`     | `sticky top-[var(--header-h,0px)] z-30` | —                              | `--header-h`   |
+| `ActivityBar`   | `fixed bottom-0 z-50`                   | `--activity-h` on the root     | —              |
+| scroll root     | `flex-1 overflow-y-auto`                | —                              | `--activity-h` |
 
-`--header-h` is the panel's only published band height. The rail is outside the
-scroller, so it has nothing to stick to and nothing below it needs to park clear of it
-— the scroller's own top edge already begins beneath it.
+Two variables, and they publish to different places for a reason. `--header-h` is
+per-`TabPanel` (see below); `--activity-h` goes on the document root because there is
+exactly one activity bar in the panel, and a root-scoped value cannot be clobbered by
+a hidden tab.
+
+The rail is outside the scroller, so it has nothing to stick to and nothing below it
+needs to park clear of it — the scroller's own top edge already begins beneath it.
+
+**The bottom reserve is the same rule as the sticky offsets.** The `ActivityBar` is
+`fixed`, so it is out of flow and paints over the end of whatever is scrolling behind
+it. The scroll root reserves `pb-[var(--activity-h,36px)]`. It used to reserve a flat
+`pb-14`, which was wrong by 4px against the bar it was guarding and would have gone
+wrong again on any change to the bar's padding or its bucket rack. The fallback is the
+condensed bar's own height, which is both what the bar boots into and what the
+variable resolves to wherever there is no `ResizeObserver` (jsdom).
 
 **`--header-h` is scoped to the `TabPanel`, not the document root.** Every tab stays
 mounted, so all nine headers exist at once and a root-scoped variable would be
