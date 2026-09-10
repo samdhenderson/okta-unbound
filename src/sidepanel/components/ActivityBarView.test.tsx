@@ -263,17 +263,23 @@ describe('ActivityBarView', () => {
 
   it('reflects the cancelling state on the action', () => {
     renderView(idleView({ operationActive: true, canCancel: true, isCancelling: true }));
+    // Named, not positional: the collapse chevron now shares this cluster at
+    // every width, so a bare getByRole('button') matches two.
     const actions = screen.getByTestId('activity-actions');
-    expect(within(actions).getByRole('button')).toBeDisabled();
+    expect(within(actions).getByRole('button', { name: /cancel/i })).toBeDisabled();
     expect(actions).toHaveTextContent(/cancel/i);
   });
 
-  it('does not offer the collapse toggle when not collapsible', () => {
-    render(<ActivityBarView view={idleView()} onCancel={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: /activity stats/i })).not.toBeInTheDocument();
+  // The bar used to hide this toggle above 640px, on the reasoning that a wide
+  // panel has room for the full row. Room is not consent: the band is docked over
+  // the content at every width, so the way to give the space back is offered at
+  // every width too.
+  it('offers the collapse toggle with no width or prop gating it', () => {
+    render(<ActivityBarView view={idleView()} onCancel={vi.fn()} onToggleCollapse={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /hide extra activity stats/i })).toBeInTheDocument();
   });
 
-  describe('condensed layout (narrow panel)', () => {
+  describe('condensed layout', () => {
     it('shows only status, rate and the processed tally — full metric slots hidden', () => {
       render(
         <ActivityBarView
@@ -283,7 +289,6 @@ describe('ActivityBarView', () => {
             failed: 3,
           })}
           onCancel={vi.fn()}
-          collapsible
           collapsed
           onToggleCollapse={vi.fn()}
         />,
@@ -312,7 +317,6 @@ describe('ActivityBarView', () => {
             opFailed: 1,
           })}
           onCancel={vi.fn()}
-          collapsible
           collapsed
           onToggleCollapse={vi.fn()}
         />,
@@ -329,7 +333,6 @@ describe('ActivityBarView', () => {
         <ActivityBarView
           view={idleView({ queueLength: 5, canCancel: true })}
           onCancel={onCancel}
-          collapsible
           collapsed
           onToggleCollapse={vi.fn()}
         />,
@@ -345,7 +348,6 @@ describe('ActivityBarView', () => {
         <ActivityBarView
           view={idleView()}
           onCancel={vi.fn()}
-          collapsible
           collapsed
           onToggleCollapse={onToggleCollapse}
         />,
@@ -354,12 +356,11 @@ describe('ActivityBarView', () => {
       expect(onToggleCollapse).toHaveBeenCalledTimes(1);
     });
 
-    it('offers a re-collapse toggle and the full stats when narrow but expanded', () => {
+    it('offers a re-collapse toggle and the full stats once expanded', () => {
       render(
         <ActivityBarView
           view={idleView({ queueLength: 7, activeRequests: 3 })}
           onCancel={vi.fn()}
-          collapsible
           collapsed={false}
           onToggleCollapse={vi.fn()}
         />,
@@ -484,7 +485,6 @@ describe('per-bucket headroom', () => {
       <ActivityBarView
         view={idleView({ buckets: [bucket({ bucket: '/api/v1/users', planned: 40 })] })}
         onCancel={vi.fn()}
-        collapsible
         collapsed
       />,
     );
@@ -503,13 +503,11 @@ describe('per-bucket headroom', () => {
       ],
     });
 
-    const { unmount } = render(
-      <ActivityBarView view={view} onCancel={vi.fn()} collapsible collapsed />,
-    );
+    const { unmount } = render(<ActivityBarView view={view} onCancel={vi.fn()} collapsed />);
     expect(screen.queryAllByTestId(/^activity-bucket-\/api/)).toHaveLength(0);
     unmount();
 
-    render(<ActivityBarView view={view} onCancel={vi.fn()} collapsible collapsed={false} />);
+    render(<ActivityBarView view={view} onCancel={vi.fn()} collapsed={false} />);
     expect(screen.queryAllByTestId(/^activity-bucket-\/api/)).toHaveLength(2);
   });
 });
@@ -643,7 +641,6 @@ describe('ActivityBarView operation ledger', () => {
           buckets: [bucket({ bucket: '/api/v1/users', gatedUntil: FIXED_NOW + 24_000 })],
         })}
         onCancel={vi.fn()}
-        collapsible
         collapsed
       />,
     );

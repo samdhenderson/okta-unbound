@@ -35,7 +35,7 @@ const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' }
 
 - Size scale is `sm | md | lg` by default. Three primitives extend it where a call site needed a
   step the three-name scale could not express: `Button` adds `xs` (24px, the recessed step —
-  `ActionBar`'s selection register, never a page verb), `Icon` is `xs | sm | md | lg | xl`
+  `ActionBar`'s selection register and the docked `ActivityBar`, never a page verb), `Icon` is `xs | sm | md | lg | xl`
   (12/16/20/24/32px), `LoadingSpinner` is `sm | md | lg | xl | 2xl` (16/20/24/32/48px). The scales
   are **name-for-name aligned** over the sizes they share, so a spinner standing in for a glyph is
   requested by the glyph's own size name. Extend a scale only when a real call site needs the step,

@@ -2,11 +2,13 @@
  * @module sidepanel/hooks/usePublishedHeight
  * @description Publish an element's measured height as a CSS custom property on an ancestor.
  *
- * The mechanism behind the side panel's sticky stack (ADR-0032). Three bands compete for
- * the top of the one shared scroller — the tab rail, the page header, and a detail view's
- * action strip — and each has to sit exactly below the one before it. Rather than hard-code
- * an offset (the "magic number" ADR-0030 declined to introduce), each band measures itself
- * and publishes its height; the band below consumes that variable in its own `top`.
+ * The mechanism behind the side panel's sticky stack (ADR-0032), and behind the bottom
+ * reserve the docked activity bar needs. Bands compete for the edges of the one shared
+ * scroller — the tab rail, the page header and a detail view's action strip at the top,
+ * the activity bar at the bottom — and whatever sits next to one has to clear it exactly.
+ * Rather than hard-code an offset (the "magic number" ADR-0030 declined to introduce),
+ * each band measures itself and publishes its height; its neighbour consumes that
+ * variable in its own `top` or `padding-bottom`.
  *
  * One owner per variable, and the value is always measured, so it cannot drift when a
  * band's padding, font size or wrapping changes.
@@ -47,11 +49,12 @@ export interface UsePublishedHeightOptions {
  *
  * @example
  * ```tsx
- * usePublishedHeight(bandRef, '--band-h');            // singleton: document root
+ * usePublishedHeight(barRef, '--activity-h');          // singleton: document root
  * usePublishedHeight(headerRef, '--header-h', { scopeSelector: '[data-header-scope]' });
- * // The panel's only live caller is the second form: `PageHeader` publishes
- * // `--header-h` per `TabPanel`. The document-root mode is kept for a future
- * // singleton band — the tab rail used it until the chrome left the scroller.
+ * // Both forms are live. `ActivityBarView` takes the first — there is exactly one
+ * // activity bar, so the root is the right scope and no hidden tab can clobber it.
+ * // `PageHeader` takes the second: seven are mounted at once, so each publishes
+ * // `--header-h` into its own `TabPanel`.
  * ```
  */
 export function usePublishedHeight(

@@ -1,11 +1,17 @@
 /**
- * Tests for the ActivityBar container — the responsive collapse wiring and the
- * confirm-gated Cancel path.
+ * Tests for the ActivityBar container — the collapse wiring and the confirm-gated
+ * Cancel path.
  *
  * The pure layout is covered by ActivityBarView.test.tsx; here we exercise the
- * container's own logic: it condenses on a narrow panel, expands on the chevron,
- * shows the full row (no toggle) on a wide panel, and routes Cancel through a
- * window.confirm before draining the scheduler queue.
+ * container's own logic: it boots condensed, expands on the chevron, re-collapses
+ * on a second click, and routes Cancel through a window.confirm before draining
+ * the scheduler queue.
+ *
+ * The width harness these cases used to open with is gone with the breakpoint it
+ * set up. The bar read `window.innerWidth` through `useIsNarrow` and only offered
+ * the toggle below 640px; it now offers it at every width, so there is no panel
+ * size at which this container behaves differently and nothing for a test to pin
+ * a width for.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -21,11 +27,6 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 );
 
 const sendMessage = chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
-
-/** Set the jsdom panel width (innerWidth is redefinable with configurable: true). */
-function setWidth(px: number): void {
-  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: px });
-}
 
 beforeEach(() => {
   sendMessage.mockReset();
@@ -53,8 +54,7 @@ beforeEach(() => {
 });
 
 describe('ActivityBar', () => {
-  it('condenses on a narrow panel and expands when the chevron is clicked', async () => {
-    setWidth(400);
+  it('boots condensed and expands when the chevron is clicked', async () => {
     render(<ActivityBar />, { wrapper });
 
     await waitFor(() => expect(screen.getByTestId('activity-rate-compact')).toBeInTheDocument());
@@ -68,23 +68,22 @@ describe('ActivityBar', () => {
     expect(screen.getByRole('button', { name: /hide extra activity stats/i })).toBeInTheDocument();
   });
 
-  it('shows the full row with no collapse toggle on a wide panel', async () => {
-    setWidth(1200);
+  // Replaces 'shows the full row with no collapse toggle on a wide panel', whose
+  // subject was the 640px gate. That gate is gone; what has to hold now is the
+  // round trip — the reader can put the bar back the way it was.
+  it('re-collapses on a second chevron click', async () => {
     render(<ActivityBar />, { wrapper });
 
-    // Waits on the precondition these cases actually need — a queue of 6 makes
-    // `canCancel` true — rather than on the `Queue` slot that used to print it.
-    await waitFor(() =>
-      expect(
-        within(screen.getByTestId('activity-actions')).getByRole('button', { name: /cancel/i }),
-      ).toBeEnabled(),
-    );
+    await waitFor(() => expect(screen.getByTestId('activity-rate-compact')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /show all activity stats/i }));
     expect(screen.getByTestId('activity-standing')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /activity stats/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /hide extra activity stats/i }));
+    expect(screen.queryByTestId('activity-standing')).not.toBeInTheDocument();
+    expect(screen.getByTestId('activity-rate-compact')).toBeInTheDocument();
   });
 
   it('confirms then drains the queue on Cancel', async () => {
-    setWidth(1200);
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<ActivityBar />, { wrapper });
 
@@ -106,7 +105,6 @@ describe('ActivityBar', () => {
   });
 
   it('does not cancel when the confirm is dismissed', async () => {
-    setWidth(1200);
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<ActivityBar />, { wrapper });
 

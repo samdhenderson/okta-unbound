@@ -89,7 +89,9 @@ every density, so a fourth would render identically and only invite disagreement
 
 Three density scopes — `compact` below 400px, `default` 400–559, `comfortable` at 560+.
 **Density is derived from panel width, never chosen**, and it changes space only: type
-never scales. `[data-density='…']` pins a scope for a story or a test and wins over the
+never scales. `--sp-rung` is the one role that does not widen at `comfortable`: it holds
+at 16px across `default` and `comfortable`, because a 24px gap between stacked cards read
+as drift rather than as breathing room. `[data-density='…']` pins a scope for a story or a test and wins over the
 width query.
 
 A raw `p-4` on a card is a defect the same way a raw duration literal is. Radius is
