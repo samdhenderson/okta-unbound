@@ -43,6 +43,17 @@ const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' }
   (`Button.tsx` is the model).
 - Variant/status names use the shared `StatusType` (`success | warning | danger | info`) — never
   `error`.
+- **`Button`'s `ghost` and `link` are different kinds of quiet.** `ghost` is still a box: it keeps
+  its size's horizontal padding and sits in a row of buttons as one of them — the treatment for a
+  panel toggle or a disclosure trigger, which _is_ a button but must not compete with the verbs
+  beside it. `link` is not a box: it drops horizontal padding entirely, takes `text-primary-text`
+  and underlines on hover, so its first glyph lands on the same vertical line as the box edges
+  above and below it. It keeps the _vertical_ half of the size scale, so a row of links is exactly
+  as tall as the row of buttons it replaced. Use it where the control is a phrase in the layout
+  rather than an object in a row of objects — `ActionBar`'s selection register (`Select all (M)`,
+  `Deselect all`) is the reference case. It stays a real `<button>`; the look is a link, the
+  semantics are not. Never reach for `link` to make a _verb_ quieter — a verb that acts gets
+  `secondary`, and the size scale is what makes it quiet.
 
 ## Catalog
 

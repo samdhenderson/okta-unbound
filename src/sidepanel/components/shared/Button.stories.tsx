@@ -24,7 +24,7 @@ const meta = {
     children: { description: 'Button label content.' },
     variant: {
       description:
-        'Visual treatment: `secondary` is the default; `danger`/`success` carry semantic colour; `ghost` is chromeless; `primary` is the page call to action.',
+        'Visual treatment: `secondary` is the default; `danger`/`success` carry semantic colour; `ghost` is chromeless but still a box; `link` reads as running text, with no horizontal padding at all; `primary` is the page call to action.',
     },
     size: {
       description:
@@ -69,9 +69,37 @@ export const Danger: Story = {
   args: { variant: 'danger', children: 'Remove members' },
 };
 
-/** Low-emphasis, chromeless. */
+/** Low-emphasis, chromeless — but still a box, with its size's horizontal padding. */
 export const Ghost: Story = {
   args: { variant: 'ghost' },
+};
+
+/**
+ * `link` is the other chromeless treatment, and it is not a box at all: no
+ * horizontal padding, the primary text colour, an underline on hover, and no press
+ * scale — text that shrinks under the pointer reads as a glitch rather than as a
+ * press.
+ *
+ * Dropping the padding is the whole point. A `link` is a phrase in the layout, so
+ * its first glyph has to land on the same vertical line as the box edges above and
+ * below it; a `ghost` in the same slot sits inset by a padding nothing else in the
+ * column has. It keeps the *vertical* half of its size scale, so a row of links is
+ * exactly as tall as the row of buttons it replaced. `ActionBar`'s selection
+ * register is the reference case — `Select all (M)` and `Deselect all` state what
+ * the filter matched and how to stop ticking it, which is furniture around a list,
+ * not a verb acting on one.
+ *
+ * It is still a real `<button>`: the look is a link, the semantics are not, because
+ * pressing it navigates nowhere. Never use it to make a verb quieter — a verb that
+ * acts gets `secondary`, and the size scale is what makes it quiet.
+ */
+export const Link: Story = {
+  args: { variant: 'link', size: 'xs', children: 'Select all (245)' },
+};
+
+/** Disabled, a `link` loses its colour and its underline rather than greying a box. */
+export const LinkDisabled: Story = {
+  args: { variant: 'link', size: 'xs', children: 'Select all (245)', disabled: true },
 };
 
 /** Disabled state. */
