@@ -284,7 +284,6 @@ const UsersTab: React.FC<UsersTabProps> = ({
                 isLoadingProfile={panes.isLoadingProfile}
                 profileConfig={panes.profileConfig}
                 onProfileConfigChange={panes.updateProfileConfig}
-                onProfileConfigReset={panes.resetProfileConfig}
                 ruleReads={panes.ruleReads}
                 profileEdit={state.profileEdit}
               />

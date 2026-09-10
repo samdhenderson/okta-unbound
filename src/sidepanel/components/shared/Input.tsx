@@ -73,6 +73,11 @@ interface InputProps {
   autoFocus?: boolean;
   /** Key handler on the input (e.g. Enter to submit, Escape to cancel). */
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  /**
+   * Blur handler, for a field that commits when focus leaves it — an inline
+   * rename that swaps back to a label rather than waiting for a Save.
+   */
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   /** Ref to the underlying `<input>` (e.g. to refocus after clearing). */
   inputRef?: React.Ref<HTMLInputElement>;
 }
@@ -164,6 +169,7 @@ const Input: React.FC<InputProps> = ({
   className = '',
   autoFocus = false,
   onKeyDown,
+  onBlur,
   inputRef,
 }) => {
   const inputClasses = `
@@ -215,6 +221,7 @@ const Input: React.FC<InputProps> = ({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
+          onBlur={onBlur}
           aria-label={ariaLabel}
           placeholder={placeholder}
           disabled={disabled}

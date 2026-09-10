@@ -142,8 +142,6 @@ export interface UseUserDetailPanesReturn {
   profileConfig: ProfileDisplayConfig;
   /** Applies one patch to the configuration and persists it (coalesced). */
   updateProfileConfig: (patch: Partial<ProfileDisplayConfig>) => void;
-  /** Discards the org's configuration and returns to the shipped defaults. */
-  resetProfileConfig: () => void;
   /**
    * Attribute Okta name → the names of the rules that read it *and* currently
    * grant this user access. Attributes no qualifying rule reads are absent.
@@ -260,11 +258,12 @@ export function useUserDetailPanes({
 
   // The hook memoizes on the joined names, so a fresh array each render is fine.
   const attributeNames = attributes.map((attribute) => attribute.name);
-  const {
-    config: profileConfig,
-    update: updateProfileConfig,
-    reset: resetProfileConfig,
-  } = useProfileDisplayConfig(oktaOrigin, attributeNames);
+  // `reset` is deliberately not taken: the display editor resets its own draft,
+  // so Cancel can still undo a reset that was never written.
+  const { config: profileConfig, update: updateProfileConfig } = useProfileDisplayConfig(
+    oktaOrigin,
+    attributeNames,
+  );
 
   // `unresolved` and `unavailable` both mean "we cannot say", which renders as no
   // marks at all — never as "no rule reads this attribute".
@@ -288,7 +287,6 @@ export function useUserDetailPanes({
     isLoadingProfile: schemaQuery.isLoading,
     profileConfig,
     updateProfileConfig,
-    resetProfileConfig,
     ruleReads,
     mastering,
   };

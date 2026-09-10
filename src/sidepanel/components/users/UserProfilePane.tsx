@@ -17,20 +17,32 @@
  * strings into an explanation of this person's access — and it is why the header
  * counts "read by rules that grant access" beside the plain attribute count.
  *
- * ## It renders; it does not fetch, and it owns no dialog
+ * ## It renders; it does not fetch, and it holds no configuration
  *
  * `attributes` and `config` arrive as props rather than being pulled from
  * `allProfileAttributes` / `useProfileDisplayConfig` inside the component. That
  * keeps the pane pure and story-able, and follows `docs/components.md`'s "list
  * rows derive; they never fetch" — the rung above owns the hooks.
  *
- * The same goes for both of its dialogs. The gear calls
- * {@link UserProfilePaneProps.onConfigure} and `Save` calls
- * {@link ProfileEditControls.onSave}; the configuration modal and the save
- * confirmation are mounted by {@link
- * module:sidepanel/components/users/UserDetailPanel}, which already owns
- * `ProfileDisplayModal` the same way. A pane that owned a live-write
- * confirmation could not be rendered in a story without one.
+ * The one dialog left in the picture is the save confirmation: `Save` calls
+ * {@link ProfileEditControls.onSave}, and {@link
+ * module:sidepanel/components/users/UserDetailPanel} mounts the modal. A pane
+ * that owned a live-write confirmation could not be rendered in a story without
+ * one.
+ *
+ * ## Three modes, two of them editors
+ *
+ * Display customization used to be a modal over this pane. It is now
+ * `ProfileDisplayEditor`, rendered **here, in place of the section list**, so
+ * the categories being dragged are the categories on screen rather than a
+ * second copy of them in a dialog. The pane still holds no configuration state:
+ * the editor owns a local draft and hands the **whole** config back through
+ * {@link ProfileDisplayCustomizeControls.onCommit} on Done, so a Cancel leaves
+ * nothing behind and a commit can never be a one-key patch.
+ *
+ * That makes value-editing and display-customizing mutually exclusive — both
+ * take over the same rows — which is why the header omits the gear mid-draft
+ * and the Edit button while customizing.
  *
  * ## Editing
  *
@@ -64,7 +76,11 @@ import type { ProfileDisplayConfig } from '../../../shared/storage/profileDispla
 import type { AttributeDescriptor } from './profileAttributes';
 import { buildAttributeBlocks } from './profileAttributeBlocks';
 import UserProfileAttributeList from './UserProfileAttributeList';
-import UserProfilePaneHeader, { type ProfileEditControls } from './UserProfilePaneHeader';
+import UserProfilePaneHeader, {
+  type ProfileDisplayCustomizeControls,
+  type ProfileEditControls,
+} from './UserProfilePaneHeader';
+import ProfileDisplayEditor from './ProfileDisplayEditor';
 import type { AttributeEditCell } from '../../hooks/useProfileEdit';
 
 /** Props for {@link UserProfilePane}. */
@@ -87,8 +103,11 @@ export interface UserProfilePaneProps {
    * map carry no chip; the map is never expected to hold an empty array.
    */
   ruleReads: Record<string, string[]>;
-  /** Opens the "Configure attribute display" modal, which this pane does not own. */
-  onConfigure: () => void;
+  /**
+   * The display-customization mode flag and verbs. Absent renders no gear and
+   * no editor — a surface that does not offer customization at all.
+   */
+  customize?: ProfileDisplayCustomizeControls;
   /** Render placeholders instead of the list while the profile/schema loads. */
   isLoading?: boolean;
   /**
@@ -120,7 +139,7 @@ function fieldCountLabel(count: number): string {
  *   attributes={allProfileAttributes(user, schema)}
  *   config={config}
  *   ruleReads={profileRuleReads(rules, user, memberships)}
- *   onConfigure={() => setConfigOpen(true)}
+ *   customize={customizeControls}
  * />
  * ```
  */
@@ -128,13 +147,27 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
   attributes,
   config,
   ruleReads,
-  onConfigure,
+  customize,
   isLoading = false,
   edit,
   cells,
 }) => {
   const [filter, setFilter] = useState('');
   const [onlyRuleRead, setOnlyRuleRead] = useState(false);
+
+  const isCustomizing = customize?.isCustomizing ?? false;
+
+  /**
+   * Entering customize mode drops the `Used by rules` pill, and the editor is
+   * never told about it: an editor that can only file the attributes some rule
+   * happens to read would silently refuse to file the rest. The text filter is
+   * carried in, because there it is a *find* — the editor honours it, and says
+   * so by disabling its drag handles while it is set.
+   */
+  const beginCustomizing = (): void => {
+    setOnlyRuleRead(false);
+    customize?.onBegin();
+  };
 
   const blocks = useMemo(
     () => buildAttributeBlocks(attributes, config, ruleReads, { filter, onlyRuleRead }),
@@ -149,6 +182,12 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
     0,
   );
 
+  // Omitted, not disabled, on a surface with no customization wired: an action
+  // that cannot act is not offered.
+  const configureActions = customize
+    ? [{ label: 'Configure display', onClick: beginCustomizing, variant: 'secondary' as const }]
+    : undefined;
+
   const isFiltered = filter.trim() !== '' || onlyRuleRead;
   const clearFilters = (): void => {
     setFilter('');
@@ -161,7 +200,7 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
         shown={shown}
         total={total}
         ruleReadCount={readCount}
-        onConfigure={onConfigure}
+        customize={customize && { ...customize, onBegin: beginCustomizing }}
         edit={edit}
       />
 
@@ -197,7 +236,19 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
         </div>
       </div>
 
-      {isLoading ? (
+      {isCustomizing && customize ? (
+        // The whole of customize mode is one component: the pane is at its
+        // ~300-line ceiling (`docs/state-management.md`), and the draft, the
+        // drag machine and the option strip all belong to the editor anyway.
+        <ProfileDisplayEditor
+          attributes={attributes}
+          config={config}
+          ruleReads={ruleReads}
+          filter={filter}
+          onCommit={customize.onCommit}
+          onCancel={customize.onCancel}
+        />
+      ) : isLoading ? (
         <div className="px-(--sp-card) pb-(--sp-card)">
           <Skeleton variant="row" size="md" count={4} label="Loading profile attributes" />
         </div>
@@ -214,7 +265,7 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
             icon="settings"
             title="No attributes to show"
             description="Every attribute is hidden, or empty on this user and set not to show."
-            actions={[{ label: 'Configure display', onClick: onConfigure, variant: 'secondary' }]}
+            actions={configureActions}
           />
         )
       ) : (

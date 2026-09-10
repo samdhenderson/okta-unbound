@@ -1,7 +1,10 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, within } from 'storybook/test';
-import UserProfilePaneHeader, { type ProfileEditControls } from './UserProfilePaneHeader';
+import UserProfilePaneHeader, {
+  type ProfileDisplayCustomizeControls,
+  type ProfileEditControls,
+} from './UserProfilePaneHeader';
 
 /** The edit cluster in its resting, nothing-typed-yet state. */
 const controls: ProfileEditControls = {
@@ -12,6 +15,14 @@ const controls: ProfileEditControls = {
   onBeginEdit: fn(),
   onCancelEdit: fn(),
   onSave: fn(),
+};
+
+/** Customization offered, not under way: the gear is live and the rows are read-only. */
+const customize: ProfileDisplayCustomizeControls = {
+  isCustomizing: false,
+  onBegin: fn(),
+  onCommit: fn(),
+  onCancel: fn(),
 };
 
 /** The Profile pane's header strip: what is shown, the display gear, and the edit verbs. */
@@ -27,12 +38,17 @@ const meta = {
           "The Profile pane's top strip, extracted when the pane became editable — the pane was already " +
           'at the ~300-line ceiling and the strip had grown from "a summary line and a gear" into a mode ' +
           'switch with three states.\n\n' +
-          'Two clusters sit side by side. The summary sentence and the gear are constant; the edit cluster ' +
-          'beside them is **Edit**, or **Cancel + Save** with a dirty count, or nothing at all.\n\n' +
+          'The summary sentence is constant; the cluster beside it names the mode. Read mode is **Edit** ' +
+          '(when anything is editable) plus the gear; value-edit mode is **Cancel + Save** with a dirty ' +
+          'count; customize mode is a single `Customizing display` badge.\n\n' +
           '**The Edit button is absent, not disabled, when a profile has nothing editable.** A disabled ' +
           'Edit on a profile entirely mastered by Active Directory invites the reader to hunt for the ' +
           'reason it will not press — and the per-attribute lock reasons, which only appear in edit mode, ' +
           'would have nothing to explain.\n\n' +
+          '**The gear is absent, not disabled, mid-draft** — the same argument extended. Pressing it during ' +
+          'a value edit would switch modes and silently discard the draft. It is absent again while ' +
+          'customizing, where the verbs that matter (Reset to default, Cancel, Done) belong to the editor ' +
+          'that owns the draft and render in its own footer.\n\n' +
           'Save refuses an edit with no changes and an edit with an invalid value, so the status line ' +
           'beside it always says why: how many attributes would be written, that there is nothing to ' +
           'write yet, or that a value needs fixing first. A disabled button that does not say why is a ' +
@@ -45,14 +61,16 @@ const meta = {
     shown: { description: 'How many attributes the filter and configuration leave on screen.' },
     total: { description: 'How many distinct attributes the profile has in total.' },
     ruleReadCount: { description: 'How many of the shown attributes a granting rule reads.' },
-    onConfigure: { description: 'Opens the "Configure attribute display" modal.' },
+    customize: {
+      description: 'The display-customization mode flag and verbs. Absent renders no gear at all.',
+    },
     edit: { description: 'The edit verbs; absent on a surface that does not offer editing.' },
   },
   args: {
     shown: 12,
     total: 21,
     ruleReadCount: 2,
-    onConfigure: fn(),
+    customize,
   },
   decorators: [
     (Story: () => React.ReactElement) => (
@@ -147,6 +165,38 @@ export const EditingInvalid: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('button', { name: 'Save' })).toBeDisabled();
     await expect(canvas.getByText('Fix the highlighted values')).toBeInTheDocument();
+  },
+};
+
+/**
+ * Customize mode: the rows below have become the display editor, so the header
+ * carries the mode and nothing else — no Edit, no gear, and no verbs that would
+ * have to describe a draft they cannot see.
+ */
+export const Customizing: Story = {
+  args: { edit: controls, customize: { ...customize, isCustomizing: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Customizing display')).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    await expect(
+      canvas.queryByRole('button', { name: 'Configure attribute display' }),
+    ).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * A surface with no customization wired at all — no gear, rather than a gear
+ * that would do nothing.
+ */
+export const NoCustomization: Story = {
+  args: { customize: undefined, edit: controls },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.queryByRole('button', { name: 'Configure attribute display' }),
+    ).not.toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Edit' })).toBeEnabled();
   },
 };
 

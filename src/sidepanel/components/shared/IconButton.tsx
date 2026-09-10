@@ -40,6 +40,23 @@ interface IconButtonProps {
   expanded?: boolean;
   /** `id` of the region this button shows/hides — reflected as `aria-controls`. */
   controls?: string;
+  /**
+   * Pointer-down handler, for a button that starts a gesture rather than firing
+   * on click — a drag handle. A click still fires `onClick` as usual.
+   */
+  onPointerDown?: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  /**
+   * Key handler, for a button that owns a keyboard interaction beyond activation
+   * — a drag handle stepping with the arrow keys while it holds focus.
+   */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
+  /** Extra accessible description — `id` of the element explaining the control. */
+  describedBy?: string;
+  /**
+   * Ref to the underlying `<button>` — for a control that has to take focus back
+   * after the list around it re-renders (a drag handle mid-keyboard-reorder).
+   */
+  buttonRef?: React.Ref<HTMLButtonElement>;
   className?: string;
 }
 
@@ -85,16 +102,24 @@ const IconButton: React.FC<IconButtonProps> = ({
   active,
   expanded,
   controls,
+  onPointerDown,
+  onKeyDown,
+  describedBy,
+  buttonRef,
   className = '',
 }) => (
   <button
+    ref={buttonRef}
     type={type}
     onClick={onClick}
+    onPointerDown={onPointerDown}
+    onKeyDown={onKeyDown}
     disabled={disabled}
     aria-label={label}
     aria-pressed={active}
     aria-expanded={expanded}
     aria-controls={controls}
+    aria-describedby={describedBy}
     title={title ?? label}
     className={`inline-flex items-center justify-center rounded-md press active:brightness-90 focus:outline-2 focus:outline-offset-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
   >

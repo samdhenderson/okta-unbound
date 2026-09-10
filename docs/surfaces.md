@@ -132,7 +132,7 @@ primary line — an unsized `font-semibold` renders at 16px next to a peer's 14p
 1. `space-y-3` between bordered rows — the default, and what `ScrollableList` and the
    list `Skeleton` already emit, so a placeholder matches the real list.
 2. `divide-y divide-neutral-100` inside one bordered container — for a dense,
-   table-like surface (`ComparisonAttributesTab`, `ProfileDisplayAttributesTab`,
+   table-like surface (`ComparisonAttributesTab`, `ProfileDisplayEditor`,
    `RuleImpactModal`), whose rows opt out of the per-row border.
 
 `divide-neutral-200` and a per-row `border-b last:border-b-0` are not sanctioned for a

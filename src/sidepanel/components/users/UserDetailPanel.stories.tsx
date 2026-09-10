@@ -163,7 +163,6 @@ const meta = {
     isLoadingProfile: false,
     profileConfig: DEFAULT_PROFILE_DISPLAY_CONFIG,
     onProfileConfigChange: fn(),
-    onProfileConfigReset: fn(),
     ruleReads: RULE_READS,
   },
   argTypes: {

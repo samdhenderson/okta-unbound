@@ -25,8 +25,7 @@
  *   levels for nothing (`docs/state-management.md`).
  * - The attribute, not only the class, because jsdom loads no stylesheet: a
  *   class-only hide leaves the whole subtree answering `getByRole`, and three
- *   panes of rows would then all match at once. `ProfileDisplayModal` already
- *   establishes the idiom.
+ *   panes of rows would then all match at once.
  *
  * ## It composes; it does not fetch
  *
@@ -44,13 +43,19 @@
  * "loaded, and there are none", and collapsing the two would hide a real zero
  * forever, which is the same defect pointing the other way.
  *
- * ## The panes' dialogs live here
+ * ## The Profile pane's dialog lives here; its display editor does not
  *
- * A pane renders and owns no dialog, so both of the Profile pane's are mounted
- * at this level: `ProfileDisplayModal` behind the gear and `ProfileSaveModal`
- * behind Save — the last thing between a draft and a live write to the org's
- * directory. Both open from a nullable payload rather than a boolean beside one,
+ * A pane renders and owns no dialog, so `ProfileSaveModal` is mounted at this
+ * level — the last thing between a draft and a live write to the org's
+ * directory. It opens from a nullable payload rather than a boolean beside one,
  * so what is being confirmed and the fact that something is cannot drift apart.
+ *
+ * Display customization is **not** a dialog any more. The gear switches the
+ * Profile pane into customize mode, where `ProfileDisplayEditor` replaces the
+ * section list in place; all this rung keeps is the mode flag, because nothing
+ * outside the card reads it. The editor holds its own draft and hands back a
+ * whole `ProfileDisplayConfig` on Done, so the write happens once, on commit —
+ * where the modal it replaced wrote live on every click.
  *
  * ## Page-level actions are deliberately not here
  *
@@ -65,7 +70,6 @@ import { Tabs, type TabItem } from '../shared';
 import GroupMembershipsList from './GroupMembershipsList';
 import UserAppsList from './UserAppsList';
 import UserProfilePane from './UserProfilePane';
-import ProfileDisplayModal from './ProfileDisplayModal';
 import ProfileSaveModal from './ProfileSaveModal';
 import { userDisplayName } from '../../../shared/utils/userDisplay';
 import type { AttributeDescriptor } from './profileAttributes';
@@ -142,13 +146,12 @@ export interface UserDetailPanelProps {
   /** The admin's reconciled profile-display configuration for this org. */
   profileConfig: ProfileDisplayConfig;
   /**
-   * Applies one configuration patch. Record patches (`assign`, `hidden`) arrive
-   * whole by design — pass them straight through to the store's `update`, never
-   * merged here.
+   * Applies one configuration change. The display editor commits the **whole**
+   * configuration on Done, and record fields (`assign`, `hidden`) are always
+   * whole maps by design — pass them straight through to the store's `update`,
+   * never merged here.
    */
   onProfileConfigChange: (patch: Partial<ProfileDisplayConfig>) => void;
-  /** Discards the org's configuration and returns to the shipped defaults. */
-  onProfileConfigReset: () => void;
   /**
    * Attribute Okta name → the names of the rules that read it *and* currently
    * grant this user access. Absent attributes carry no mark.
@@ -188,13 +191,12 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
   isLoadingProfile,
   profileConfig,
   onProfileConfigChange,
-  onProfileConfigReset,
   ruleReads,
   profileEdit,
 }) => {
-  // The gear belongs to the Profile pane, so its dialog's open state does too —
+  // The gear belongs to the Profile pane, so the mode it switches on does too —
   // nothing outside this card reads it.
-  const [isConfiguringProfile, setIsConfiguringProfile] = useState(false);
+  const [isCustomizingDisplay, setIsCustomizingDisplay] = useState(false);
 
   const tabs: TabItem[] = [
     // Every count here is omitted rather than zeroed while its payload is
@@ -272,7 +274,20 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
             config={profileConfig}
             ruleReads={ruleReads}
             isLoading={isLoadingProfile}
-            onConfigure={() => setIsConfiguringProfile(true)}
+            customize={{
+              isCustomizing: isCustomizingDisplay,
+              onBegin: () => setIsCustomizingDisplay(true),
+              // Done: one whole-config write, then out of the mode. `assign`
+              // and `hidden` arrive complete by design — a one-key patch is
+              // how a record merge un-files everything it did not mention.
+              onCommit: (next) => {
+                onProfileConfigChange(next);
+                setIsCustomizingDisplay(false);
+              },
+              // Cancel: the draft never left the editor, so there is nothing to
+              // undo here.
+              onCancel: () => setIsCustomizingDisplay(false),
+            }}
             edit={profileEdit?.controls}
             cells={profileEdit?.cells}
           />
@@ -280,23 +295,9 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
       </div>
 
       {/*
-        Edits apply live to the pane behind the dialog: the patch goes straight to
-        the store's `update`, and `assign`/`hidden` arrive as whole maps by design.
-      */}
-      <ProfileDisplayModal
-        isOpen={isConfiguringProfile}
-        onClose={() => setIsConfiguringProfile(false)}
-        attributes={attributes}
-        config={profileConfig}
-        onChange={onProfileConfigChange}
-        onReset={onProfileConfigReset}
-        ruleReads={ruleReads}
-      />
-
-      {/*
-        The save confirmation belongs here for the same reason the display modal
-        does: the pane renders and owns no dialog, and this is the last thing
-        between a draft and a live write to the org's directory. Its own
+        The save confirmation belongs here because the pane renders and owns no
+        dialog, and this is the last thing between a draft and a live write to
+        the org's directory. Its own
         `changes` prop is the nullable discriminant that opens it, so it is
         mounted unconditionally whenever the rung offers editing.
       */}

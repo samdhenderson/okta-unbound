@@ -74,7 +74,7 @@ export interface UserProfileAttributeListProps {
  * Outer list box: the gap between fields, and the grid track in `grid`.
  *
  * Deliberately **not** an ADR-0048 role. `rows` vs. `compact` is a content-density
- * choice the admin makes in `ProfileDisplayCategoriesTab` — same standing as
+ * choice the admin makes in `ProfileDisplayOptions` — same standing as
  * `ListRow`'s own `density` prop, which the ADR says must not run in parallel with
  * the viewport-driven scale. Collapsing `space-y-2`/`space-y-1` onto one role would
  * erase the one distinction this lookup exists to keep.
