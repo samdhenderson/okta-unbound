@@ -96,6 +96,21 @@ interface ClauseChecklistProps {
    * `group-name-regex` reason.
    */
   groupContext?: RuleGroupContext;
+  /**
+   * Names group ids the {@link groupContext} cannot — every group referenced by
+   * a clause that this user is **not** a member of.
+   *
+   * The two sources answer different halves of one question and neither is
+   * enough alone. `groupContext` names the groups the user is in; the group an
+   * admin actually needs named is usually the prerequisite they are *missing*,
+   * which by definition is not in that list. Supplied by
+   * `sidepanel/hooks/useGroupNameResolver`, which reads the org snapshot and
+   * falls back to one `GET /api/v1/groups/{id}`.
+   *
+   * This component never fetches. An id nothing names still renders exactly as
+   * it did — quoted, in mono, inside the expression.
+   */
+  resolveGroupName?: GroupNameResolver;
 }
 
 /** Props for {@link ClauseRow}. */
@@ -322,19 +337,22 @@ const ClauseChecklist: React.FC<ClauseChecklistProps> = ({
   user,
   maxClauses,
   groupContext,
+  resolveGroupName: resolveFromHost,
 }) => {
   const { clauses, summary } = useMemo(
     () => explainRuleExpression(expression, user, { maxClauses, groups: groupContext }),
     [expression, user, maxClauses, groupContext],
   );
 
-  // No list means no resolver — today's raw-id rendering, rather than one that
-  // answers `undefined` to everything.
+  // Two sources, membership names first: those are rows Okta returned for this
+  // user, and the host's resolver may be answering from a walked snapshot. A
+  // surface that supplies neither renders raw ids, exactly as before either
+  // existed.
   const resolveGroupName = useMemo<GroupNameResolver | undefined>(() => {
-    if (!groupContext || groupContext.length === 0) return undefined;
-    const namesById = new Map(groupContext.map((entry) => [entry.id, entry.name]));
-    return (groupId) => namesById.get(groupId);
-  }, [groupContext]);
+    const namesById = new Map((groupContext ?? []).map((entry) => [entry.id, entry.name]));
+    if (namesById.size === 0 && !resolveFromHost) return undefined;
+    return (groupId) => namesById.get(groupId) ?? resolveFromHost?.(groupId);
+  }, [groupContext, resolveFromHost]);
 
   if (clauses.length === 0) {
     const reasonCode =

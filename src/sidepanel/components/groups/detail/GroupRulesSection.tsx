@@ -59,7 +59,13 @@
  * full rung stays exactly as it was.
  */
 import React, { useMemo } from 'react';
-import { AlertMessage, DetailSection, LoadingSpinner, RuleExpressionText } from '../../shared';
+import {
+  AlertMessage,
+  DetailSection,
+  LoadingSpinner,
+  RuleExpressionText,
+  type GroupNameResolver,
+} from '../../shared';
 import RuleCard from '../../RuleCard';
 import type { FeedingRule, SourceStatus } from '../../../hooks/useGroupSource';
 import type { ReferencingRule } from '../../../hooks/useGroupRuleReferences';
@@ -73,15 +79,23 @@ import type { FormattedRule } from '../../../../shared/types';
  * — a horizontal scroller in a side panel this narrow hides the end of the very line the
  * block exists to show.
  */
-const RuleConditionLine: React.FC<{ rule: FormattedRule }> = ({ rule }) => {
-  const names = rule.allGroupNamesMap;
+const RuleConditionLine: React.FC<{
+  rule: FormattedRule;
+  resolveGroupName?: GroupNameResolver;
+}> = ({ rule, resolveGroupName: resolveFromHost }) => {
   /*
-    The resolver is derived from the names the caller already holds — this component
-    fetches nothing, and an id with no known name stays verbatim in the expression.
+    Two sources, per-rule map first. `allGroupNamesMap` is populated only by
+    `fetchGroupRulesRequest` with `resolveGroupNames: true` — and this rung's
+    loader (`groupDiscovery.fetchAndCacheAllGroupRules`) formats with
+    `formatRuleForDisplay`, which never sets it. So on this surface the map was
+    always absent and the resolver always `undefined`: every group id in every
+    condition here rendered raw, permanently. The host's resolver is what
+    actually answers; the map stays first for the paths that do populate it.
   */
-  const resolveGroupName = useMemo(
-    () => (names ? (groupId: string) => names[groupId] : undefined),
-    [names],
+  const names = rule.allGroupNamesMap;
+  const resolveGroupName = useMemo<GroupNameResolver | undefined>(
+    () => (groupId) => names?.[groupId] ?? resolveFromHost?.(groupId),
+    [names, resolveFromHost],
   );
 
   const expression = rule.conditionExpression || rule.condition;
@@ -108,7 +122,17 @@ const RuleRelationList: React.FC<{
   emptyMessage: string;
   rules: FormattedRule[];
   onNavigateToRule?: (ruleId: string) => void;
-}> = ({ heading, hint, status, error, emptyMessage, rules, onNavigateToRule }) => (
+  resolveGroupName?: GroupNameResolver;
+}> = ({
+  heading,
+  hint,
+  status,
+  error,
+  emptyMessage,
+  rules,
+  onNavigateToRule,
+  resolveGroupName,
+}) => (
   <div>
     <h3 className="text-xs font-medium text-neutral-600">
       {heading}
@@ -133,7 +157,7 @@ const RuleRelationList: React.FC<{
               <RuleCard rule={rule} onOpenInRulesTab={onNavigateToRule} />
               {/* Outside the row, never inside it: the row is covered by a stretched
                   button, and a badge under that overlay would be unreachable. */}
-              <RuleConditionLine rule={rule} />
+              <RuleConditionLine rule={rule} resolveGroupName={resolveGroupName} />
             </div>
           ))}
         </div>
@@ -158,6 +182,11 @@ interface GroupRulesSectionProps {
   referencingError: string | null;
   /** Opens a rule's detail rung on the Rules tab. Pressing a row is the jump. */
   onNavigateToRule?: (ruleId: string) => void;
+  /**
+   * Names the group ids inside the conditions rendered here. Supplied by the
+   * rung, which owns `useGroupNameResolver`; this section fetches nothing.
+   */
+  resolveGroupName?: GroupNameResolver;
 }
 
 /**
@@ -172,6 +201,7 @@ const GroupRulesSection: React.FC<GroupRulesSectionProps> = ({
   referencingStatus,
   referencingError,
   onNavigateToRule,
+  resolveGroupName,
 }) => (
   <DetailSection title="Rules">
     <div className="space-y-4">
@@ -183,6 +213,7 @@ const GroupRulesSection: React.FC<GroupRulesSectionProps> = ({
         emptyMessage="No rule assigns users to this group. Members are added manually or by app push."
         rules={assigningRules}
         onNavigateToRule={onNavigateToRule}
+        resolveGroupName={resolveGroupName}
       />
 
       <RuleRelationList
@@ -193,6 +224,7 @@ const GroupRulesSection: React.FC<GroupRulesSectionProps> = ({
         emptyMessage="No rule condition references this group by id."
         rules={referencingRules}
         onNavigateToRule={onNavigateToRule}
+        resolveGroupName={resolveGroupName}
       />
     </div>
   </DetailSection>

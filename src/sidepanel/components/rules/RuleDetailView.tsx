@@ -34,8 +34,14 @@
  * rendering; pushing the rung costs no API call. That is what lets `RulesTab` push it
  * straight from a row without a loading state.
  */
-import React from 'react';
-import { CopyableId, DetailSection, EntityLink } from '../shared';
+import React, { useMemo } from 'react';
+import {
+  CopyableId,
+  DetailSection,
+  EntityLink,
+  RuleExpressionText,
+  type GroupNameResolver,
+} from '../shared';
 import Icon from '../shared/Icon';
 import RuleActionBar from './RuleActionBar';
 import type { FormattedRule } from '../../../shared/types';
@@ -46,6 +52,14 @@ export interface RuleDetailViewProps {
   rule: FormattedRule;
   /** Okta org origin, for the Admin Console rules-page link. */
   oktaOrigin?: string | null;
+  /**
+   * Names the group ids inside the condition. Supplied by `RulesTab`, which owns
+   * `useGroupNameResolver`; this rung fetches nothing.
+   *
+   * `rule.allGroupNamesMap` remains the first source when the rules were loaded
+   * on a path that populates it — see the `When` section.
+   */
+  resolveGroupName?: GroupNameResolver;
   /** Open the read-only impact preview. Omitted when the rule targets no groups. */
   onPreviewImpact?: () => void;
   /** Whether the strip's disclosure tier is open. */
@@ -89,62 +103,6 @@ const MissingGroupChip: React.FC<{ groupId: string }> = ({ groupId }) => (
 );
 
 /**
- * Render a condition expression, swapping recognised group ids for the shared
- * {@link EntityLink} badge where a name is known.
- *
- * Carried over from `RuleCard`. The badge *replaces* the literal it stood for and so
- * carries `copyId` — the same trade `RuleExpressionText` makes — and its copy control
- * names the **id**, not the group, because two groups in one condition can share a display
- * name and the derived default would collide (I-009). An id with no known name is left
- * verbatim: this is source text, and a bare id in mono inside a `<code>` already reads as
- * an id rather than as a name.
- *
- * @param expression - The raw condition expression.
- * @param allGroupNamesMap - Group id to display name, when the org snapshot resolved them.
- * @returns Nodes for the expression, with group-name badges interleaved.
- */
-const renderConditionWithGroupBadges = (
-  expression: string,
-  allGroupNamesMap?: Record<string, string>,
-): React.ReactNode => {
-  if (!allGroupNamesMap || Object.keys(allGroupNamesMap).length === 0) return expression;
-
-  const groupIdPattern = /\b00g[a-zA-Z0-9]{17}\b/g;
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match;
-
-  while ((match = groupIdPattern.exec(expression)) !== null) {
-    const groupId = match[0];
-    const groupName = allGroupNamesMap[groupId];
-
-    if (match.index > lastIndex) parts.push(expression.substring(lastIndex, match.index));
-
-    if (groupName && groupName !== groupId) {
-      parts.push(
-        <EntityLink
-          key={`${groupId}-${match.index}`}
-          type="group"
-          id={groupId}
-          name={groupName}
-          copyId
-          copyIdLabel={`Copy group id ${groupId}`}
-          className="align-middle"
-        />,
-      );
-    } else {
-      parts.push(groupId);
-    }
-
-    lastIndex = match.index + groupId.length;
-  }
-
-  if (lastIndex < expression.length) parts.push(expression.substring(lastIndex));
-
-  return parts.length > 0 ? parts : expression;
-};
-
-/**
  * The rule detail rung.
  *
  * The header is not here — `RulesTab` keeps one `PageHeader` and feeds it
@@ -156,6 +114,7 @@ const renderConditionWithGroupBadges = (
 const RuleDetailView: React.FC<RuleDetailViewProps> = ({
   rule,
   oktaOrigin,
+  resolveGroupName: resolveFromHost,
   onPreviewImpact,
   tierOpen,
   onTierOpenChange,
@@ -170,6 +129,16 @@ const RuleDetailView: React.FC<RuleDetailViewProps> = ({
 }) => {
   const hasConflicts = Boolean(rule.conflicts && rule.conflicts.length > 0);
   const missingTargetCount = rule.missingGroupIds?.length ?? 0;
+
+  // Per-rule map first, host resolver second. `allGroupNamesMap` is populated
+  // only when the rules were fetched with `resolveGroupNames: true` **and** the
+  // org's group walk had rows — so on a cold snapshot it is empty and the host's
+  // resolver is the one that answers.
+  const names = rule.allGroupNamesMap;
+  const resolveGroupName = useMemo<GroupNameResolver>(
+    () => (groupId: string) => names?.[groupId] ?? resolveFromHost?.(groupId),
+    [names, resolveFromHost],
+  );
 
   return (
     <div className="space-y-(--sp-rung)">
@@ -193,12 +162,18 @@ const RuleDetailView: React.FC<RuleDetailViewProps> = ({
         description="The condition Okta evaluates against every user in the org."
       >
         <div className="rounded-md border border-neutral-200 bg-white p-(--sp-card)">
-          <code className="block overflow-x-auto font-mono text-sm text-neutral-900">
-            {renderConditionWithGroupBadges(
-              rule.conditionExpression || rule.condition,
-              rule.allGroupNamesMap,
-            )}
-          </code>
+          {/*
+            The shared renderer, not a local one. This rung kept its own id-regex
+            tokeniser doing the same job — and being id-shaped only, it could not
+            badge a group a condition names by *name*, which the shared one does
+            (I-036). Two renderers for one string is exactly the drift
+            `RuleExpressionText` was promoted to `shared/` to stop, and this is
+            the surface where a divergence would be most visible.
+          */}
+          <RuleExpressionText
+            text={rule.conditionExpression || rule.condition}
+            resolveGroupName={resolveGroupName}
+          />
         </div>
 
         {rule.userAttributes.length > 0 && (

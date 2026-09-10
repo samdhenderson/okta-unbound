@@ -17,7 +17,7 @@
  */
 import React from 'react';
 import type jsep from 'jsep';
-import { Badge, EntityLink, Eyebrow } from '../shared';
+import { Badge, EntityLink, Eyebrow, type GroupNameResolver } from '../shared';
 import ClauseChecklist from '../groups/detail/ClauseChecklist';
 import { parseRuleExpression, type RuleGroupContext } from '../../../shared/ruleEvaluator';
 import { conditionExpressionOf } from '../../../shared/membership/ruleExpression';
@@ -124,6 +124,13 @@ export interface RuleEvidenceProps {
    * (ADR-0021).
    */
   groupContext?: RuleGroupContext;
+  /**
+   * Names the group ids {@link groupContext} cannot — the ones this user is not
+   * a member of, which is usually the group the reader most needs named. Passed
+   * straight through to the checklist; see its own prop for why the two sources
+   * are both needed.
+   */
+  resolveGroupName?: GroupNameResolver;
 }
 
 /**
@@ -131,7 +138,12 @@ export interface RuleEvidenceProps {
  *
  * @param props - See {@link RuleEvidenceProps}.
  */
-const MembershipRuleEvidence: React.FC<RuleEvidenceProps> = ({ rule, user, groupContext }) => {
+const MembershipRuleEvidence: React.FC<RuleEvidenceProps> = ({
+  rule,
+  user,
+  groupContext,
+  resolveGroupName,
+}) => {
   const expression = conditionExpressionOf(rule);
   const attributes = conditionAttributes(expression);
 
@@ -155,7 +167,12 @@ const MembershipRuleEvidence: React.FC<RuleEvidenceProps> = ({ rule, user, group
       <div className="mt-2">
         <Eyebrow className="mb-1 block">Condition</Eyebrow>
         {user ? (
-          <ClauseChecklist expression={expression} user={user} groupContext={groupContext} />
+          <ClauseChecklist
+            expression={expression}
+            user={user}
+            groupContext={groupContext}
+            resolveGroupName={resolveGroupName}
+          />
         ) : (
           <code className="block overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-neutral-200 bg-white p-2 font-mono text-xs text-neutral-900">
             {expression || 'No condition expression'}

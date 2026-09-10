@@ -76,10 +76,19 @@ interface ReportState {
   readonly userId: string | null;
   /** The committed report. */
   readonly report: BlastRadiusReport;
+  /**
+   * The org's group id → name map as it stood when the report was committed.
+   *
+   * Held in state rather than only in {@link groupNamesRef} because the rule rows
+   * *render* condition expressions, and an `isMemberOfGroup("00g…")` inside one
+   * was printing raw while this hook sat on the names for the whole org. A ref
+   * cannot feed a render; this can.
+   */
+  readonly groupNames: ReadonlyMap<string, string>;
 }
 
 /** The resting state. One shared instance, so `setState(IDLE)` on an idle hook bails out. */
-const IDLE: ReportState = { userId: null, report: NOT_COMPUTED };
+const IDLE: ReportState = { userId: null, report: NOT_COMPUTED, groupNames: new Map() };
 
 /** What {@link useBlastRadius} needs to answer a question about an edit. */
 export interface UseBlastRadiusOptions {
@@ -140,6 +149,16 @@ export interface UseBlastRadiusReturn {
   reset: () => void;
   /** Whether a run is in flight — true only across the group-name cache read. */
   isAnalyzing: boolean;
+  /**
+   * Names a group id from the org snapshot read this report was computed with,
+   * so a rule row can print `isMemberOfGroup("00g…")` as the group.
+   *
+   * Reads nothing and fetches nothing — it is the map the analysis already used
+   * to label target groups, handed to the surface that renders the conditions.
+   * `undefined` for an id the snapshot does not hold, and for every id before a
+   * report has been computed.
+   */
+  resolveGroupName: (groupId: string) => string | undefined;
 }
 
 /**
@@ -208,6 +227,15 @@ export function useBlastRadius({
   const currentUserId = user?.id ?? null;
   const report = state.userId === currentUserId ? state.report : NOT_COMPUTED;
 
+  // Scoped to the same subject check as the report itself: labelling this run's
+  // ids with the previous user's names would be confident and wrong, which is
+  // the failure `groupNamesRef`'s origin key already guards against upstream.
+  const committedNames = state.userId === currentUserId ? state.groupNames : undefined;
+  const resolveGroupName = useCallback(
+    (groupId: string) => committedNames?.get(groupId),
+    [committedNames],
+  );
+
   const analyze = useCallback(
     (draft: Readonly<Record<string, unknown>>) => {
       if (!user) {
@@ -229,7 +257,7 @@ export function useBlastRadius({
         if (!mountedRef.current || runIdRef.current !== runId) return;
 
         const next = analyzeBlastRadius({ user, draft, memberships, rules, groupNames });
-        setState({ userId: user.id, report: next });
+        setState({ userId: user.id, report: next, groupNames });
         setIsAnalyzing(false);
         // Counts and the status enum only — never a name, an expression, or a
         // drafted value.
@@ -239,5 +267,5 @@ export function useBlastRadius({
     [user, memberships, rules, oktaOrigin, reset],
   );
 
-  return { report, analyze, reset, isAnalyzing };
+  return { report, analyze, reset, isAnalyzing, resolveGroupName };
 }

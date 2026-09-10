@@ -145,6 +145,23 @@ export const cacheKeys = {
   appGroups: (appId: string): EntityKey => ['appGroups', appId],
 
   /**
+   * One group's display name, resolved by id.
+   *
+   * The backstop behind `useGroupNameResolver`: the org snapshot names every
+   * group it has walked, and this holds the handful it has not — a group id
+   * embedded in a rule condition, on a screen the reader is looking at now,
+   * whose org walk has not completed or never covered it.
+   *
+   * Entity-scoped, so it keys on the Okta group id alone (see the module note).
+   * Held at {@link TTL_LONG}: a group's name is one of the slowest-changing
+   * facts in an org, and the whole point of the entry is to make the fallback
+   * fetch happen once rather than once per surface.
+   *
+   * @param groupId - The Okta group id.
+   */
+  groupName: (groupId: string): EntityKey => ['groupName', groupId],
+
+  /**
    * One user's application assignments, as `userOperations.getUserApps` reports
    * them — the rows **and** the `complete` flag saying whether the pagination
    * walk finished.
