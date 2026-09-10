@@ -30,7 +30,21 @@
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { STAGE, TYPE, FRAMES, INTER, COLOR } from '../theme';
-import { Dock, Lift, Count, Split, Fan, FanChild, Recede } from '../verbs';
+import {
+  Dock,
+  Lift,
+  Count,
+  Split,
+  Fan,
+  FanChild,
+  Recede,
+  Snap,
+  Stamp,
+  Wipe,
+  Strike,
+  Pulse,
+  VERBS,
+} from '../verbs';
 import type { VerbName } from '../verbs';
 import { SketchBox, Written, draw as pencilDraw } from '../pencil';
 
@@ -333,6 +347,17 @@ export const Verbs: React.FC = () => {
   const drawPeriod = DRAW_TEXT_OFFSET + DRAW_TEXT_FRAMES + 90;
   const drawFrom = loopFrom(frame, 6 * ROW_STAGGER, drawPeriod);
 
+  // --- The five ad verbs. Every one of them is short enough that a 90f hold
+  // would be most of its cycle, so they run on a 60f hold instead: the point of
+  // this half of the matrix is that these land inside a shot the film would
+  // still be starting, and a long hold hides exactly that.
+  const AD_HOLD = 60;
+  const snapFrom = loopFrom(frame, 7 * ROW_STAGGER, VERBS.snap.frames + AD_HOLD);
+  const stampFrom = loopFrom(frame, 8 * ROW_STAGGER, VERBS.stamp.frames + AD_HOLD);
+  const wipeFrom = loopFrom(frame, 9 * ROW_STAGGER, VERBS.wipe.frames + AD_HOLD);
+  const strikeFrom = loopFrom(frame, 10 * ROW_STAGGER, VERBS.strike.frames + AD_HOLD);
+  const pulseFrom = loopFrom(frame, 11 * ROW_STAGGER, VERBS.pulse.frames + AD_HOLD);
+
   return (
     <AbsoluteFill style={{ background: STAGE.back, fontFamily: INTER }}>
       <div style={{ padding: '20px 40px 0' }}>
@@ -340,295 +365,432 @@ export const Verbs: React.FC = () => {
           The verb matrix
         </div>
         <div style={{ fontSize: TYPE.label, color: STAGE.inkDim, marginTop: 6 }}>
-          Seven verbs, three nouns each: a rule card, a member row, a tally. Every row runs the same
-          verb at the same phase across all three columns.
+          Twelve verbs, three nouns each: a rule card, a member row, a tally. Every row runs the
+          same verb at the same phase across all three columns. Left, the seven the film argues in.
+          Right, the five the advertisement needs, which are the same grammar with the reading time
+          taken out.
         </div>
       </div>
 
-      <div style={{ padding: '14px 40px 0', display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <Row
-          verb="dock"
-          cells={[
-            <Cell key="c1" label={`${FRAMES.dockTotal}F`} labelGap={DOCK_LABEL_GAP}>
-              <Dock from={dockFrom}>
-                <RuleCard />
-              </Dock>
-            </Cell>,
-            <Cell key="c2" label={`${FRAMES.dockTotal}F`} labelGap={DOCK_LABEL_GAP}>
-              <Dock from={dockFrom}>
-                <MemberRow />
-              </Dock>
-            </Cell>,
-            <Cell key="c3" label={`${FRAMES.dockTotal}F`} labelGap={DOCK_LABEL_GAP}>
-              <Dock from={dockFrom}>
-                <Tally value={94} />
-              </Dock>
-            </Cell>,
-          ]}
-        />
+      <div
+        style={{
+          padding: '14px 40px 0',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          columnGap: 40,
+          alignItems: 'start',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <Row
+            verb="dock"
+            cells={[
+              <Cell key="c1" label={`${FRAMES.dockTotal}F`} labelGap={DOCK_LABEL_GAP}>
+                <Dock from={dockFrom}>
+                  <RuleCard />
+                </Dock>
+              </Cell>,
+              <Cell key="c2" label={`${FRAMES.dockTotal}F`} labelGap={DOCK_LABEL_GAP}>
+                <Dock from={dockFrom}>
+                  <MemberRow />
+                </Dock>
+              </Cell>,
+              <Cell key="c3" label={`${FRAMES.dockTotal}F`} labelGap={DOCK_LABEL_GAP}>
+                <Dock from={dockFrom}>
+                  <Tally value={94} />
+                </Dock>
+              </Cell>,
+            ]}
+          />
 
-        <Row
-          verb="lift"
-          cells={[
-            <Cell key="c1" label={`${FRAMES.lift}F`}>
-              <Lift from={liftFrom}>
-                <RuleCard />
-              </Lift>
-            </Cell>,
-            <Cell key="c2" label={`${FRAMES.lift}F`}>
-              <Lift from={liftFrom}>
-                <MemberRow />
-              </Lift>
-            </Cell>,
-            <Cell key="c3" label={`${FRAMES.lift}F`}>
-              <Lift from={liftFrom}>
-                <Tally value={94} />
-              </Lift>
-            </Cell>,
-          ]}
-        />
+          <Row
+            verb="lift"
+            cells={[
+              <Cell key="c1" label={`${FRAMES.lift}F`}>
+                <Lift from={liftFrom}>
+                  <RuleCard />
+                </Lift>
+              </Cell>,
+              <Cell key="c2" label={`${FRAMES.lift}F`}>
+                <Lift from={liftFrom}>
+                  <MemberRow />
+                </Lift>
+              </Cell>,
+              <Cell key="c3" label={`${FRAMES.lift}F`}>
+                <Lift from={liftFrom}>
+                  <Tally value={94} />
+                </Lift>
+              </Cell>,
+            ]}
+          />
 
-        <Row
-          verb="count"
-          cells={[
-            <Cell key="c1" label={`${FRAMES.countRoll}F ROLL, ${FRAMES.countAffirmSettle}F AFFIRM`}>
-              <div
-                style={{
-                  padding: '10px 16px',
-                  background: STAGE.plate,
-                  border: `1px solid ${STAGE.rule}`,
-                  borderRadius: 10,
-                }}
+          <Row
+            verb="count"
+            cells={[
+              <Cell
+                key="c1"
+                label={`${FRAMES.countRoll}F ROLL, ${FRAMES.countAffirmSettle}F AFFIRM`}
               >
                 <div
                   style={{
-                    fontSize: TYPE.unit,
-                    letterSpacing: '.16em',
-                    textTransform: 'uppercase',
-                    color: STAGE.inkDim,
-                    marginBottom: 4,
+                    padding: '10px 16px',
+                    background: STAGE.plate,
+                    border: `1px solid ${STAGE.rule}`,
+                    borderRadius: 10,
                   }}
                 >
-                  Members filled
+                  <div
+                    style={{
+                      fontSize: TYPE.unit,
+                      letterSpacing: '.16em',
+                      textTransform: 'uppercase',
+                      color: STAGE.inkDim,
+                      marginBottom: 4,
+                    }}
+                  >
+                    Members filled
+                  </div>
+                  <Count from={countFrom} value={93} size={40} />
                 </div>
-                <Count from={countFrom} value={93} size={40} />
-              </div>
-            </Cell>,
-            <Cell key="c2" label={`${FRAMES.countRoll}F ROLL, ${FRAMES.countAffirmSettle}F AFFIRM`}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  width: 260,
-                  padding: '8px 14px',
-                  borderBottom: `1px solid ${STAGE.rule}`,
-                }}
+              </Cell>,
+              <Cell
+                key="c2"
+                label={`${FRAMES.countRoll}F ROLL, ${FRAMES.countAffirmSettle}F AFFIRM`}
               >
-                <div style={{ width: 10, height: 10, borderRadius: 5, background: STAGE.accent }} />
-                <div style={{ fontSize: TYPE.body, color: STAGE.ink, flex: 1 }}>Engineering</div>
-                <Count from={countFrom} value={12} size={27} unit="apps" />
-              </div>
-            </Cell>,
-            <Cell key="c3" label={`${FRAMES.countRoll}F ROLL, ${FRAMES.countAffirmSettle}F AFFIRM`}>
-              <Count from={countFrom} value={930} unit="events" size={56} />
-            </Cell>,
-          ]}
-        />
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    width: 260,
+                    padding: '8px 14px',
+                    borderBottom: `1px solid ${STAGE.rule}`,
+                  }}
+                >
+                  <div
+                    style={{ width: 10, height: 10, borderRadius: 5, background: STAGE.accent }}
+                  />
+                  <div style={{ fontSize: TYPE.body, color: STAGE.ink, flex: 1 }}>Engineering</div>
+                  <Count from={countFrom} value={12} size={27} unit="apps" />
+                </div>
+              </Cell>,
+              <Cell
+                key="c3"
+                label={`${FRAMES.countRoll}F ROLL, ${FRAMES.countAffirmSettle}F AFFIRM`}
+              >
+                <Count from={countFrom} value={930} unit="events" size={56} />
+              </Cell>,
+            ]}
+          />
 
-        {/* `Split`'s halves travel outward from the object's own resting
+          {/* `Split`'s halves travel outward from the object's own resting
             position via `transform`, which never changes its layout box - so
             a cell that hugs its column's left edge (every other row's
             default) leaves the departing left half nothing but the gutter to
             travel into, and at this row's gap widths that gutter is narrower
             than the travel. Centring each cell (`center`) gives both halves
             equal room on either side of the column instead. */}
-        <Row
-          verb="split"
-          cells={[
-            <Cell key="c1" label={`${FRAMES.split}F`} center>
-              <Split
-                from={splitOpenFrom}
-                close={splitCloseFrom}
-                gap={140}
-                tilt={[-4, 4]}
-                left={<RuleCard status="expected" />}
-                right={<RuleCard status="actual" />}
-              />
-            </Cell>,
-            <Cell key="c2" label={`${FRAMES.split}F`} center>
-              <Split
-                from={splitOpenFrom}
-                close={splitCloseFrom}
-                gap={100}
-                // Narrower than the row's other `MemberRow`s: "before
-                // edit"/"after edit" are short enough not to need the wider
-                // default plate, and a narrower pair leaves more of the
-                // column's own gutter free for the halves' travel.
-                left={<MemberRow label="before edit" width={220} />}
-                right={<MemberRow label="after edit" width={220} />}
-              />
-            </Cell>,
-            <Cell key="c3" label={`${FRAMES.split}F`} center>
-              <Split
-                from={splitOpenFrom}
-                close={splitCloseFrom}
-                gap={130}
-                left={<Tally value={8} unit="before" />}
-                right={<Tally value={12} unit="after" />}
-                delta={
-                  <div
-                    style={{
-                      width: 130,
-                      height: 3,
-                      background: STAGE.alert,
-                      position: 'relative',
-                    }}
-                  >
+          <Row
+            verb="split"
+            cells={[
+              <Cell key="c1" label={`${FRAMES.split}F`} center>
+                <Split
+                  from={splitOpenFrom}
+                  close={splitCloseFrom}
+                  gap={140}
+                  tilt={[-4, 4]}
+                  left={<RuleCard status="expected" />}
+                  right={<RuleCard status="actual" />}
+                />
+              </Cell>,
+              <Cell key="c2" label={`${FRAMES.split}F`} center>
+                <Split
+                  from={splitOpenFrom}
+                  close={splitCloseFrom}
+                  gap={100}
+                  // Narrower than the row's other `MemberRow`s: "before
+                  // edit"/"after edit" are short enough not to need the wider
+                  // default plate, and a narrower pair leaves more of the
+                  // column's own gutter free for the halves' travel.
+                  left={<MemberRow label="before edit" width={220} />}
+                  right={<MemberRow label="after edit" width={220} />}
+                />
+              </Cell>,
+              <Cell key="c3" label={`${FRAMES.split}F`} center>
+                <Split
+                  from={splitOpenFrom}
+                  close={splitCloseFrom}
+                  gap={130}
+                  left={<Tally value={8} unit="before" />}
+                  right={<Tally value={12} unit="after" />}
+                  delta={
                     <div
                       style={{
-                        position: 'absolute',
-                        top: -26,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        fontSize: TYPE.unit,
-                        color: STAGE.alert,
-                        whiteSpace: 'nowrap',
+                        width: 130,
+                        height: 3,
+                        background: STAGE.alert,
+                        position: 'relative',
                       }}
                     >
-                      plus 4 members
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: -26,
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          fontSize: TYPE.unit,
+                          color: STAGE.alert,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        plus 4 members
+                      </div>
                     </div>
-                  </div>
-                }
-              />
-            </Cell>,
-          ]}
-        />
-
-        <Row
-          verb="fan"
-          cells={[
-            <Cell key="c1" label={`${FRAMES.fanTotal}F, ${FRAMES.fanStagger}F APART`}>
-              <Fan from={fanFrom} count={3} style={{ display: 'flex', gap: 10 }}>
-                {(i, releaseFrame) => (
-                  <FanChild from={releaseFrame} angle={(i - 1) * 10}>
-                    <MiniRuleCard status={i === 1 ? 'active' : 'draft'} />
-                  </FanChild>
-                )}
-              </Fan>
-            </Cell>,
-            <Cell key="c2" label={`${FRAMES.fanTotal}F, ${FRAMES.fanStagger}F APART`}>
-              <Fan from={fanFrom} count={3} style={{ display: 'flex', gap: 10 }}>
-                {(i, releaseFrame) => (
-                  <FanChild from={releaseFrame} angle={(i - 1) * 6}>
-                    <MiniMemberRow label={`member ${i + 1}`} />
-                  </FanChild>
-                )}
-              </Fan>
-            </Cell>,
-            <Cell key="c3" label={`${FRAMES.fanTotal}F, ${FRAMES.fanStagger}F APART`}>
-              <Fan from={fanFrom} count={3} style={{ display: 'flex', gap: 20 }}>
-                {(i, releaseFrame) => (
-                  <FanChild from={releaseFrame} angle={(i - 1) * 10}>
-                    <Tally value={[2, 4, 12][i]} unit={['rules', 'groups', 'apps'][i]} size={32} />
-                  </FanChild>
-                )}
-              </Fan>
-            </Cell>,
-          ]}
-        />
-
-        <Row
-          verb="recede"
-          cells={[
-            <Cell key="c1" label={`${FRAMES.recede}F`}>
-              <Recede from={recedeFrom}>
-                <RuleCard />
-              </Recede>
-            </Cell>,
-            <Cell key="c2" label={`${FRAMES.recede}F`}>
-              <Recede from={recedeFrom}>
-                <MemberRow />
-              </Recede>
-            </Cell>,
-            <Cell key="c3" label={`${FRAMES.recede}F`}>
-              <Recede from={recedeFrom}>
-                <Tally value={94} />
-              </Recede>
-            </Cell>,
-          ]}
-        />
-
-        <Row
-          verb="draw"
-          cells={[
-            <Cell key="c1" label={`${DRAW_BOX_FRAMES}F BOX, ${DRAW_TEXT_FRAMES}F LABEL`}>
-              <svg width={210} height={100} viewBox="0 0 210 100">
-                <SketchBox
-                  x={8}
-                  y={6}
-                  width={160}
-                  height={50}
-                  p={pencilDraw(frame, drawFrom, DRAW_BOX_FRAMES)}
-                  seed={1}
+                  }
                 />
-                <Written
-                  x={12}
-                  y={6 + 50 + DRAW_LABEL_CLEARANCE}
-                  text="Rule card"
-                  p={pencilDraw(frame, drawFrom + DRAW_TEXT_OFFSET, DRAW_TEXT_FRAMES)}
-                  size={20}
-                  weight={600}
-                />
-              </svg>
-            </Cell>,
-            <Cell key="c2" label={`${DRAW_BOX_FRAMES}F BOX, ${DRAW_TEXT_FRAMES}F LABEL`}>
-              {/* Wider than the 248px box it contains: `Written` reveals the full
+              </Cell>,
+            ]}
+          />
+
+          <Row
+            verb="fan"
+            cells={[
+              <Cell key="c1" label={`${FRAMES.fanTotal}F, ${FRAMES.fanStagger}F APART`}>
+                <Fan from={fanFrom} count={3} style={{ display: 'flex', gap: 10 }}>
+                  {(i, releaseFrame) => (
+                    <FanChild from={releaseFrame} angle={(i - 1) * 10}>
+                      <MiniRuleCard status={i === 1 ? 'active' : 'draft'} />
+                    </FanChild>
+                  )}
+                </Fan>
+              </Cell>,
+              <Cell key="c2" label={`${FRAMES.fanTotal}F, ${FRAMES.fanStagger}F APART`}>
+                <Fan from={fanFrom} count={3} style={{ display: 'flex', gap: 10 }}>
+                  {(i, releaseFrame) => (
+                    <FanChild from={releaseFrame} angle={(i - 1) * 6}>
+                      <MiniMemberRow label={`member ${i + 1}`} />
+                    </FanChild>
+                  )}
+                </Fan>
+              </Cell>,
+              <Cell key="c3" label={`${FRAMES.fanTotal}F, ${FRAMES.fanStagger}F APART`}>
+                <Fan from={fanFrom} count={3} style={{ display: 'flex', gap: 20 }}>
+                  {(i, releaseFrame) => (
+                    <FanChild from={releaseFrame} angle={(i - 1) * 10}>
+                      <Tally
+                        value={[2, 4, 12][i]}
+                        unit={['rules', 'groups', 'apps'][i]}
+                        size={32}
+                      />
+                    </FanChild>
+                  )}
+                </Fan>
+              </Cell>,
+            ]}
+          />
+
+          <Row
+            verb="recede"
+            cells={[
+              <Cell key="c1" label={`${FRAMES.recede}F`}>
+                <Recede from={recedeFrom}>
+                  <RuleCard />
+                </Recede>
+              </Cell>,
+              <Cell key="c2" label={`${FRAMES.recede}F`}>
+                <Recede from={recedeFrom}>
+                  <MemberRow />
+                </Recede>
+              </Cell>,
+              <Cell key="c3" label={`${FRAMES.recede}F`}>
+                <Recede from={recedeFrom}>
+                  <Tally value={94} />
+                </Recede>
+              </Cell>,
+            ]}
+          />
+
+          <Row
+            verb="draw"
+            cells={[
+              <Cell key="c1" label={`${DRAW_BOX_FRAMES}F BOX, ${DRAW_TEXT_FRAMES}F LABEL`}>
+                <svg width={210} height={100} viewBox="0 0 210 100">
+                  <SketchBox
+                    x={8}
+                    y={6}
+                    width={160}
+                    height={50}
+                    p={pencilDraw(frame, drawFrom, DRAW_BOX_FRAMES)}
+                    seed={1}
+                  />
+                  <Written
+                    x={12}
+                    y={6 + 50 + DRAW_LABEL_CLEARANCE}
+                    text="Rule card"
+                    p={pencilDraw(frame, drawFrom + DRAW_TEXT_OFFSET, DRAW_TEXT_FRAMES)}
+                    size={20}
+                    weight={600}
+                  />
+                </svg>
+              </Cell>,
+              <Cell key="c2" label={`${DRAW_BOX_FRAMES}F BOX, ${DRAW_TEXT_FRAMES}F LABEL`}>
+                {/* Wider than the 248px box it contains: `Written` reveals the full
                   measured width of its text, and `jane.doe@example.com` at 18px
                   runs to the old 260px viewport edge, where the SVG clipped its
                   last glyph. The box sets the drawing, the viewport must fit the
                   longest thing drawn in it. */}
-              <svg width={320} height={92} viewBox="0 0 320 92">
-                <SketchBox
-                  x={6}
-                  y={6}
-                  width={248}
-                  height={40}
-                  p={pencilDraw(frame, drawFrom, DRAW_BOX_FRAMES)}
-                  seed={5}
-                />
-                <Written
-                  x={14}
-                  y={6 + 40 + DRAW_LABEL_CLEARANCE}
-                  text="jane.doe@example.com"
-                  p={pencilDraw(frame, drawFrom + DRAW_TEXT_OFFSET, DRAW_TEXT_FRAMES)}
-                  size={18}
-                  weight={400}
-                />
-              </svg>
-            </Cell>,
-            <Cell key="c3" label={`${DRAW_BOX_FRAMES}F BOX, ${DRAW_TEXT_FRAMES}F LABEL`}>
-              <svg width={130} height={108} viewBox="0 0 130 108">
-                <SketchBox
-                  x={6}
-                  y={6}
-                  width={90}
-                  height={56}
-                  p={pencilDraw(frame, drawFrom, DRAW_BOX_FRAMES)}
-                  seed={9}
-                />
-                <Written
-                  x={16}
-                  y={6 + 56 + DRAW_LABEL_CLEARANCE}
-                  text="94"
-                  p={pencilDraw(frame, drawFrom + DRAW_TEXT_OFFSET, DRAW_TEXT_FRAMES)}
-                  size={24}
-                  weight={700}
-                />
-              </svg>
-            </Cell>,
-          ]}
-        />
+                <svg width={320} height={92} viewBox="0 0 320 92">
+                  <SketchBox
+                    x={6}
+                    y={6}
+                    width={248}
+                    height={40}
+                    p={pencilDraw(frame, drawFrom, DRAW_BOX_FRAMES)}
+                    seed={5}
+                  />
+                  <Written
+                    x={14}
+                    y={6 + 40 + DRAW_LABEL_CLEARANCE}
+                    text="jane.doe@example.com"
+                    p={pencilDraw(frame, drawFrom + DRAW_TEXT_OFFSET, DRAW_TEXT_FRAMES)}
+                    size={18}
+                    weight={400}
+                  />
+                </svg>
+              </Cell>,
+              <Cell key="c3" label={`${DRAW_BOX_FRAMES}F BOX, ${DRAW_TEXT_FRAMES}F LABEL`}>
+                <svg width={130} height={108} viewBox="0 0 130 108">
+                  <SketchBox
+                    x={6}
+                    y={6}
+                    width={90}
+                    height={56}
+                    p={pencilDraw(frame, drawFrom, DRAW_BOX_FRAMES)}
+                    seed={9}
+                  />
+                  <Written
+                    x={16}
+                    y={6 + 56 + DRAW_LABEL_CLEARANCE}
+                    text="94"
+                    p={pencilDraw(frame, drawFrom + DRAW_TEXT_OFFSET, DRAW_TEXT_FRAMES)}
+                    size={24}
+                    weight={700}
+                  />
+                </svg>
+              </Cell>,
+            ]}
+          />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <Row
+            verb="snap"
+            cells={[
+              <Cell key="c1" label={`${VERBS.snap.frames}F`}>
+                <Snap from={snapFrom} edge="left">
+                  <MiniRuleCard />
+                </Snap>
+              </Cell>,
+              <Cell key="c2" label={`${VERBS.snap.frames}F`}>
+                <Snap from={snapFrom}>
+                  <MiniMemberRow label="amara@example.com" />
+                </Snap>
+              </Cell>,
+              <Cell key="c3" label={`${VERBS.snap.frames}F`}>
+                <Snap from={snapFrom}>
+                  <Tally value={94} size={34} />
+                </Snap>
+              </Cell>,
+            ]}
+          />
+
+          <Row
+            verb="stamp"
+            cells={[
+              <Cell key="c1" label={`${VERBS.stamp.frames}F`}>
+                <Stamp from={stampFrom} flash={STAGE.accent}>
+                  <div style={{ fontSize: 34, fontWeight: 700, color: STAGE.ink }}>WHY</div>
+                </Stamp>
+              </Cell>,
+              <Cell key="c2" label={`${VERBS.stamp.frames}F`}>
+                <Stamp from={stampFrom}>
+                  <MiniMemberRow label="amara@example.com" />
+                </Stamp>
+              </Cell>,
+              <Cell key="c3" label={`${VERBS.stamp.frames}F`}>
+                <Stamp from={stampFrom}>
+                  <Tally value={94} size={34} />
+                </Stamp>
+              </Cell>,
+            ]}
+          />
+
+          <Row
+            verb="wipe"
+            cells={[
+              <Cell key="c1" label={`${VERBS.wipe.frames}F`}>
+                <Wipe from={wipeFrom}>
+                  <MiniRuleCard />
+                </Wipe>
+              </Cell>,
+              <Cell key="c2" label={`${VERBS.wipe.frames}F`}>
+                <Wipe from={wipeFrom} direction="down">
+                  <MiniMemberRow label="amara@example.com" />
+                </Wipe>
+              </Cell>,
+              <Cell key="c3" label={`${VERBS.wipe.frames}F`}>
+                <Wipe from={wipeFrom}>
+                  <Tally value={94} size={34} />
+                </Wipe>
+              </Cell>,
+            ]}
+          />
+
+          <Row
+            verb="strike"
+            cells={[
+              <Cell key="c1" label={`${VERBS.strike.frames}F`}>
+                <div style={{ width: 108 }}>
+                  <MiniRuleCard />
+                  <Strike from={strikeFrom} style={{ marginTop: 6 }} />
+                </div>
+              </Cell>,
+              <Cell key="c2" label={`${VERBS.strike.frames}F`}>
+                <div style={{ width: 150 }}>
+                  <MiniMemberRow label="amara@example.com" />
+                  <Strike from={strikeFrom} color={STAGE.alert} style={{ marginTop: 6 }} />
+                </div>
+              </Cell>,
+              <Cell key="c3" label={`${VERBS.strike.frames}F`}>
+                <div style={{ width: 120 }}>
+                  <Tally value={94} size={34} />
+                  <Strike from={strikeFrom} style={{ marginTop: 6 }} />
+                </div>
+              </Cell>,
+            ]}
+          />
+
+          <Row
+            verb="pulse"
+            cells={[
+              <Cell key="c1" label={`${VERBS.pulse.frames}F`}>
+                <Pulse from={pulseFrom} radius={8}>
+                  <MiniRuleCard />
+                </Pulse>
+              </Cell>,
+              <Cell key="c2" label={`${VERBS.pulse.frames}F`}>
+                <Pulse from={pulseFrom} radius={6}>
+                  <MiniMemberRow label="amara@example.com" />
+                </Pulse>
+              </Cell>,
+              <Cell key="c3" label={`${VERBS.pulse.frames}F`}>
+                <Pulse from={pulseFrom} color={STAGE.affirm} radius={8}>
+                  <Tally value={94} size={34} />
+                </Pulse>
+              </Cell>,
+            ]}
+          />
+        </div>
       </div>
     </AbsoluteFill>
   );

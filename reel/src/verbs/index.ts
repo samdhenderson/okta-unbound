@@ -32,3 +32,8 @@ export * from './Count';
 export * from './Split';
 export * from './Fan';
 export * from './Recede';
+export * from './Snap';
+export * from './Stamp';
+export * from './Wipe';
+export * from './Strike';
+export * from './Pulse';
