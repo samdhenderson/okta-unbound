@@ -233,6 +233,37 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
     if (referencedGroupIds.length > 0) requestGroupNames(referencedGroupIds);
   }, [referencedGroupIds, requestGroupNames]);
 
+  /*
+    The backstop rung of the certainty ladder (ADR-0031's endpoint, fired without
+    a click).
+
+    Rungs 1-3 answer nearly everything: Okta's own `_embedded['group-rules']`
+    where the roster carried it, then the evaluator with the user's full group
+    list, then the org rules listing. What survives all three is a membership the
+    panel genuinely cannot settle — `attribution` other than `exact` — and for
+    those the honest options are to ask Okta or to keep hedging. Hedging is not
+    an option (`docs/claims.md`), so it asks.
+
+    Scoped hard, because this is the one rung that costs a call per row:
+
+    - only unsettled rows, so a proven membership never spends a request;
+    - only while the pane is on screen and the load has settled, so a hidden tab
+      and a half-read list issue nothing;
+    - once per row per hook instance, enforced inside `proveAll`.
+
+    If this fires often, the defect is in rung 2 and belongs there — the cost is
+    the symptom, not the design.
+  */
+  const unsettled = useMemo(
+    () => (isLoading ? [] : memberships.filter((m) => m.attribution !== 'exact')),
+    [isLoading, memberships],
+  );
+
+  useEffect(() => {
+    if (!isActive || unsettled.length === 0) return;
+    proofs.proveAll(unsettled);
+  }, [isActive, unsettled, proofs]);
+
   const toggleRow = (groupId: string) =>
     setOpenGroupIds((current) => {
       const next = new Set(current);

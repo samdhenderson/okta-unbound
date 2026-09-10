@@ -287,7 +287,11 @@ describe('getGroupRulesForGroup', () => {
       { id: '00gFAKEtarget0000001', profile: { name: 'Engineering' } },
       { id: '00gFAKEcondition0001', profile: { name: 'Contractors' } },
     ]);
-    vi.mocked(orgSnapshotStore.getMeta).mockResolvedValue({ complete: true });
+    // Only `complete` is read here; the rest of `SyncMeta` is irrelevant to the
+    // formatting under test.
+    vi.mocked(orgSnapshotStore.getMeta).mockResolvedValue({
+      complete: true,
+    } as Awaited<ReturnType<typeof orgSnapshotStore.getMeta>>);
 
     const core = makeCore({
       makeApiRequest: vi.fn().mockResolvedValue({

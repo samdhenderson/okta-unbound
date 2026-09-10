@@ -33,7 +33,7 @@
  * Rule names are end-user-controllable Okta data: rendered as escaped React text,
  * never logged here.
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Button } from '../shared';
 import Icon from '../shared/Icon';
 import { membershipSourceLine, sourceLineLabel } from '../../../shared/membership/sourceLine';
@@ -64,6 +64,20 @@ export interface MembershipProofs {
    * see the hook's note on why a roster must override it.
    */
   prove: (membership: GroupMembership, rowKey?: string) => void;
+  /**
+   * Ask Okta about every membership the panel could not settle itself — the
+   * backstop rung of the certainty ladder.
+   *
+   * Safe to call on every render with the same list: a row is asked about **at
+   * most once per hook instance**, whatever the answer was, so a request Okta
+   * declined is not retried on the next re-render.
+   *
+   * Pass only rows that are genuinely unsettled. This is the one rung that costs
+   * a call per row, and a row the evaluator already proved must never reach it —
+   * see the note on `prove` above about spending an admin's rate limit on a
+   * question nobody asked.
+   */
+  proveAll: (memberships: readonly GroupMembership[]) => void;
   /** Whether the surface can prove anything at all (a resolver was supplied). */
   enabled: boolean;
 }
@@ -120,9 +134,30 @@ export function useMembershipProofs(
     [onProve],
   );
 
+  /**
+   * Rows this instance has already sent, whatever came back. `outcomes` cannot
+   * serve: `unanswered` is a terminal state that would otherwise be re-asked on
+   * every render, and re-asking a question Okta declined once is how a backstop
+   * turns into a loop.
+   */
+  const asked = useRef<Set<string>>(new Set());
+
+  const proveAll = useCallback(
+    (memberships: readonly GroupMembership[]) => {
+      if (!onProve) return;
+      for (const membership of memberships) {
+        const rowKey = membership.group.id;
+        if (asked.current.has(rowKey)) continue;
+        asked.current.add(rowKey);
+        prove(membership, rowKey);
+      }
+    },
+    [onProve, prove],
+  );
+
   const outcomeFor = useCallback((rowKey: string) => outcomes[rowKey], [outcomes]);
 
-  return { outcomeFor, prove, enabled: Boolean(onProve) };
+  return { outcomeFor, prove, proveAll, enabled: Boolean(onProve) };
 }
 
 /** Props for {@link MembershipProofAction}. */

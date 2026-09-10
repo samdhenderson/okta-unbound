@@ -10,7 +10,7 @@
  * a reader does.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GroupMembershipsList from './GroupMembershipsList';
 import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
@@ -638,7 +638,6 @@ describe('GroupMembershipsList — proving one membership against Okta', () => {
     ...formattedRuleMembership,
     attribution: 'ambiguous',
   };
-
   const withProof = (
     onProveMembershipSource: (groupId: string) => Promise<MemberRuleAttribution>,
     memberships: GroupMembership[] = [guessed],
@@ -649,6 +648,12 @@ describe('GroupMembershipsList — proving one membership against Okta', () => {
         user={user}
         memberships={memberships}
         onProveMembershipSource={onProveMembershipSource}
+        // RETARGETED: these cases are about the **manual** button, and the pane
+        // now also asks automatically about anything it could not settle (the
+        // ladder's backstop rung, covered in its own describe below). Rendering
+        // them off screen keeps that rung inert, so what a click does is still
+        // observable in isolation. Nothing about the assertions moved.
+        isActive={false}
       />,
     );
 
@@ -764,5 +769,92 @@ describe('GroupMembershipsList — proving one membership against Okta', () => {
     expect(
       await screen.findByTitle(/Okta answering rather than the classifier/),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * The backstop rung of the certainty ladder: ADR-0031's endpoint, fired without
+ * a click, for the memberships rungs 1-3 could not settle.
+ *
+ * The manual button above is unchanged and still the only path for a settled
+ * row. What is new is that a row the panel *cannot* answer is no longer left
+ * hedged until somebody happens to open it — hedging is not an option
+ * (`docs/claims.md`), so the panel goes and asks.
+ */
+describe('GroupMembershipsList — asking Okta about what it could not settle', () => {
+  const unsettled: GroupMembership = { ...formattedRuleMembership, attribution: 'ambiguous' };
+  const settled: GroupMembership = { ...formattedRuleMembership, attribution: 'exact' };
+
+  const renderList = (
+    onProveMembershipSource: (groupId: string) => Promise<MemberRuleAttribution>,
+    memberships: GroupMembership[],
+    extra: Record<string, unknown> = {},
+  ) =>
+    render(
+      <GroupMembershipsList
+        {...base}
+        user={user}
+        memberships={memberships}
+        onProveMembershipSource={onProveMembershipSource}
+        {...extra}
+      />,
+    );
+
+  it('asks about a membership it could not settle, with no click at all', async () => {
+    const onProve = vi
+      .fn()
+      .mockResolvedValue({ state: 'rules', rules: [{ id: '0prX', name: 'HR sync' }] });
+    renderList(onProve, [unsettled]);
+
+    await waitFor(() => expect(onProve).toHaveBeenCalledWith(unsettled.group.id));
+    // And the answer lands on the row, not merely in the network log.
+    await openRow('Engineering');
+    expect(await screen.findByText(/Okta confirms: added by rule: HR sync/)).toBeInTheDocument();
+  });
+
+  it('never spends a request on a membership it already proved', async () => {
+    const onProve = vi.fn().mockResolvedValue({ state: 'no-rules' as const });
+    renderList(onProve, [settled]);
+
+    // Give the effect a turn to be wrong in.
+    await openRow('Engineering');
+    expect(onProve).not.toHaveBeenCalled();
+  });
+
+  it('asks once per row, however many times the list re-renders', async () => {
+    const onProve = vi.fn().mockResolvedValue({ state: 'unknown' as const });
+    const { rerender } = renderList(onProve, [unsettled]);
+
+    await waitFor(() => expect(onProve).toHaveBeenCalledTimes(1));
+
+    // `unknown` is terminal and must not be retried: re-asking a question Okta
+    // declined once is how a backstop becomes a loop.
+    rerender(
+      <GroupMembershipsList
+        {...base}
+        user={user}
+        memberships={[unsettled]}
+        onProveMembershipSource={onProve}
+      />,
+    );
+    await openRow('Engineering');
+    expect(onProve).toHaveBeenCalledTimes(1);
+  });
+
+  it('issues nothing while the pane is off screen', async () => {
+    const onProve = vi.fn().mockResolvedValue({ state: 'no-rules' as const });
+    renderList(onProve, [unsettled], { isActive: false });
+
+    await openRow('Engineering');
+    expect(onProve).not.toHaveBeenCalled();
+  });
+
+  it('issues nothing until the membership list has finished loading', async () => {
+    // A partial list is not a smaller answer; asking about it would spend calls
+    // on rows whose classification is not final.
+    const onProve = vi.fn().mockResolvedValue({ state: 'no-rules' as const });
+    renderList(onProve, [unsettled], { isLoading: true });
+
+    expect(onProve).not.toHaveBeenCalled();
   });
 });
