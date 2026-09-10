@@ -37,6 +37,10 @@ npm run reel:vo:budget   # per-beat narration time budget, derived from the cut 
 npm run reel:vo:targets  # rewrite NARRATION.md's Target: lines from the real cut
 npm run reel:vo:measure  # ffprobe captures/vo/ -> reel/src/vo.generated.ts
 npm run reel:vo:check    # narration gate: every act voiced, every line inside its budget
+npm run ad:look          # look at the store page ad (a separate 19s cut, reel/AD.md)
+npm run ad:draft         # render the ad cheaply, with sound
+npm run ad               # render clips/okta-unbound-ad.mp4
+npm run sfx              # synthesise the ad's sound effects with ffmpeg
 ```
 
 ## Message-passing model (the one thing to know)
@@ -138,29 +142,30 @@ be reviewed with `security-logging-reviewer`.
 
 ## Routing table — read ONLY the matching row(s)
 
-| If the task is…                                | Read                                               | Consider delegating to      |
-| ---------------------------------------------- | -------------------------------------------------- | --------------------------- |
-| Scoping a feature / adding a tab / a new verb  | `docs/product.md`, then `docs/features-plan.md`    | `feature-ideator`           |
-| Styling / colors / tokens / typography         | `docs/design-system.md`                            | `ui-reviewer`               |
-| Building / using a shared component            | `docs/components.md`, `docs/design-system.md`      | `component-builder`         |
-| Building / exploring a component visually      | `docs/component-explorer.md`                       | `component-builder`         |
-| Modal / a11y / loading-empty-error UX          | `docs/ux-guidelines.md`                            | `ui-reviewer`               |
-| Motion / animation / reduced motion            | `docs/motion.md`                                   | `ui-reviewer`               |
-| Refactoring a god component / pipeline / hooks | `docs/architecture.md`, `docs/state-management.md` | `architecture-refactor`     |
-| Adding / fixing tests                          | `docs/testing.md`                                  | `test-writer`               |
-| Logging / secrets / validation / `any` removal | `docs/development.md`                              | `security-logging-reviewer` |
-| Security posture / threat model / controls     | `docs/security.md`                                 | `security-logging-reviewer` |
-| Build / lint / CI / release / versioning       | `docs/development.md`                              | —                           |
-| Finding / removing unused code                 | `docs/dead-code.md`                                | —                           |
-| Calling the Okta API / picking an endpoint     | `okta-api` skill                                   | —                           |
-| Documenting code / TypeDoc / API comments      | `docs/development.md`                              | `docs-maintainer`           |
-| Writing / updating a spec or ADR               | `docs/README.md` + the affected doc                | `docs-maintainer`           |
-| Understanding the whole system                 | `docs/architecture.md`                             | —                           |
-| Changing the reel's cut, beats, or narration   | `okta-reel` skill                                  | `reel-cutter`               |
-| Building a reel piece, diagram, or verb        | `okta-reel` skill                                  | `reel-smith`                |
-| Filming or re-filming a demo chapter           | `okta-reel` skill                                  | —                           |
-| Unattended nightly maintenance run             | `SESSION.md`, `CONVENTIONS.md`                     | see `SESSION.md`'s roster   |
-| Fixing a named correctness bug (`DEBT.md`)     | the cited item's **Problem**/**Done when**         | `bugfix`                    |
+| If the task is…                                 | Read                                               | Consider delegating to      |
+| ----------------------------------------------- | -------------------------------------------------- | --------------------------- |
+| Scoping a feature / adding a tab / a new verb   | `docs/product.md`, then `docs/features-plan.md`    | `feature-ideator`           |
+| Styling / colors / tokens / typography          | `docs/design-system.md`                            | `ui-reviewer`               |
+| Building / using a shared component             | `docs/components.md`, `docs/design-system.md`      | `component-builder`         |
+| Building / exploring a component visually       | `docs/component-explorer.md`                       | `component-builder`         |
+| Modal / a11y / loading-empty-error UX           | `docs/ux-guidelines.md`                            | `ui-reviewer`               |
+| Motion / animation / reduced motion             | `docs/motion.md`                                   | `ui-reviewer`               |
+| Refactoring a god component / pipeline / hooks  | `docs/architecture.md`, `docs/state-management.md` | `architecture-refactor`     |
+| Adding / fixing tests                           | `docs/testing.md`                                  | `test-writer`               |
+| Logging / secrets / validation / `any` removal  | `docs/development.md`                              | `security-logging-reviewer` |
+| Security posture / threat model / controls      | `docs/security.md`                                 | `security-logging-reviewer` |
+| Build / lint / CI / release / versioning        | `docs/development.md`                              | —                           |
+| Finding / removing unused code                  | `docs/dead-code.md`                                | —                           |
+| Calling the Okta API / picking an endpoint      | `okta-api` skill                                   | —                           |
+| Documenting code / TypeDoc / API comments       | `docs/development.md`                              | `docs-maintainer`           |
+| Writing / updating a spec or ADR                | `docs/README.md` + the affected doc                | `docs-maintainer`           |
+| Understanding the whole system                  | `docs/architecture.md`                             | —                           |
+| Changing the reel's cut, beats, or narration    | `okta-reel` skill                                  | `reel-cutter`               |
+| Building a reel piece, diagram, or verb         | `okta-reel` skill                                  | `reel-smith`                |
+| Filming or re-filming a demo chapter            | `okta-reel` skill                                  | —                           |
+| Changing the store page ad or its sound effects | `reel/AD.md`                                       | `reel-smith`                |
+| Unattended nightly maintenance run              | `SESSION.md`, `CONVENTIONS.md`                     | see `SESSION.md`'s roster   |
+| Fixing a named correctness bug (`DEBT.md`)      | the cited item's **Problem**/**Done when**         | `bugfix`                    |
 
 ## Where things are
 
