@@ -148,9 +148,20 @@ hiding behind **More** while the panel it toggles sits open below.
 ## The selection register
 
 `register` is the strip's second measured row, for verbs whose object is what the
-reader has ticked. It renders as a recessed well (`bg-neutral-50`) inside the band's
-white chrome, one button size down (`xs` against the action row's `sm`) — a tonal
-step and a size step, no border, no rule, no divider.
+reader has ticked. It renders on the band's own white surface, at the band's own
+`px-2`, one button size down (`xs` against the action row's `sm`) — no border, no
+rule, no divider, no wash.
+
+**What separates the two families is the controls, not the surface.** Selection
+furniture — `Select all (M)`, `Deselect all`: the things that say how many rows the
+filter matched and how to stop ticking them — takes `variant: 'link'`. A verb that
+acts on the ticked rows (`Compare (N)`) keeps `secondary`, however small. The
+register's old `bg-neutral-50` well carried that separation until 2026-09-10 and is
+gone: a wash says _different_ but never _subordinate_, says nothing to a reader who
+cannot see it, and its `mx-2 px-2` inset stacked on the band's own — pushing the
+row's first glyph 24px from the card edge while every row above it started at 8px.
+The band's left edge is one line now, top to bottom. Row height is unchanged: a
+`link` keeps the vertical half of its size scale.
 
 **Pass it whenever the rung has a selection at all, not only once something is
 ticked.** The row holds its space in both states, so the first tick adds controls to

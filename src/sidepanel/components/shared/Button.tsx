@@ -2,7 +2,7 @@
  * @module sidepanel/components/shared/Button
  * @description The primary text button primitive — the default choice for any clickable CTA.
  *
- * Five variants and four sizes, with optional leading/trailing icon, loading
+ * Six variants and four sizes, with optional leading/trailing icon, loading
  * spinner, badge, and full-width layout. For icon-only affordances use
  * `IconButton`; for filter toggles use `FilterPill`.
  *
@@ -24,8 +24,29 @@
 import React from 'react';
 import Icon, { type IconType } from '../shared/Icon';
 
-/** Visual treatments: `secondary` is the default; `danger`/`success` carry semantic colour; `ghost` is chromeless. */
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
+/**
+ * Visual treatments: `secondary` is the default; `danger`/`success` carry semantic
+ * colour; `ghost` is chromeless; `link` reads as running text.
+ *
+ * ## `ghost` and `link` are not the same "chromeless"
+ *
+ * `ghost` is still a **box**: it keeps its size's horizontal padding, grows a wash
+ * on hover, and sits in a row of buttons as one of them. It is the treatment for a
+ * control that *is* a button but must not compete with the verbs beside it — a
+ * panel toggle, a disclosure trigger.
+ *
+ * `link` is not a box. It drops its horizontal padding entirely, takes the primary
+ * text colour and underlines on hover, so its first glyph lands on the same
+ * vertical line as the box edges above and below it rather than sitting inset from
+ * them by a padding nothing else in the column has. Use it where the control is a
+ * phrase in the layout rather than an object in a row of objects — the selection
+ * register's `Select all (M)` is the reference case. It is still a real `<button>`:
+ * the look is a link, the semantics are not, because pressing it navigates nowhere.
+ *
+ * Never reach for `link` to make a verb quieter. A verb that acts on something gets
+ * `secondary`, however small, and the size scale is what makes it quiet.
+ */
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success' | 'link';
 /**
  * Height/padding scale — `xs` ≈ 24px, `sm` ≈ 36px, `md` ≈ 40px, `lg` ≈ 56px.
  *
@@ -121,13 +142,34 @@ const variantClasses: Record<ButtonVariant, string> = {
     text-neutral-700 font-medium
     disabled:text-neutral-400
   `,
+  link: `
+    bg-transparent
+    text-primary-text hover:text-primary-dark hover:underline underline-offset-2
+    font-medium
+    transition-colors duration-(--dur-instant)
+    disabled:text-neutral-400 disabled:no-underline
+  `,
+};
+
+/**
+ * The horizontal padding that makes a button a box, held apart from the rest of the
+ * size scale because `link` is charged none of it: a link is a phrase, so its first
+ * glyph has to sit on the same vertical line as the box edges above and below it.
+ * The vertical half of the scale still applies — a `link` keeps its size's height,
+ * so a row of them is exactly as tall as the row of buttons it replaced.
+ */
+const sizePaddingX: Record<ButtonSize, string> = {
+  xs: 'px-2',
+  sm: 'px-3',
+  md: 'px-4',
+  lg: 'px-4',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  xs: 'px-2 py-0.5 text-xs min-h-6', // 24px
-  sm: 'px-3 py-1.5 text-xs min-h-9', // 36px
-  md: 'px-4 py-2 text-sm min-h-10', // 40px
-  lg: 'px-4 py-3 text-base min-h-14', // 56px
+  xs: 'py-0.5 text-xs min-h-6', // 24px
+  sm: 'py-1.5 text-xs min-h-9', // 36px
+  md: 'py-2 text-sm min-h-10', // 40px
+  lg: 'py-3 text-base min-h-14', // 56px
 };
 
 /**
@@ -165,12 +207,21 @@ const Button: React.FC<ButtonProps> = ({
   controls,
   ariaLabel,
 }) => {
+  /*
+   * A `link` is a phrase, so it is charged no horizontal padding and no press scale
+   * — text that shrinks under the pointer reads as a glitch rather than as a press
+   * — and it justifies from its start edge instead of centring inside a box it does
+   * not have.
+   */
+  const isLink = variant === 'link';
+
   const baseClasses = `
-    inline-flex items-center justify-center gap-2
-    rounded-md press active:brightness-90
+    inline-flex items-center gap-2
+    ${isLink ? 'justify-start rounded-sm' : 'justify-center rounded-md press active:brightness-90'}
     disabled:cursor-not-allowed
     focus:outline-2 focus:outline-offset-2 focus:outline-primary
     ${variantClasses[variant]}
+    ${isLink ? '' : sizePaddingX[size]}
     ${sizeClasses[size]}
     ${fullWidth ? 'w-full' : ''}
   `

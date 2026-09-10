@@ -118,13 +118,18 @@
  * either a divider or a colour — and a strip that has to explain its own
  * grouping has already lost.
  *
- * **The separation is a tonal step and nothing else.** No border, no rule, no
- * divider: the register is a recessed well (`bg-neutral-50`, the panel's one
- * surface tone below white) inside the band's white chrome, so the band reads as
- * two surfaces at two elevations. That is not the grey slab ADR-0051 §Context
- * rejected — that one was the *whole* strip, sitting above a white list, reading
- * as a section switched off. This is an inset well inside a white band, with the
- * band's own verbs on white directly above it.
+ * **The separation is in the controls, not in the surface.** No border, no rule,
+ * no divider, and no wash either: the register is the band's last row on the same
+ * white chrome as the rest of it, and what marks it as a different family is that
+ * its selection furniture is `link` at `xs` while the page's verbs above are
+ * buttons at `sm`.
+ *
+ * It was a recessed `bg-neutral-50` well until that turned out to cost more than
+ * it bought. A wash is a weak signal — it says *different*, never *subordinate*,
+ * and says nothing at all to a reader who cannot see it — and it dragged real
+ * geometry behind it: a second radius nested inside the band's own, and an `mx-2
+ * px-2` inset stacked on the band's `px-2`, so the register's first glyph sat 24px
+ * from the card edge while every row above started at 8px.
  *
  * **It shares, it does not stack.** The register renders whenever the caller
  * passes one, whatever is in it — so a rung whose register holds only
@@ -135,8 +140,8 @@
  * specific defect this shape exists to avoid.
  *
  * **It renders one size down.** Its buttons are `xs` (24px) against the action
- * row's `sm` (36px). The tonal step says the two rows are different surfaces;
- * the size step says which one is subordinate — without it a register holding
+ * row's `sm` (36px). The `link` treatment says the two rows hold different kinds
+ * of control; the size step says which one is subordinate — without it a register holding
  * `Select all (247)`, `Deselect all` and `Compare (3)` is simply the widest,
  * loudest thing in the band, and the page's own verbs above it read as the
  * afterthought. Both the visible row and its probe take the size from one
@@ -606,11 +611,24 @@ const ActionBar: React.FC<ActionBarProps> = ({
 
       {register !== undefined && (
         /*
-         * The selection register: one tonal step below the band's white chrome
-         * and separated from it by nothing else — no border, no rule, no divider.
-         * Inset (`mx-2 mb-2`) and radiused so it reads as a well sunk into the
-         * card rather than a second card stacked on it, and so its corners cannot
-         * poke out past the band's own rounded chrome at rest.
+         * The selection register: the band's last row, on the band's own white
+         * surface and at the band's own `px-2`, separated from the rows above by
+         * nothing at all — no border, no rule, no divider, no wash.
+         *
+         * It was a recessed `bg-neutral-50` well until that turned out to cost
+         * more than it bought. A wash is a weak signal — it says *different*,
+         * never *subordinate*, and says nothing to a reader who cannot see it —
+         * and it dragged real geometry behind it: a second radius nested inside
+         * the band's own, and an `mx-2 px-2` inset stacked on the band's `px-2`,
+         * so the register's first glyph sat 24px from the card edge while every
+         * row above it started at 8px. The band's one vertical line, broken by
+         * its last row, to make a point the controls were already making.
+         *
+         * What separates the two families now is the treatment of the controls
+         * themselves: page verbs are buttons at `sm`, selection furniture is
+         * `link` at `xs`. The row's height is unchanged — a `link` keeps its
+         * size's height, so this is exactly as tall as the row of `xs` buttons
+         * it replaced.
          *
          * Rendered whenever the caller passes a register, empty or not: the row
          * holds its space in both states, so ticking the first row adds controls
@@ -621,7 +639,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
           role="group"
           aria-label={register.ariaLabel}
           data-testid="action-bar-register"
-          className="mx-2 mb-2 flex flex-wrap items-center gap-2 rounded-md bg-neutral-50 px-2 py-1.5"
+          className="flex flex-wrap items-center gap-2 px-2 pb-2"
         >
           <span
             ref={registerAnchorRef}
