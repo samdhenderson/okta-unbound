@@ -21,8 +21,10 @@
  * ## Two rows, because there were always two kinds of verb
  *
  * The strip declares a page-scoped `actions` row and a selection-scoped
- * `register`, and `ActionBar` renders the second as a recessed well one tonal
- * step below the first — no border, no rule, no divider between them.
+ * `register`, and `ActionBar` renders the second as the band's last row on the
+ * same white surface — no border, no rule, no divider, no wash. What tells the
+ * two families apart is the controls: verbs are buttons at `sm`, selection
+ * furniture is `link` at `xs`.
  *
  * The split is not decoration. *Export list* acts on the filter and is present in
  * every state; *Export (3)* acts on the ticked rows and is gone the moment they
@@ -284,7 +286,7 @@ const GroupsListActionBar: React.FC<GroupsListActionBarProps> = ({
           {
             id: 'deselect-all',
             label: 'Deselect all',
-            variant: 'ghost' as const,
+            variant: 'link' as const,
             onClick: onDeselectAll,
             priority: 'pinned' as const,
           },
@@ -301,13 +303,17 @@ const GroupsListActionBar: React.FC<GroupsListActionBarProps> = ({
         the button's accessible description — says which of the two boundaries it
         is sitting on rather than restating the label.
 
-        `ghost`, like `Deselect all`: inside the register's recessed well these two
-        are furniture for the selection, not verbs acting on it, and the bordered
-        `secondary` of `Compare (N)` is what a verb looks like here.
+        `link`, like `Deselect all`: these two are furniture for the selection —
+        how many rows the filter matches, and how to stop ticking them — not verbs
+        acting on it, and the bordered `secondary` of `Compare (N)` is what a verb
+        looks like in this row. They were `ghost` while the register was a grey
+        well, where a chromeless box was as quiet as anything could get; with the
+        well gone, `ghost` would leave two boxes floating on white with no edge and
+        no reason to be boxes at all.
       */
       id: 'select-all',
       label: `Select all (${filteredCount})`,
-      variant: 'ghost',
+      variant: 'link',
       onClick: onSelectAll,
       disabled: filteredCount === 0 || selectedCount === filteredCount,
       title:

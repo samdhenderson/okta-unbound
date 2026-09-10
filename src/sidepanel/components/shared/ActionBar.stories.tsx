@@ -51,8 +51,9 @@ const meta = {
     register: {
       description:
         'The **selection register** — a second measured row of selection-scoped verbs, rendered ' +
-        'below `subRow` and separated from the action row by a tonal step alone: no border, no ' +
-        'rule, no divider. It shares rather than stacks (pass it whenever the rung has a ' +
+        "below `subRow` on the band's own white surface: no border, no rule, no divider and no " +
+        'wash — what marks it as a different family is that its selection furniture is `link` at ' +
+        '`xs` while the page verbs above are buttons at `sm`. It shares rather than stacks (pass it whenever the rung has a ' +
         'selection at all, so the first tick adds controls to a row that already exists instead ' +
         'of pushing the list down), it overflows independently of the action row, and both rows ' +
         'spill into the one tier behind the one **More**. Its leading descriptor must be a ' +
@@ -659,10 +660,16 @@ export const AlignsWithTheRung: Story = {
  *
  * The two families used to share one row, where nothing distinguished *Export
  * list* (acts on the filter, present always) from *Export (3)* (acts on the
- * ticked rows, gone the moment they are unticked). They are separated here by a
- * **tonal step and nothing else** — the register is a recessed well one step
- * below the band's white chrome, with no border, rule or divider between them, so
- * the band reads as two surfaces at two elevations.
+ * ticked rows, gone the moment they are unticked). What separates them here is
+ * **the controls themselves**: selection furniture is `link` at `xs`, page verbs
+ * are buttons at `sm`. No border, no rule, no divider — and no wash: the register
+ * sits on the band's own white surface and at the band's own `px-2`, so its first
+ * glyph lands on the same vertical line as the verbs above it.
+ *
+ * A `bg-neutral-50` well used to carry that separation. It is gone because a
+ * background says *different* but never *subordinate*, says nothing at all to a
+ * reader who cannot see it, and charged an `mx-2 px-2` inset on top of the band's
+ * own — pushing this row's text 24px in while every row above started at 8px.
  *
  * **Position one of the register is a safety property** (ADR-0051 §2): every
  * other control in it appears and disappears with the selection size, so whatever
@@ -670,8 +677,8 @@ export const AlignsWithTheRung: Story = {
  * `Select all (M)` when nothing is — two controls whose worst outcome is another
  * click — and never *Merge*, which empties the source groups.
  *
- * The tone step itself is **not** verified by this story: the headless runner
- * loads no Tailwind, so elevation, inset and colour are only checkable in a
+ * The treatment itself is **not** verified by this story: the headless runner
+ * loads no Tailwind, so colour, weight and inset are only checkable in a
  * CSS-bearing browser.
  */
 export const WithSelectionRegister: Story = {
@@ -690,8 +697,20 @@ export const WithSelectionRegister: Story = {
     register: {
       ariaLabel: 'Actions for the selected groups',
       actions: [
-        { id: 'deselect-all', label: 'Deselect all', onClick: fn(), priority: 'pinned' },
-        { id: 'select-all', label: 'Select all (34)', onClick: fn(), priority: 'pinned' },
+        {
+          id: 'deselect-all',
+          label: 'Deselect all',
+          variant: 'link',
+          onClick: fn(),
+          priority: 'pinned',
+        },
+        {
+          id: 'select-all',
+          label: 'Select all (34)',
+          variant: 'link',
+          onClick: fn(),
+          priority: 'pinned',
+        },
         { id: 'compare', label: 'Compare (3)', icon: 'chart', onClick: fn() },
         { id: 'merge', label: 'Merge (3)', icon: 'link', onClick: fn(), priority: 'tier' },
       ],
@@ -739,7 +758,15 @@ export const TheRegisterHoldsItsRowWhenEmpty: Story = {
     ],
     register: {
       ariaLabel: 'Actions for the selected groups',
-      actions: [{ id: 'select-all', label: 'Select all (34)', onClick: fn(), priority: 'pinned' }],
+      actions: [
+        {
+          id: 'select-all',
+          label: 'Select all (34)',
+          variant: 'link',
+          onClick: fn(),
+          priority: 'pinned',
+        },
+      ],
     },
   },
   play: async ({ canvasElement }) => {
