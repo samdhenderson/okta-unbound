@@ -111,10 +111,7 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
     groupBuckets,
     appBuckets,
     causes,
-    groupDiffCount,
-    appDiffCount,
     attributeParity,
-    attributeDiffCount,
     attributeConfig,
     attributeRuleReads,
     attributeEdit,
@@ -142,7 +139,6 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
       {!comparedUser && (
         <ComparisonSearchPhase
           contextUser={contextUser}
-          contextName={contextName}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           isSearching={isSearching}
@@ -172,13 +168,7 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
             isLoading={isLoading}
           />
 
-          <ComparisonTabBar
-            activeTab={activeTab}
-            onChange={setActiveTab}
-            groupDiff={groupDiffCount}
-            appDiff={appDiffCount}
-            attributeDiff={attributeDiffCount}
-          />
+          <ComparisonTabBar activeTab={activeTab} onChange={setActiveTab} />
 
           {isLoading && (
             <div className="py-8">

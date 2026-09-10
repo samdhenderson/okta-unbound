@@ -11,9 +11,10 @@ const SECTION_TABS: TabItem[] = [
 ];
 
 /**
- * The user-comparison surface's four sections: a `segmented` strip that carries
- * glyphs, wraps to two rows on a narrow panel, and badges only the counts that
- * have something to report.
+ * A strip that carries glyphs and badges only the counts that have something to
+ * report. No app surface pairs icons with `underline` today — the comparison
+ * strip dropped its glyphs when it moved here — but the capability is real in
+ * every variant, so it keeps a story.
  */
 const COMPARISON_TABS: TabItem[] = [
   { key: 'overview', label: 'Overview', icon: 'chart' },
@@ -43,7 +44,7 @@ const RAIL_TABS: TabItem[] = [
   { key: 'history', label: 'History', icon: 'clipboard' },
 ];
 
-/** Accessible tab bar with `underline`, `segmented` and `rail` variants. */
+/** Accessible tab bar with `underline` and `rail` variants. */
 const meta = {
   title: 'Shared/Tabs',
   component: Tabs,
@@ -53,7 +54,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Accessible tab bar with `underline`, `segmented` and `rail` variants.\n\n' +
+          'Accessible tab bar with `underline` and `rail` variants.\n\n' +
           'Renders the tab strip only — callers own the panels and toggle them on the active key. Implements the ARIA tablist pattern (`role="tablist"`/`role="tab"`, `aria-selected`, roving `tabindex`) with Left/Right/Home/End keyboard navigation and automatic activation. Tabs may carry an optional count badge.\n\n' +
           "The `rail` variant is icon-first: inactive tabs show only their glyph and the active tab's label unfurls beside it, so many sections fit a narrow panel. It stays horizontally scrollable with edge fades, scrolls the active tab into view, and slides a 2px underline beneath. Active is Odyssey's `Tabs` marking — `--color-primary-text` at bold weight, no filled block; the hover wash and the inset focus ring are Odyssey's `SideNav`. Every rail tab carries its label as `aria-label` **and** a `Tooltip` naming it on hover and on focus: the label answers “where am I?”, the chip answers “what is this?”.\n\n" +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs)',
@@ -66,11 +67,7 @@ const meta = {
     onChange: { description: 'Invoked with the newly selected tab key.' },
     variant: {
       description:
-        '`underline` (default) for section navigation; `segmented` for compact toggles; `rail` for icon-first navigation in a narrow panel.',
-    },
-    wrap: {
-      description:
-        'Let a `segmented` strip take a second row on a narrow panel: two equal columns below `sm`, one row above it. Ignored by `underline` and `rail`.',
+        '`underline` (default) for section navigation; `rail` for icon-first navigation in a narrow panel.',
     },
     ariaLabel: { description: 'Accessible label for the tablist (e.g. “User profile sections”).' },
     className: { description: 'Extra classes merged onto the tablist container.' },
@@ -91,13 +88,11 @@ const ControlledTabs = ({
   initial,
   variant,
   width,
-  wrap = false,
 }: {
   tabs: TabItem[];
   initial: string;
   variant: TabsVariant;
   width: number;
-  wrap?: boolean;
 }) => {
   const [active, setActive] = useState(initial);
   return (
@@ -107,7 +102,6 @@ const ControlledTabs = ({
         activeKey={active}
         onChange={setActive}
         variant={variant}
-        wrap={wrap}
         ariaLabel="Demo"
       />
       <p className="text-sm text-neutral-600" style={{ padding: 12 }}>
@@ -124,34 +118,40 @@ export const Underline: Story = {
   ),
 };
 
-/** Segmented variant — compact two-way toggle. */
-export const Segmented: Story = {
+/** A compact two-way toggle inside a section — the same strip at a small width. */
+export const UnderlineCompact: Story = {
   render: () => (
-    <ControlledTabs tabs={COMPOSITION_TABS} initial="attrs" variant="segmented" width={260} />
+    <ControlledTabs tabs={COMPOSITION_TABS} initial="attrs" variant="underline" width={260} />
   ),
 };
 
 /**
- * Segmented with **icons and difference counts**. A tab's `icon` renders before its
- * label in every variant (only `rail` collapses to it), and `countDisplay: 'nonzero'`
- * suppresses a count of `0` — Attributes has nothing to report, so it shows no pill,
- * while its slot stays reserved so a badge landing later moves no label.
+ * **Icons and difference counts.** A tab's `icon` renders before its label in every
+ * variant (only `rail` collapses to it), and `countDisplay: 'nonzero'` suppresses a
+ * count of `0` — Attributes has nothing to report, so it shows no pill, while its
+ * slot stays reserved so a badge landing later moves no label.
  */
-export const SegmentedWithIcons: Story = {
+export const UnderlineWithIcons: Story = {
   render: () => (
-    <ControlledTabs tabs={COMPARISON_TABS} initial="overview" variant="segmented" width={480} />
+    <ControlledTabs tabs={COMPARISON_TABS} initial="overview" variant="underline" width={480} />
   ),
 };
 
 /**
- * The same strip with `wrap`, at the width the panel can actually be dragged down to.
- * Four icon+label tabs need roughly 440px on one line, so below `sm` the strip takes a
- * second row rather than truncating "Attributes" or dropping the glyphs.
+ * Four bare labels at the width the panel can actually be dragged down to: 292px
+ * of strip against 328px of track, so nothing scrolls. The story above — the same
+ * four tabs with glyphs and reserved badge slots — measures 489px, which is why
+ * the real comparison strip carries neither.
  */
-export const SegmentedWrapped: Story = {
+export const UnderlineCompactPanel: Story = {
   parameters: { layout: 'padded' },
   render: () => (
-    <ControlledTabs tabs={COMPARISON_TABS} initial="groups" variant="segmented" width={330} wrap />
+    <ControlledTabs
+      tabs={COMPARISON_TABS.map(({ icon: _icon, count: _count, countDisplay: _cd, ...tab }) => tab)}
+      initial="groups"
+      variant="underline"
+      width={330}
+    />
   ),
 };
 

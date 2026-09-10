@@ -156,10 +156,9 @@ export interface UseUserComparisonOptions {
  *
  * @param options - See `UseUserComparisonOptions`.
  * @returns The comparison view model: `comparedUser` and search state, `activeTab`
- *   control, `groupBuckets` / `appBuckets` with their diff counts and per-facet
- *   plus `overallSimilarity`, the `attributeParity` value diff with its own
- *   `attributeDiffCount`, `attributeConfig` and `attributeRuleReads`, the
- *   classified `causes` worklist, aggregated
+ *   control, `groupBuckets` / `appBuckets` with their per-facet similarity plus
+ *   `overallSimilarity`, the `attributeParity` value diff, `attributeConfig` and
+ *   `attributeRuleReads`, the classified `causes` worklist, aggregated
  *   `isLoading` / `loadError`, group-copy state (`addingGroupId`, `addError`) and
  *   the bidirectional `addToContext` / `addToCompared` actions, display names, and
  *   the `selectUser` / `changeUser` actions.
@@ -524,13 +523,6 @@ export function useUserComparison({
     if (referencedGroupIds.length > 0) requestGroupNames(referencedGroupIds);
   }, [referencedGroupIds, requestGroupNames]);
 
-  const groupDiffCount = groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length;
-  const appDiffCount = appBuckets.onlyCompared.length + appBuckets.onlyContext.length;
-  // The VISIBLE differences only. The badge has to agree with what the tab lists
-  // on arrival; the ones a config hides are counted separately and disclosed by
-  // the tab itself, which can also offer to reveal them.
-  const attributeDiffCount = attributeParity.differenceCount;
-
   const groupSimilarity = jaccard(
     groupBuckets.shared.length,
     groupBuckets.shared.length + groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length,
@@ -576,10 +568,7 @@ export function useUserComparison({
     groupBuckets,
     appBuckets,
     causes,
-    groupDiffCount,
-    appDiffCount,
     attributeParity,
-    attributeDiffCount,
     attributeConfig,
     attributeRuleReads,
     // Both columns' editors and the single confirmation on screen. Undefined is

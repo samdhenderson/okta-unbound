@@ -65,7 +65,6 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
     <div className={className}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <Tabs
-          variant="segmented"
           ariaLabel="Response view"
           activeKey={view}
           onChange={(key) => setView(key as ViewMode)}

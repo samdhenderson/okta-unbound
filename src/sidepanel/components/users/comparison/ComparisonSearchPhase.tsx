@@ -2,10 +2,13 @@
  * @module sidepanel/components/users/comparison/ComparisonSearchPhase
  * @description Phase 1 of the comparison surface: search for and pick the second user.
  *
- * The intro card previously carried a decorative blurred glow (`blur-2xl`) behind
- * its icon — purely ornamental, `aria-hidden`, and contributing no information.
- * Removed: this is a repeated admin workflow, not a marketing surface, and the
- * card's job is entirely carried by its icon and copy without it.
+ * The screen is the search box and its results, and nothing else. It previously
+ * opened with an intro card naming the context user and a dashed "Start typing to
+ * search" panel, which between them pushed the only control on the screen below
+ * the fold in a 360px panel. Neither stated a fact the screen does not already
+ * carry: the admin arrived here through the **Compare** action and the header
+ * names what they are comparing, so the card explained the button they had just
+ * pressed and the panel explained the field beneath it.
  */
 import React from 'react';
 import Icon from '../../shared/Icon';
@@ -18,8 +21,6 @@ import type { OktaUser } from '../../../../shared/types';
 interface ComparisonSearchPhaseProps {
   /** The context user; excluded from results so users can't compare with themselves. */
   contextUser: OktaUser;
-  /** Display name of the context user, shown in the intro copy. */
-  contextName: string;
   /** Current search text (controlled). */
   searchQuery: string;
   /** Updates the search text. */
@@ -37,7 +38,6 @@ interface ComparisonSearchPhaseProps {
  */
 const ComparisonSearchPhase: React.FC<ComparisonSearchPhaseProps> = ({
   contextUser,
-  contextName,
   searchQuery,
   setSearchQuery,
   isSearching,
@@ -48,23 +48,6 @@ const ComparisonSearchPhase: React.FC<ComparisonSearchPhaseProps> = ({
 
   return (
     <div className="space-y-(--sp-rung)">
-      <div className="rounded-md border border-primary-highlight bg-primary-light/60 p-(--sp-card)">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 rounded-md bg-white p-2 text-primary shadow-sm">
-            <Icon type="sparkles" size="md" />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-neutral-900">Compare with another user</p>
-            <p className="mt-0.5 text-xs text-neutral-600 leading-relaxed">
-              Find someone to compare side-by-side with{' '}
-              <span className="font-semibold text-primary-text">{contextName}</span>. You&rsquo;ll
-              see shared and unique groups and app assignments and can quickly copy missing groups
-              over.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/*
         No `autoFocus`: neither host has ever produced focus here (Modal's own
         effect focuses its close button after the child commit — characterized in
@@ -85,16 +68,6 @@ const ComparisonSearchPhase: React.FC<ComparisonSearchPhaseProps> = ({
         <div className="flex items-center justify-center gap-2 py-4 text-sm text-neutral-500">
           <LoadingSpinner size="sm" />
           Searching directory…
-        </div>
-      )}
-
-      {!isSearching && searchQuery.trim().length === 0 && (
-        <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-neutral-200 bg-neutral-50/60 px-6 py-10 text-center">
-          <div className="rounded-full bg-white p-3 text-neutral-400 shadow-sm">
-            <Icon type="users" size="lg" />
-          </div>
-          <p className="mt-3 text-sm font-medium text-neutral-700">Start typing to search</p>
-          <p className="mt-1 text-xs text-neutral-500">Try a name, a login, or an email domain.</p>
         </div>
       )}
 

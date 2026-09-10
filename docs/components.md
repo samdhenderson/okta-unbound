@@ -58,7 +58,7 @@ These carry a written contract; read it before using one:
 - [`EntityLink`](./component-primitives.md#entitylink) — reference another entity
 - [`RuleExpressionText`](./component-primitives.md#ruleexpressiontext) — print a rule's condition
 - [`EntityChooser`](./component-primitives.md#entitychooser) — the scope-first launcher (`home/`)
-- [`Tabs`](./component-primitives.md#tabs) — the tab bar: `underline`, `segmented`, `rail`
+- [`Tabs`](./component-primitives.md#tabs) — the tab bar: `underline` (default) or `rail`
 - [`Tooltip`](./component-primitives.md#tooltip) — the hover- and focus-triggered label chip
 - [`IconButton` / `StretchedButton`](./component-primitives.md#iconbutton-and-stretchedbutton) — the
   disclosure control, and the whole-card press target

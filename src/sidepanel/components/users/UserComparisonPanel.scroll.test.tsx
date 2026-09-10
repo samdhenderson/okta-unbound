@@ -70,10 +70,7 @@ function comparisonState(): UserComparisonState {
     groupBuckets: { onlyCompared: [], shared: [], onlyContext: [] },
     appBuckets: { onlyCompared: [], shared: [], onlyContext: [] },
     causes: undefined,
-    groupDiffCount: 0,
-    appDiffCount: 0,
     attributeParity: { rows: [], hiddenRows: [], hiddenDifferences: 0, differenceCount: 0 },
-    attributeDiffCount: 0,
     attributeConfig: DEFAULT_PROFILE_DISPLAY_CONFIG,
     attributeRuleReads: {},
     attributeEdit: {
