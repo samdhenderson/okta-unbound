@@ -37,7 +37,7 @@ export const appGroupsDescriptor: EntityExport<AppGroup> = {
   defaultQuery: { limit: 200 },
   schema: appGroupSchema,
   filter: { kind: 'none' },
-  linkify: { entityType: 'group', idColumnId: 'id' },
+  linkify: { idColumnId: 'id', target: (g) => ({ type: 'group', id: g.id }) },
   columnCatalog: [
     { id: 'id', label: 'Group ID', group: 'base', defaultEnabled: true, accessor: (g) => g.id },
     {

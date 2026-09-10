@@ -27,6 +27,14 @@ export interface UserAppAssignment {
   id: string;
   /** Display label, falling back to the app name and then the id. */
   label: string;
+  /**
+   * The app's Okta `name` — the app *type* key (`oidc_client`, `salesforce`),
+   * not the display label. Carried because the Admin Console's app route is
+   * `/admin/app/{name}/instance/{id}`: without it no "Open in Okta" link can be
+   * built. Absent when the org did not report one, in which case the link is
+   * withheld rather than guessed.
+   */
+  name?: string;
   /** How the assignment was granted, when Okta reported it. */
   scope?: AppAssignmentScope;
   /**
@@ -164,6 +172,7 @@ export function createUserOperations(coreApi: CoreApi) {
               apps.push({
                 id: app.id,
                 label: app.label || app.name || app.id,
+                name: app.name,
                 // Read defensively off the untyped `_embedded`: any shape that is
                 // not a recognizable app-user yields undefined, so the app is still
                 // listed with its scope simply unknown.

@@ -59,6 +59,18 @@ const membership = (over: Partial<GroupMembership> = {}): GroupMembership => ({
 const row = (assignment: UserAppAssignment, memberships: GroupMembership[] = []) =>
   summarizeAppSources([assignment], memberships).rows[0];
 
+describe('appSourceSummary — the row identity', () => {
+  it("carries the app's type key alongside its label, so the row can link to Okta", () => {
+    // `/admin/app/{name}/instance/{id}` — the label is not a substitute, and the
+    // id alone resolves to an error page.
+    expect(row(app({ name: 'salesforce' })).name).toBe('salesforce');
+  });
+
+  it('leaves the type key absent when Okta reported none, rather than guessing', () => {
+    expect(row(app()).name).toBeUndefined();
+  });
+});
+
 describe('appSourceSummary — badge states', () => {
   it("labels a reported 'USER' scope Direct", () => {
     const r = row(app({ scope: 'USER' }));

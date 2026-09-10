@@ -23,7 +23,7 @@
  * **Policies.** Okta issues policy ids under at least two prefixes (`00p` and
  * `rst`, as this repo's own `POLICY_ID_PATTERN` already accepts), the prefix
  * varies by policy type, and {@link module:shared/utils/oktaUrl}'s
- * `OktaAdminEntityType` has no `policy` member — so there is nowhere correct to
+ * `OktaAdminTarget` has no `policy` member — so there is nowhere correct to
  * send the reader. A wrong guess navigates an admin to the wrong tab, which is
  * worse than falling through to a name search. `aus` (authorization servers) is
  * omitted for the same reason: nothing in this app browses them.

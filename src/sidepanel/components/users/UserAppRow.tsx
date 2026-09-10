@@ -71,7 +71,10 @@ const UserAppRow: React.FC<UserAppRowProps> = ({ row, oktaOrigin }) => {
             </div>
           )}
 
-          <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="app" entityId={row.id} />
+          <OpenInOktaLink
+            oktaOrigin={oktaOrigin}
+            target={{ type: 'app', id: row.id, name: row.name }}
+          />
         </div>
       </div>
     </div>

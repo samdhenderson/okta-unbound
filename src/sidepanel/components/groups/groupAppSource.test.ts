@@ -14,6 +14,7 @@ import type { PushGroupMapping } from '../../../shared/types';
 const slack: AppGrant = {
   id: '0oaFAKE1',
   label: 'Slack',
+  name: 'slack',
   status: 'ACTIVE',
   signOnMode: 'SAML_2_0',
   lastUpdated: new Date('2025-11-14T09:30:00Z'),
@@ -37,6 +38,10 @@ describe('toGroupAppRows', () => {
     expect(row).toMatchObject({
       id: '0oaFAKE1',
       label: 'Slack',
+      // The app *type* key, kept distinct from the label: the row's "Open in
+      // Okta" route is `/admin/app/{name}/instance/{id}` and cannot be built
+      // from the id alone.
+      name: 'slack',
       status: 'ACTIVE',
       statusVariant: 'success',
       signOnMode: 'SAML_2_0',

@@ -140,7 +140,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
     }, [onAnalyzeSource, group]);
 
     const handleOpenInOkta = useCallback(() => {
-      const url = oktaAdminEntityUrl(oktaOrigin, 'group', group.id);
+      const url = oktaAdminEntityUrl(oktaOrigin, { type: 'group', id: group.id });
       if (url) window.open(url, '_blank', 'noopener,noreferrer');
     }, [oktaOrigin, group.id]);
 

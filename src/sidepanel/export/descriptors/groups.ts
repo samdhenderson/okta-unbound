@@ -139,7 +139,7 @@ export const groupsDescriptor: EntityExport<GroupWithStats> = {
     placeholder: 'type eq "OKTA_GROUP"',
     help: 'Optional Okta `search` expression (SCIM). Leave blank to export all groups.',
   },
-  linkify: { entityType: 'group', idColumnId: 'id' },
+  linkify: { idColumnId: 'id', target: (g) => ({ type: 'group', id: g.id }) },
   columnCatalog: groupColumns,
 };
 

@@ -188,7 +188,10 @@ const AppListItem: React.FC<AppListItemProps> = memo(
                   </div>
                 )}
 
-                <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="app" entityId={app.id} />
+                <OpenInOktaLink
+                  oktaOrigin={oktaOrigin}
+                  target={{ type: 'app', id: app.id, name: app.name }}
+                />
               </div>
             </div>
           </div>

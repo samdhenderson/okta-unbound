@@ -74,8 +74,14 @@ export interface EntitySearchApi {
       email?: string;
     }>
   >;
-  /** Type-ahead app search (`q=`), used only when the snapshot cannot answer. */
-  searchApps: (query: string) => Promise<Array<{ id: string; label: string }>>;
+  /**
+   * Type-ahead app search (`q=`), used only when the snapshot cannot answer.
+   *
+   * `name` is the app *type* key, not the label: a row the surface cannot
+   * navigate to is offered as an Admin Console link instead, and that route is
+   * `/admin/app/{name}/instance/{id}`.
+   */
+  searchApps: (query: string) => Promise<Array<{ id: string; label: string; name?: string }>>;
   /** Whole-list policy walk; `/api/v1/policies` has no name search of its own. */
   listPolicies: (type?: OktaPolicyType) => Promise<OktaPolicyListItem[]>;
   /** By-id group lookup, for a snapshot miss. */
@@ -216,7 +222,7 @@ export function useEntitySearchSources({
         const seen = new Set(local.map((row) => row.id));
         const live = (await searchApps(query))
           .filter((app) => !seen.has(app.id))
-          .map((app) => ({ kind: 'app' as const, id: app.id, name: app.label }));
+          .map((app) => ({ kind: 'app' as const, id: app.id, name: app.label, appName: app.name }));
         return [...local, ...live];
       };
     }
@@ -285,6 +291,7 @@ export function useEntitySearchSources({
             kind: 'app',
             id: lookup.app.id,
             name: lookup.app.label || lookup.app.name || lookup.app.id,
+            appName: lookup.app.name,
           };
         case 'missing':
           return null;

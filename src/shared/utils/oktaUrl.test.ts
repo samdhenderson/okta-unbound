@@ -42,19 +42,33 @@ describe('oktaAdminEntityUrl', () => {
   const origin = 'https://acme.okta.com';
 
   it('builds the per-entity admin deep links', () => {
-    expect(oktaAdminEntityUrl(origin, 'group', '00g1')).toBe(`${origin}/admin/group/00g1`);
-    expect(oktaAdminEntityUrl(origin, 'user', '00u1')).toBe(
-      `${origin}/admin/user/profile/view/00u1`,
+    expect(oktaAdminEntityUrl(origin, { type: 'group', id: '00g1' })).toBe(
+      `${origin}/admin/group/00g1`,
     );
-    expect(oktaAdminEntityUrl(origin, 'app', '0oa1')).toBe(
-      `${origin}/admin/app/0oa1/instance/0oa1`,
+    expect(oktaAdminEntityUrl(origin, { type: 'user', id: '00u1' })).toBe(
+      `${origin}/admin/user/profile/view/00u1`,
     );
   });
 
+  // The app route is keyed by the app TYPE, not by the instance id twice — the
+  // shape this replaced produced `/admin/app/0oa1/instance/0oa1`, which is an
+  // error page for every app in the org.
+  it('keys the app route on the app type key, not the instance id', () => {
+    expect(oktaAdminEntityUrl(origin, { type: 'app', id: '0oa1', name: 'salesforce' })).toBe(
+      `${origin}/admin/app/salesforce/instance/0oa1`,
+    );
+  });
+
+  it('withholds the app link when the org reported no app type key', () => {
+    expect(oktaAdminEntityUrl(origin, { type: 'app', id: '0oa1', name: undefined })).toBeNull();
+    expect(oktaAdminEntityUrl(origin, { type: 'app', id: '0oa1', name: null })).toBeNull();
+  });
+
   it('returns null when the origin or id is missing', () => {
-    expect(oktaAdminEntityUrl(null, 'group', '00g1')).toBeNull();
-    expect(oktaAdminEntityUrl(undefined, 'user', '00u1')).toBeNull();
-    expect(oktaAdminEntityUrl(origin, 'group', null)).toBeNull();
-    expect(oktaAdminEntityUrl(origin, 'user', undefined)).toBeNull();
+    expect(oktaAdminEntityUrl(null, { type: 'group', id: '00g1' })).toBeNull();
+    expect(oktaAdminEntityUrl(undefined, { type: 'user', id: '00u1' })).toBeNull();
+    expect(oktaAdminEntityUrl(origin, { type: 'group', id: null })).toBeNull();
+    expect(oktaAdminEntityUrl(origin, { type: 'user', id: undefined })).toBeNull();
+    expect(oktaAdminEntityUrl(origin, { type: 'app', id: null, name: 'salesforce' })).toBeNull();
   });
 });

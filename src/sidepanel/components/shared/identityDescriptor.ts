@@ -33,7 +33,7 @@
  * {@link EntityIdentityDescriptor.link} itself. That is what keeps the builders pure.
  */
 import type { IconType } from '../shared/Icon';
-import type { OktaAdminEntityType } from '../../../shared/utils/oktaUrl';
+import type { OktaAdminTarget } from '../../../shared/utils/oktaUrl';
 import type { BadgeVariant } from './Badge';
 
 /** One fact in the header's expanded region. */
@@ -88,5 +88,5 @@ export interface EntityIdentityDescriptor {
   /** Rows of facts for the expanded region, in render order. Empty rows are dropped. */
   rows: IdentityRow[];
   /** Admin Console deep-link target, when the entity kind supports one. */
-  link?: { entityType: OktaAdminEntityType; entityId: string };
+  link?: OktaAdminTarget;
 }

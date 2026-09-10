@@ -165,8 +165,8 @@ describe('groupIdentity', () => {
 
   it('links to the group in the Admin Console', () => {
     expect(groupIdentity(makeGroup()).link).toEqual({
-      entityType: 'group',
-      entityId: '00gFAKE1a2b3c4d5e6',
+      type: 'group',
+      id: '00gFAKE1a2b3c4d5e6',
     });
   });
 });

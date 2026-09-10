@@ -30,8 +30,21 @@ describe('appsDescriptor', () => {
     expect(appsDescriptor.filter.kind).toBe('q');
   });
 
-  it('deep-links rows as apps', () => {
-    expect(appsDescriptor.linkify?.entityType).toBe('app');
+  it('deep-links rows as apps, keyed on the app type key rather than the id', () => {
+    expect(appsDescriptor.linkify?.idColumnId).toBe('id');
+    expect(appsDescriptor.linkify?.target(app)).toEqual({
+      type: 'app',
+      id: '0oaFAKE1',
+      name: 'salesforce',
+    });
+  });
+
+  it('withholds the deep link for a row the org gave no app type key', () => {
+    expect(appsDescriptor.linkify?.target({ ...app, name: undefined })).toEqual({
+      type: 'app',
+      id: '0oaFAKE1',
+      name: undefined,
+    });
   });
 
   it('the label column accessor returns the app label', () => {

@@ -79,7 +79,7 @@ export const JUMP_SEARCH_DEBOUNCE_MS = 600;
  * Deliberately wider than {@link OktaIdKind}: searchable is not the same as
  * identifiable. {@link module:shared/utils/oktaId} refuses to classify a policy
  * id — the prefixes (`00p`, `rst`) collide with other objects and a policy has
- * no `OktaAdminEntityType` — and that refusal is correct and stays. But a policy
+ * no `OktaAdminTarget` member — and that refusal is correct and stays. But a policy
  * *name* is perfectly searchable, so the search half of this hook is keyed on
  * this union while the id-resolution half stays keyed on `OktaIdKind`. The two
  * answer different questions, and this is where they part.
@@ -99,6 +99,14 @@ export interface JumpResult {
   name: string;
   /** Secondary line — a status, a description, a login. */
   secondary?: string;
+  /**
+   * An app row's Okta `name` — the app *type* key, not the display {@link name}.
+   * Present only on `kind: 'app'` rows, and only when the source reported one.
+   * A row that reaches the Apps tab never needs it; a row that can only be
+   * offered as an Okta Admin Console link does, because that route is
+   * `/admin/app/{appName}/instance/{id}`. Absent ⇒ the link is withheld.
+   */
+  appName?: string;
 }
 
 /** How an id resolution was paid for, so the footnote can say so honestly. */

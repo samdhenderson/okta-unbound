@@ -136,15 +136,7 @@ const UserRungHeader: React.FC<UserRungHeaderProps> = ({
             ? { text: `${membershipCount} Groups`, variant: 'primary' }
             : undefined
       }
-      actions={
-        identity?.link && (
-          <OpenInOktaLink
-            oktaOrigin={oktaOrigin}
-            entityType={identity.link.entityType}
-            entityId={identity.link.entityId}
-          />
-        )
-      }
+      actions={identity?.link && <OpenInOktaLink oktaOrigin={oktaOrigin} target={identity.link} />}
       cornerAction={
         detailUser && (
           <WorkingSetPinButton

@@ -130,6 +130,6 @@ export function userIdentity(
     name: userDisplayName(user),
     badge: isAlarming ? { text: user.status, variant: statusVariant } : undefined,
     rows: [identityRow, counts, timestamps],
-    link: { entityType: 'user', entityId: user.id },
+    link: { type: 'user', id: user.id },
   };
 }

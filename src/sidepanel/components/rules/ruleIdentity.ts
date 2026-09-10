@@ -22,7 +22,7 @@
  * {@link shared/ruleUtils.ruleStatusBadge}, so the detail header and the rule's card
  * cannot drift apart on what a broken rule is called.
  *
- * **There is no `link`.** {@link shared/utils/oktaUrl.OktaAdminEntityType} is
+ * **There is no `link`.** {@link shared/utils/oktaUrl.OktaAdminTarget} is
  * `'group' | 'user' | 'app'`, and Okta's Admin Console has no per-rule route — the best
  * available target is the org's rules *list*, which is not this rule. ADR-0032 §2a's rule
  * applies: a fact the builder cannot answer is omitted, never approximated. The generic

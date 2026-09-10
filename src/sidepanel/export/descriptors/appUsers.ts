@@ -84,7 +84,7 @@ export const appUsersDescriptor: EntityExport<AppUser> = {
   defaultQuery: { limit: 200 },
   schema: appUserSchema,
   filter: { kind: 'none' },
-  linkify: { entityType: 'user', idColumnId: 'id' },
+  linkify: { idColumnId: 'id', target: (u) => ({ type: 'user', id: u.id }) },
   columnCatalog: appUserColumns,
 };
 

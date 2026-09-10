@@ -37,7 +37,7 @@ describe('ruleIdentity', () => {
   });
 
   it('offers no Okta deep link, because Okta has no per-rule route', () => {
-    // Not an oversight: `OktaAdminEntityType` has no 'rule', and the nearest real target
+    // Not an oversight: `OktaAdminTarget` has no 'rule', and the nearest real target
     // is the org's rules *list*. An "open in Okta" that lands on a search page is a
     // worse answer than no link (ADR-0032 §2a).
     expect(ruleIdentity(rule()).link).toBeUndefined();

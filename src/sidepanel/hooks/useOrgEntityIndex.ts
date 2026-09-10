@@ -107,6 +107,14 @@ export interface IndexedEntity {
    * the row has nothing useful to add.
    */
   secondary?: string;
+  /**
+   * An app row's Okta `name` — the app *type* key (`oidc_client`,
+   * `salesforce`), which {@link name} deliberately hides behind the human
+   * label. Only `kind: 'app'` rows carry it, and only when the snapshot row
+   * reported one; it exists because the Admin Console's app route is
+   * `/admin/app/{appName}/instance/{id}` and cannot be built from the id.
+   */
+  appName?: string;
 }
 
 /**
@@ -262,7 +270,8 @@ export function useOrgEntityIndexSource({
   const appsById = useMemo(() => {
     const byId = new Map<string, IndexedEntity>();
     for (const app of apps.rows) {
-      if (app.id) byId.set(app.id, { kind: 'app', id: app.id, name: appName(app) });
+      if (app.id)
+        byId.set(app.id, { kind: 'app', id: app.id, name: appName(app), appName: app.name });
     }
     return byId;
   }, [apps.rows]);

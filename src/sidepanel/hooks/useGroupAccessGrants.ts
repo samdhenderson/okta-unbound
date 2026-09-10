@@ -56,6 +56,13 @@ export interface AppGrant {
   /** Display label. */
   label: string;
   /**
+   * The app's Okta `name` — the app *type* key (`oidc_client`, `salesforce`),
+   * not the display label. Carried because the Admin Console's app route is
+   * `/admin/app/{name}/instance/{id}`, so the id alone cannot open the app.
+   * Absent means the org reported no name and the link is withheld.
+   */
+  name?: string;
+  /**
    * Okta lifecycle status (`ACTIVE`, `INACTIVE`, …), when the row reported one.
    *
    * Optional because `oktaAppListItemSchema` catches every field past the id:
@@ -162,6 +169,7 @@ function toAppGrant(app: {
   return {
     id: app.id,
     label: app.label ?? app.name ?? app.id,
+    name: app.name,
     status: app.status,
     signOnMode: app.signOnMode,
     lastUpdated: lastUpdated && !Number.isNaN(lastUpdated.getTime()) ? lastUpdated : undefined,
