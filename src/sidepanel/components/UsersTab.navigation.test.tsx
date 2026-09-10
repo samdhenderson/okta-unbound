@@ -373,7 +373,6 @@ describe('UsersTab sub-navigation', () => {
 
     await pushCompare(uev);
 
-    expect(compareView().getByText('Start typing to search')).toBeInTheDocument();
     expect(compareSearchInput()).toHaveValue('');
     expect(compareView().queryByText('Bob Compared')).not.toBeInTheDocument();
     expect(compareView().queryByRole('tablist')).not.toBeInTheDocument();

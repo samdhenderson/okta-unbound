@@ -142,7 +142,6 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
       {!comparedUser && (
         <ComparisonSearchPhase
           contextUser={contextUser}
-          contextName={contextName}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           isSearching={isSearching}
