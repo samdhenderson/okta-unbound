@@ -177,6 +177,13 @@ a click inside collapses the card. And give the button a `label` naming its subj
 cards otherwise offers a screen-reader user a list of identically-named controls, and `describedBy`
 does not fix that, because a description is not a name.
 
+`IconButton` is also the **gesture-handle** primitive. `onPointerDown` starts a gesture without
+waiting for a click, `onKeyDown` lets the handle own a keyboard conversation while it holds focus,
+and `buttonRef` lets it take focus back after the list around it re-renders. Together they are what
+make a drag handle reachable from a keyboard rather than pointer-only — `ProfileDisplayGrip` is the
+reference. `describedBy` carries the `id` of the paragraph explaining the key contract; render that
+paragraph once per surface, never per handle.
+
 ## `StableWidth`
 
 Holds a slot open at its widest state: pass that state as `reserve` and it renders invisibly in the
