@@ -174,12 +174,9 @@ const comparison = (over: Partial<UserComparisonState> = {}): UserComparisonStat
   // Nothing loaded yet, so the inventory has not resolved: `undefined` is "not
   // computed", which the worklist renders differently from an empty array.
   causes: undefined,
-  groupDiffCount: 0,
-  appDiffCount: 0,
   // The Attributes dimension, empty until a second user is picked — the same
   // frozen shape `useUserComparison` hands back during the search phase.
   attributeParity: { rows: [], hiddenRows: [], hiddenDifferences: 0, differenceCount: 0 },
-  attributeDiffCount: 0,
   attributeConfig: DEFAULT_PROFILE_DISPLAY_CONFIG,
   attributeRuleReads: {},
   attributeEdit: {
@@ -237,8 +234,6 @@ const loaded = (over: Partial<UserComparisonState> = {}): UserComparisonState =>
       contextUser,
       rules: [vpnRule],
     }),
-    groupDiffCount: 2,
-    appDiffCount: 2,
     groupSimilarity: 33,
     appSimilarity: 33,
     overallSimilarity: 33,
@@ -364,7 +359,6 @@ export const AppsIncompleteOnAppsTab: Story = {
       // Nothing arrived at all — the case where the old empty text would have
       // claimed "Neither user is assigned any apps."
       appBuckets: { onlyCompared: [], shared: [], onlyContext: [] },
-      appDiffCount: 0,
     }),
   },
 };
@@ -399,7 +393,6 @@ const withAttributes = (over: Partial<UserComparisonState> = {}): UserComparison
       hiddenDifferences: 1,
       differenceCount: 3,
     },
-    attributeDiffCount: 3,
     attributeConfig: ATTRIBUTE_CONFIG,
     // One attribute is read by a rule that currently grants access — the chip
     // that turns a list of strings into an explanation of someone's access.

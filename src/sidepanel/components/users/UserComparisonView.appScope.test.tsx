@@ -103,12 +103,9 @@ const comparison = (appBuckets: AppBucketFixture = DEFAULT_APPS): UserComparison
     // Computed, with no group differences to explain — which is a different
     // fixture state from `undefined` ("the inventory has not resolved yet").
     causes: [],
-    groupDiffCount: 0,
-    appDiffCount: 4,
     // The Attributes dimension is inert for this suite — it renders the Apps
     // tab — but the state literal has to be whole.
     attributeParity: { rows: [], hiddenRows: [], hiddenDifferences: 0, differenceCount: 0 },
-    attributeDiffCount: 0,
     attributeConfig: DEFAULT_PROFILE_DISPLAY_CONFIG,
     attributeRuleReads: {},
     attributeEdit: NO_ATTRIBUTE_EDITING,

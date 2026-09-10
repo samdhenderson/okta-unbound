@@ -138,16 +138,16 @@ export const UnderlineWithIcons: Story = {
 };
 
 /**
- * The comparison surface's four sections at the width the panel can actually be
- * dragged down to: 401px of strip against 328px of track, so it scrolls. Dropping
- * the glyphs the story above carries is worth 88px of that, which is why the real
- * strip has none.
+ * Four bare labels at the width the panel can actually be dragged down to: 292px
+ * of strip against 328px of track, so nothing scrolls. The story above — the same
+ * four tabs with glyphs and reserved badge slots — measures 489px, which is why
+ * the real comparison strip carries neither.
  */
 export const UnderlineCompactPanel: Story = {
   parameters: { layout: 'padded' },
   render: () => (
     <ControlledTabs
-      tabs={COMPARISON_TABS.map(({ icon: _icon, ...tab }) => tab)}
+      tabs={COMPARISON_TABS.map(({ icon: _icon, count: _count, countDisplay: _cd, ...tab }) => tab)}
       initial="groups"
       variant="underline"
       width={330}

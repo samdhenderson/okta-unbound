@@ -1,6 +1,6 @@
 /**
  * @module sidepanel/components/users/comparison/ComparisonTabBar
- * @description Tab bar (Overview / Groups / Apps / Attributes) with per-tab diff-count badges.
+ * @description Tab bar (Overview / Groups / Apps / Attributes) for the comparison surface.
  *
  * ## A description of four tabs, not a second tab bar
  *
@@ -9,8 +9,8 @@
  * behind the one part of a tab bar that is not styling: `Tabs` implements roving
  * `tabindex` and Arrow/Home/End, and the fork implemented **no keyboard
  * navigation at all**, so a keyboard user could reach this strip and then not
- * move inside it. What is left here is the description of these four tabs: their
- * labels, and which of them carry a diff badge.
+ * move inside it. What is left here is the description of these four tabs: four
+ * labels, and nothing else.
  *
  * ## The same strip the rest of the app uses
  *
@@ -19,13 +19,19 @@
  * `underline` variant and, like every other section strip in the panel, carry no
  * glyphs.
  *
- * Measured at the 360px panel floor: the four labels plus the three reserved
- * two-digit badge slots come to 401px against 328px of track, so the strip
- * scrolls there — `underline`'s standard answer to overflow, and what the
- * retired `segmented` variant's second row used to avoid. The glyphs would have
- * added a further 88px. Without the badges the same four labels measure ~310px
- * and would fit; the reservation is kept because all three counts land together
- * when the comparison resolves, and un-reserved they shove three labels sideways
+ * ## Four labels, no glyphs and no badges — measured against the 360px floor
+ *
+ * A 360px side panel gives this strip 328px of track. Four labels carrying both
+ * a glyph and a reserved two-digit diff badge measured **489px**; dropping the
+ * glyphs took it to 401px, still overflowing. Labels alone measure 292px and
+ * fit, so all four sections stay reachable without scrolling at the width the
+ * panel can actually be dragged to.
+ *
+ * The diff counts are what paid for it. They are not lost: each tab states its
+ * own difference count in its body on arrival, which is where the number is
+ * legible next to the items it counts rather than compressed into a pill. That
+ * also retires the badge-reservation problem the pills created — three counts
+ * landing together when the comparison resolves, shoving three labels sideways
  * in one frame (`D-053e`).
  */
 import React from 'react';
@@ -39,19 +45,6 @@ interface ComparisonTabBarProps {
   activeTab: TabKey;
   /** Invoked with the newly selected tab key. */
   onChange: (t: TabKey) => void;
-  /** Number of differing groups, shown as a badge on the Groups tab (hidden when 0). */
-  groupDiff: number;
-  /** Number of differing apps, shown as a badge on the Apps tab (hidden when 0). */
-  appDiff: number;
-  /**
-   * Number of differing attributes the admin's display config makes **visible**,
-   * shown as a badge on the Attributes tab (hidden when 0).
-   *
-   * Deliberately the visible count rather than the total: the badge has to agree
-   * with what the tab lists on arrival, and the differences a config hides are
-   * disclosed by the tab itself, which can also offer to reveal them.
-   */
-  attributeDiff: number;
 }
 
 /** One tab's static description, keyed to this surface's four sections. */
@@ -66,29 +59,14 @@ const isTabKey = (tabs: ComparisonTab[], key: string): key is TabKey =>
 
 /**
  * The comparison surface's tab bar: shared `Tabs` in its default `underline`
- * variant, with a diff-count badge on each tab that can report one.
+ * variant, four labels wide.
  */
-const ComparisonTabBar: React.FC<ComparisonTabBarProps> = ({
-  activeTab,
-  onChange,
-  groupDiff,
-  appDiff,
-  attributeDiff,
-}) => {
-  // `countDisplay: 'nonzero'` is what makes these *difference* counts rather than
-  // sizes: nothing differing is nothing to report, so the tab shows no pill — and
-  // the slot is still reserved, because all three land together when the
-  // comparison resolves.
+const ComparisonTabBar: React.FC<ComparisonTabBarProps> = ({ activeTab, onChange }) => {
   const tabs: ComparisonTab[] = [
     { key: 'overview', label: 'Overview' },
-    { key: 'groups', label: 'Groups', count: groupDiff, countDisplay: 'nonzero' },
-    { key: 'apps', label: 'Apps', count: appDiff, countDisplay: 'nonzero' },
-    {
-      key: 'attributes',
-      label: 'Attributes',
-      count: attributeDiff,
-      countDisplay: 'nonzero',
-    },
+    { key: 'groups', label: 'Groups' },
+    { key: 'apps', label: 'Apps' },
+    { key: 'attributes', label: 'Attributes' },
   ];
 
   return (

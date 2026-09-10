@@ -102,10 +102,11 @@ rather than of one surface:
 `countDisplay: 'nonzero'` also holds the badge's slot open at two digits from first render
 (`StableWidth`), because such a count arrives with a fetch: three badges landing at once would
 otherwise shove three labels sideways in one frame (`D-053e`). A strip too wide for its panel
-**scrolls**; it never wraps to a second row and never truncates a label. Dropping a strip's glyphs
-is the cheapest width back — worth 88px on the user-comparison strip's four tabs — but that strip
-still measures 401px against 328px of track at the 360px floor and scrolls there, because three
-reserved two-digit badge slots cost more than the glyphs did.
+**scrolls**; it never wraps to a second row and never truncates a label. Where a strip has to fit,
+spend its glyphs and its badges rather than its labels, and measure — a 360px side panel gives a
+strip 328px of track, and the user-comparison bar's four tabs went 489px with both, 401px without
+the glyphs, and 292px as bare labels. A tab that gives up a count is not giving up the fact: that
+strip's tabs each state their own difference count in the body, beside the items being counted.
 
 The **`rail`** variant is what `TabNavigation` uses for the panel's top-level sections; which
 sections it draws, what it shows when you stand on one it does not, and how its indicator is

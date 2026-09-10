@@ -111,8 +111,6 @@ const comparison = (over: Partial<UserComparisonState> = {}): UserComparisonStat
       shared: [{ id: 'a2', label: 'Slack' }],
       onlyContext: [{ id: 'a3', label: 'Figma', scope: 'GROUP' as const }],
     },
-    groupDiffCount: 3,
-    appDiffCount: 2,
     groupSimilarity: 25,
     appSimilarity: 33,
     overallSimilarity: 29,
