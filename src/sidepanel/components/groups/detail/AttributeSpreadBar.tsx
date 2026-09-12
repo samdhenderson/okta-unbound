@@ -28,9 +28,13 @@
  * for the value list, and the segment tooltips are pointer-only. Rather than
  * synthesise a long `aria-label` that duplicates that list badly, the bar is
  * decoration over content the card states in text — the value count and fill
- * rate beside it, the itemised list one disclosure away.
+ * rate beside it, the itemised list one disclosure away. That rule now lives on
+ * the shared {@link SpreadBar} this component draws through; what stays here is
+ * the half that is specific to an attribute — which paint a value takes, and the
+ * fact that blanks are not a segment.
  */
 import React from 'react';
+import { SpreadBar } from '../../shared';
 import { spreadSegments } from './attributeSpread';
 import type { BreakdownRow } from '../../members/memberAnalytics';
 
@@ -53,35 +57,18 @@ export interface AttributeSpreadBarProps {
  *
  * @param props - See {@link AttributeSpreadBarProps}.
  */
-const AttributeSpreadBar: React.FC<AttributeSpreadBarProps> = ({ rows, className = '' }) => {
-  const segments = spreadSegments(rows);
-  if (segments.length === 0) return null;
-
-  return (
-    <div
-      aria-hidden="true"
-      className={`flex h-3 w-full gap-px overflow-hidden rounded-full bg-neutral-100 ${className}`}
-    >
-      {segments.map((segment) => (
-        <div
-          key={segment.row.value}
-          title={
-            segment.isTail
-              ? `${segment.row.label} — ${segment.row.count.toLocaleString()} members`
-              : `${segment.row.label} — ${segment.row.count.toLocaleString()} (${Math.round(segment.row.pct)}%)`
-          }
-          /*
-            Data-driven geometry, not a hand-maintained pixel scale: the segment's
-            share *is* its member count, so `flex-grow` carries it and no width
-            has to be computed. `min-width` keeps a one-member value from
-            vanishing to a hairline.
-          */
-          style={{ background: segment.background, flexGrow: segment.row.count, flexBasis: 0 }}
-          className="min-w-1"
-        />
-      ))}
-    </div>
-  );
-};
+const AttributeSpreadBar: React.FC<AttributeSpreadBarProps> = ({ rows, className = '' }) => (
+  <SpreadBar
+    className={className}
+    segments={spreadSegments(rows).map(({ row, background, isTail }) => ({
+      key: row.value,
+      background,
+      count: row.count,
+      title: isTail
+        ? `${row.label} — ${row.count.toLocaleString()} members`
+        : `${row.label} — ${row.count.toLocaleString()} (${Math.round(row.pct)}%)`,
+    }))}
+  />
+);
 
 export default AttributeSpreadBar;

@@ -405,6 +405,7 @@ export function memberMatchesMfaValue(result: MemberMfaResult | undefined, value
   if (!result) return false;
   if (value === 'none') return result.factorCount === 0;
   if (value === 'enrolled') return result.enrolled;
+  if (value === 'single') return result.factorCount === 1;
   if (value === 'multiple') return result.factorCount >= 2;
   if (value.startsWith('has:')) return result.factorLabels.includes(value.slice(4));
   return false;
@@ -468,6 +469,179 @@ export function getObservedFactorLabels(mfaResults: Map<string, MemberMfaResult>
   const labels = new Set<string>();
   mfaResults.forEach((r) => r.factorLabels.forEach((l) => labels.add(l)));
   return Array.from(labels).sort();
+}
+
+/**
+ * The MFA enrollment partition: every scanned member in exactly one bucket.
+ *
+ * Distinct from {@link computeMfaBreakdown}, and deliberately so. That function's
+ * rows **overlap** — a member holding two factors is counted in `multiple` and
+ * again in one `has:` row per factor they hold, so the rows sum to more than the
+ * group. That is the right shape for a filter list, where each row is an
+ * independent predicate, and the wrong one for anything that draws a proportion:
+ * a spread bar over those rows would be a picture of a partition that is not one.
+ *
+ * These three buckets are mutually exclusive and sum to {@link
+ * MfaEnrollmentSummary.scanned}, which is what earns them a bar.
+ */
+export interface MfaEnrollmentSummary {
+  /** Members a scan result exists for. The denominator every `pct` here uses. */
+  scanned: number;
+  /** Members in the roster. Equal to `scanned` after a scan that ran to completion. */
+  total: number;
+  /**
+   * The buckets — `none`, `single`, `multiple` — in that order. Percentages are
+   * over {@link MfaEnrollmentSummary.scanned}, never over the roster: a scan that
+   * was cancelled half way through has not learned anything about the members it
+   * never reached, and dividing by the roster would quietly report their absence
+   * as coverage.
+   */
+  rows: BreakdownRow[];
+}
+
+/**
+ * Partition the scanned members by how many active factors they hold.
+ *
+ * @param members - The group's roster.
+ * @param mfaResults - Per-member scan results, or `null` before a scan has run.
+ * @returns The partition, or `null` when no scan has run — **absent, not zeroed**.
+ *   Rendering `0 unprotected` for a group nobody has scanned states a fact that
+ *   was never established.
+ */
+export function computeMfaEnrollment(
+  members: OktaUser[],
+  mfaResults: Map<string, MemberMfaResult> | null,
+): MfaEnrollmentSummary | null {
+  if (!mfaResults) return null;
+
+  let none = 0;
+  let single = 0;
+  let multiple = 0;
+  let scanned = 0;
+
+  for (const member of members) {
+    const result = mfaResults.get(member.id);
+    if (!result) continue;
+    scanned++;
+    if (result.factorCount === 0) none++;
+    else if (result.factorCount === 1) single++;
+    else multiple++;
+  }
+
+  const pct = (n: number) => (scanned > 0 ? (n / scanned) * 100 : 0);
+
+  return {
+    scanned,
+    total: members.length,
+    rows: [
+      { value: 'none', label: 'No factors enrolled', count: none, pct: pct(none) },
+      { value: 'single', label: 'One factor', count: single, pct: pct(single) },
+      { value: 'multiple', label: 'Two or more factors', count: multiple, pct: pct(multiple) },
+    ],
+  };
+}
+
+/** Which reason an MFA coverage card carries. A code, never a sentence. */
+export type MfaSignalKind = 'unprotected' | 'single-factor' | 'partial-scan';
+
+/**
+ * One reason the MFA coverage card is worth reading, in a form a badge can
+ * render. Same contract as {@link AttributeSignal}: the text is a self-contained
+ * phrase, never a bare number, and colour is never the only carrier.
+ */
+export interface MfaSignal {
+  /** Which signal this is. Mapped to a badge variant at the call site. */
+  kind: MfaSignalKind;
+  /** Badge text — a self-contained phrase. */
+  label: string;
+  /** The longer sentence, for the badge's tooltip. */
+  description: string;
+}
+
+/**
+ * The signals an enrollment partition carries.
+ *
+ * `partial-scan` is not decoration. Every number on the card is over `scanned`,
+ * so a reader who assumes the denominator is the group would read an incomplete
+ * scan as a complete one; the badge is what makes the card's own scope visible
+ * rather than something you have to infer from a count.
+ *
+ * @param summary - The enrollment partition from {@link computeMfaEnrollment}.
+ * @returns The signals, strongest first. Empty is an answer — a fully scanned,
+ *   fully multi-factor group has nothing flagged.
+ */
+export function mfaSignals(summary: MfaEnrollmentSummary): MfaSignal[] {
+  const signals: MfaSignal[] = [];
+  const none = summary.rows.find((row) => row.value === 'none')?.count ?? 0;
+  const single = summary.rows.find((row) => row.value === 'single')?.count ?? 0;
+
+  if (none > 0) {
+    signals.push({
+      kind: 'unprotected',
+      label: `${none.toLocaleString()} with no factor`,
+      description: `${none.toLocaleString()} of the ${summary.scanned.toLocaleString()} members scanned have no active MFA factor enrolled, so a password is all that stands in front of their account.`,
+    });
+  }
+
+  if (single > 0) {
+    signals.push({
+      kind: 'single-factor',
+      label: `${single.toLocaleString()} on a single factor`,
+      description: `${single.toLocaleString()} members hold exactly one active factor. Losing it locks them out; phishing it gets past them.`,
+    });
+  }
+
+  if (summary.scanned < summary.total) {
+    signals.push({
+      kind: 'partial-scan',
+      label: `${summary.scanned.toLocaleString()} of ${summary.total.toLocaleString()} scanned`,
+      description: `Every figure on this card is over the ${summary.scanned.toLocaleString()} members the scan reached, not the full roster. Rescan to cover the rest.`,
+    });
+  }
+
+  return signals;
+}
+
+/**
+ * How many scanned members hold each observed factor type, most common first.
+ *
+ * **Not a partition, by construction.** A member holding Okta Verify and SMS
+ * appears in both rows, so these counts sum past the group and no proportion bar
+ * may be drawn over them — the card that renders this says so in words rather
+ * than leaving a reader to work it out from arithmetic that does not close.
+ *
+ * @param members - The group's roster.
+ * @param mfaResults - Per-member scan results, or `null` before a scan has run.
+ * @returns One row per observed factor label with `pct` over the scanned count,
+ *   or `null` when no scan has run. An empty array is a different answer: the
+ *   scan ran and nobody holds a factor.
+ */
+export function computeMfaFactorTypes(
+  members: OktaUser[],
+  mfaResults: Map<string, MemberMfaResult> | null,
+): BreakdownRow[] | null {
+  if (!mfaResults) return null;
+
+  let scanned = 0;
+  const labelCounts = new Map<string, number>();
+
+  for (const member of members) {
+    const result = mfaResults.get(member.id);
+    if (!result) continue;
+    scanned++;
+    for (const label of result.factorLabels) {
+      labelCounts.set(label, (labelCounts.get(label) || 0) + 1);
+    }
+  }
+
+  return Array.from(labelCounts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([label, count]) => ({
+      value: `has:${label}`,
+      label,
+      count,
+      pct: scanned > 0 ? (count / scanned) * 100 : 0,
+    }));
 }
 
 /** Does a member match the free-text search query? (name / email / login) */
