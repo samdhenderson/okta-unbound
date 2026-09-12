@@ -575,3 +575,67 @@ describe('parse reuse', () => {
     expect(theirs.clauses[0].resolvedValue).toBe('Sales');
   });
 });
+
+// A conditional is ONE clause. Its branches are not alternatives the admin can
+// satisfy independently — which branch is even read depends on the test — so
+// splitting it would describe a rule nobody wrote. The evaluator now answers
+// them, so the rows carry real verdicts rather than `unsupported-node`.
+describe('conditional expressions are a single clause', () => {
+  it('stringifies a conditional faithfully, parenthesising a binary part', () => {
+    const { clauses } = explainRuleExpression(
+      'user.department == "Engineering" ? "EMEA" : "AMER"',
+      user,
+    );
+
+    expect(clauses).toHaveLength(1);
+    expect(clauses[0].expressionText).toBe('(user.department == "Engineering") ? "EMEA" : "AMER"');
+    // Allow-listed, resolved — but a string is not a condition.
+    expect(clauses[0].status).toBe('not-evaluated');
+    expect(clauses[0].reasonCode).toBe('not-a-boolean');
+  });
+
+  it('does not split a conditional whose branches contain connectives', () => {
+    const { clauses } = explainRuleExpression(
+      'user.isContractor ? (user.department == "Engineering" && user.title == "Intern") : false',
+      user,
+    );
+
+    expect(clauses).toHaveLength(1);
+    expect(clauses[0].status).toBe('pass');
+  });
+
+  it('passes, fails, and withholds on the chosen branch', () => {
+    const pass = explainRuleExpression(
+      'user.isContractor ? user.department == "Engineering" : false',
+      user,
+    );
+    const fail = explainRuleExpression(
+      'user.isContractor ? user.department == "Sales" : false',
+      user,
+    );
+    // `>` is allow-listed but gives up unless both operands are numbers.
+    const withheld = explainRuleExpression(
+      'user.isContractor ? user.department > "A" : false',
+      user,
+    );
+
+    expect(pass.clauses[0].status).toBe('pass');
+    expect(fail.clauses[0].status).toBe('fail');
+    expect(withheld.clauses[0].status).toBe('not-evaluated');
+    expect(withheld.clauses[0].reasonCode).toBe('operand-type');
+  });
+
+  it('is one clause among the conjuncts around it', () => {
+    const { clauses, summary } = explainRuleExpression(
+      'user.city == "San Francisco" && (user.isContractor ? user.title == "Manager" : false)',
+      user,
+    );
+
+    expect(clauses.map((c) => c.expressionText)).toEqual([
+      'user.city == "San Francisco"',
+      'user.isContractor ? (user.title == "Manager") : false',
+    ]);
+    expect(clauses.map((c) => c.status)).toEqual(['pass', 'fail']);
+    expect(summary.result).toEqual({ outcome: 'no-match' });
+  });
+});

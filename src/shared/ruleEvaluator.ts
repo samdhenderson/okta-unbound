@@ -157,7 +157,7 @@ export type RuleExprValue = ExprValue;
  * - `unsupported-node` — a node shape we do not model (non-`user.*` member
  *   access, a non-string-literal or nested computed key (`user[x]`,
  *   `user["a"]["b"]`), a bare identifier, `this`, a regex literal, a
- *   `Compound`, …).
+ *   `Compound`, an array literal, …).
  * - `operand-type` — allow-listed grammar, but an operand's runtime type is
  *   outside what the operator or function accepts (`user.department > "A"`,
  *   `String.startsWith(user.employeeNumber, "4")`, an object-valued attribute).
@@ -636,6 +636,10 @@ function isBinaryExpression(node: jsep.Expression): node is jsep.BinaryExpressio
   return node.type === 'BinaryExpression';
 }
 
+function isConditionalExpression(node: jsep.Expression): node is jsep.ConditionalExpression {
+  return node.type === 'ConditionalExpression';
+}
+
 /**
  * Fully-qualified name of a call's callee — `String.startsWith`, or a bare
  * `isMemberOfGroup`. Returns `undefined` for any callee shape we do not model
@@ -1007,6 +1011,51 @@ function evaluateCall(node: jsep.CallExpression, options: EvaluationWalkOptions)
   return isUnresolved(result) ? giveUp('operand-type', options) : result;
 }
 
+/**
+ * Whether two resolved values are the *same* value, under the same equality
+ * discipline {@link evaluateBinary} applies to `==`.
+ *
+ * Strict and scalar-only: an array operand is never comparable here, because
+ * `===` on two arrays is reference equality — a confident "these differ" about
+ * collections that may well be identical. Two array branches are therefore not
+ * the same value, which is what keeps {@link evaluateConditional} from claiming
+ * an answer it has not established.
+ */
+function isSameValue(left: ExprValue, right: ExprValue): boolean {
+  if (Array.isArray(left) || Array.isArray(right)) return false;
+  return left === right;
+}
+
+/**
+ * Three-valued conditional (`test ? consequent : alternate`).
+ *
+ * The test goes through the same {@link truthiness} discipline the connectives
+ * use — one truthiness for the whole module, and an array is never a truth
+ * value — so a resolved test simply selects its branch, and the selected
+ * branch's own {@link UNRESOLVED} propagates.
+ *
+ * **An unresolved test does not automatically poison the conditional.** Both
+ * branches are evaluated, and if they resolve to the same value the structure
+ * has already determined the answer whatever the test would have said. That is
+ * the eager posture {@link evaluateAnd}/{@link evaluateOr} already take —
+ * `unresolvable || true` is `true` — applied to the one other place where a
+ * sub-expression we cannot read does not actually change the result. Anything
+ * else stays unresolved: never a guess.
+ */
+function evaluateConditional(
+  node: jsep.ConditionalExpression,
+  options: EvaluationWalkOptions,
+): EvalResult {
+  const test = truthiness(evaluateNode(node.test, options));
+  if (!isUnresolved(test)) {
+    return evaluateNode(test ? node.consequent : node.alternate, options);
+  }
+  const consequent = evaluateNode(node.consequent, options);
+  const alternate = evaluateNode(node.alternate, options);
+  if (isUnresolved(consequent) || isUnresolved(alternate)) return UNRESOLVED;
+  return isSameValue(consequent, alternate) ? consequent : UNRESOLVED;
+}
+
 /** Walk one AST node against the allow-list. Never throws for unsupported input. */
 function evaluateNode(node: jsep.Expression, options: EvaluationWalkOptions): EvalResult {
   if (isLiteral(node)) {
@@ -1020,6 +1069,7 @@ function evaluateNode(node: jsep.Expression, options: EvaluationWalkOptions): Ev
   if (isMemberExpression(node)) return resolveMember(node, options);
   if (isCallExpression(node)) return evaluateCall(node, options);
   if (isBinaryExpression(node)) return evaluateBinary(node, options);
+  if (isConditionalExpression(node)) return evaluateConditional(node, options);
   if (isUnaryExpression(node)) {
     if (node.operator === '-') {
       // Unary minus on a numeric literal only — `-1`, `-0.5`. `-user.x`,
@@ -1036,8 +1086,8 @@ function evaluateNode(node: jsep.Expression, options: EvaluationWalkOptions): Ev
     const argument = truthiness(evaluateNode(node.argument, options));
     return isUnresolved(argument) ? UNRESOLVED : !argument;
   }
-  // Identifier, Compound, ArrayExpression, ConditionalExpression, ThisExpression,
-  // SequenceExpression — none are meaningful group-rule conditions.
+  // Identifier, Compound, ArrayExpression, ThisExpression, SequenceExpression —
+  // none are meaningful group-rule conditions.
   return giveUpLogged('unsupported-node', options);
 }
 
@@ -1183,6 +1233,16 @@ function isSupportedNode(node: jsep.Expression, options: GrammarWalkOptions = {}
       return reject('unsupported-operator', options);
     }
     return isSupportedNode(node.left, options) && isSupportedNode(node.right, options);
+  }
+  if (isConditionalExpression(node)) {
+    // Okta EL's `test ? a : b`. Supported exactly when all three parts are — the
+    // mirror of `evaluateConditional`, which may have to read either branch (and
+    // reads both when the test is unresolved).
+    return (
+      isSupportedNode(node.test, options) &&
+      isSupportedNode(node.consequent, options) &&
+      isSupportedNode(node.alternate, options)
+    );
   }
   return reject('unsupported-node', options);
 }

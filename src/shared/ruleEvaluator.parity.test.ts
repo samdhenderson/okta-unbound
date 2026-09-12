@@ -694,9 +694,48 @@ const OUTCOME_CASES: readonly OutcomeCase[] = [
     expression: 'user.department == ["Engineering"]',
     expected: 'unevaluable',
   },
+  // --- conditional expressions (`test ? consequent : alternate`) -------------
+  // These rows read `unevaluable` until the evaluator learned the node type:
+  // jsep always parsed a ternary, and both walks declined it as
+  // `unsupported-node`.
   {
-    name: 'reason unsupported-node: conditional expression',
+    name: 'conditional: a true test takes the consequent',
     expression: 'user.isContractor ? true : false',
+    expected: 'match',
+  },
+  {
+    name: 'conditional: a false test takes the alternate',
+    expression: 'user.department == "Sales" ? true : false',
+    expected: 'no-match',
+  },
+  {
+    name: 'conditional producing a value, compared',
+    expression: '(user.department == "Engineering" ? "Eng" : "Other") == "Eng"',
+    expected: 'match',
+  },
+  {
+    name: 'conditional whose chosen branch does not resolve',
+    expression: `user.isContractor ? ${UNRESOLVED_CLAUSE} : true`,
+    expected: 'unevaluable',
+  },
+  {
+    name: 'conditional whose UNCHOSEN branch does not resolve still answers',
+    expression: `user.isContractor ? true : ${UNRESOLVED_CLAUSE}`,
+    expected: 'match',
+  },
+  {
+    name: 'conditional with an unresolved test and identical branches resolves',
+    expression: `(${UNRESOLVED_CLAUSE} ? "X" : "X") == "X"`,
+    expected: 'match',
+  },
+  {
+    name: 'conditional with an unresolved test and differing branches stays unevaluable',
+    expression: `(${UNRESOLVED_CLAUSE} ? "X" : "Y") == "X"`,
+    expected: 'unevaluable',
+  },
+  {
+    name: 'conditional with an unsupported branch stays unevaluable',
+    expression: 'user.isContractor ? true : department',
     expected: 'unevaluable',
   },
   {
@@ -1082,8 +1121,28 @@ const GATE_CASES: readonly GateCase[] = [
     expected: false,
   },
   {
-    name: 'rejects a conditional expression',
+    name: 'accepts a conditional expression whose three parts are all supported',
     expression: 'user.isContractor ? true : false',
+    expected: true,
+  },
+  {
+    name: 'accepts a nested conditional',
+    expression: 'user.isContractor ? (user.department == "Engineering" ? "a" : "b") : "c"',
+    expected: true,
+  },
+  {
+    name: 'rejects a conditional with an unsupported test',
+    expression: '["a"] ? "a" : "b"',
+    expected: false,
+  },
+  {
+    name: 'rejects a conditional with an unsupported consequent',
+    expression: 'user.isContractor ? department : "b"',
+    expected: false,
+  },
+  {
+    name: 'rejects a conditional with an unsupported alternate',
+    expression: 'user.isContractor ? "a" : this.department',
     expected: false,
   },
   {

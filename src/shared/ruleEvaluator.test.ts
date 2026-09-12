@@ -790,3 +790,137 @@ describe('AST seam', () => {
     );
   });
 });
+
+// ===========================================================================
+// Conditional expressions (`test ? consequent : alternate`). Okta EL accepts
+// them and jsep has always parsed them; the evaluator used to decline the node
+// outright, so a rule written in the ternary form came back `unevaluable`
+// however ordinary its parts were.
+// ===========================================================================
+describe('conditional expressions', () => {
+  const user: OktaUser = {
+    id: '00uFAKE',
+    status: 'ACTIVE',
+    profile: {
+      login: 'ada@example.com',
+      email: 'ada@example.com',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      department: 'Engineering',
+      userType: 'EMPLOYEE',
+      region: 'EU',
+      division: 'EMEA',
+      contractor: false,
+      roles: ['admin', 'dev'],
+      // `missingAttr` is deliberately absent: reading it is how a test operand
+      // is made UNRESOLVED rather than false.
+    },
+  } as unknown as OktaUser;
+
+  /** The same user, with the attributes an individual case needs changed. */
+  const userWith = (profile: Record<string, unknown>): OktaUser =>
+    ({ ...user, profile: { ...user.profile, ...profile } }) as unknown as OktaUser;
+
+  const groupsWithStaff = [{ id: '00gFAKE1', name: 'Staff' }];
+  const groupsWithoutStaff = [{ id: '00gFAKE2', name: 'Interns' }];
+
+  describe('a resolved test selects its branch', () => {
+    const expression =
+      'user.userType == "EMPLOYEE" ? isMemberOfGroupName("Staff") : user.contractor == true';
+
+    it('takes the consequent when the test is true', () => {
+      expect(tryEvaluateRuleExpression(expression, user, groupsWithStaff)).toBe('match');
+    });
+
+    it('reports no-match when the chosen consequent resolves to false', () => {
+      expect(tryEvaluateRuleExpression(expression, user, groupsWithoutStaff)).toBe('no-match');
+    });
+
+    it('takes the alternate when the test is false', () => {
+      const contractor = userWith({ userType: 'CONTRACTOR', contractor: true });
+      expect(tryEvaluateRuleExpression(expression, contractor, groupsWithoutStaff)).toBe('match');
+    });
+  });
+
+  describe('a conditional that produces a value, inside a comparison', () => {
+    const expression = '(user.region == "EU" ? "EMEA" : "AMER") == user.division';
+
+    it('matches when the selected branch equals the compared attribute', () => {
+      expect(tryEvaluateRuleExpression(expression, user)).toBe('match');
+    });
+
+    it('reports no-match when it does not', () => {
+      expect(tryEvaluateRuleExpression(expression, userWith({ division: 'AMER' }))).toBe(
+        'no-match',
+      );
+    });
+
+    it('follows the alternate branch for a false test', () => {
+      const amer = userWith({ region: 'US', division: 'AMER' });
+      expect(tryEvaluateRuleExpression(expression, amer)).toBe('match');
+    });
+  });
+
+  describe('an unresolved test', () => {
+    it('still resolves when both branches are the same value', () => {
+      expect(tryEvaluateRuleExpression('(user.missingAttr ? "X" : "X") == "X"', user)).toBe(
+        'match',
+      );
+    });
+
+    it('stays unevaluable when the branches differ', () => {
+      expect(tryEvaluateRuleExpression('(user.missingAttr ? "X" : "Y") == "X"', user)).toBe(
+        'unevaluable',
+      );
+    });
+
+    it('stays unevaluable for array branches, which are never the same value', () => {
+      expect(walkUngated('user.missingAttr ? user.roles : user.roles', user).resolved).toBe(false);
+    });
+
+    it('stays unevaluable when a branch is itself unresolved', () => {
+      expect(
+        walkUngated('user.missingAttr ? user.department : user.alsoMissing', user).resolved,
+      ).toBe(false);
+    });
+  });
+
+  describe('the chosen branch carries the answer', () => {
+    // `>` is allow-listed, so the grammar gate passes, but it gives up unless
+    // both operands are numbers — that branch resolves to nothing.
+    const expression = 'user.userType == "EMPLOYEE" ? user.department > "A" : false';
+
+    it('is unevaluable when the chosen branch does not resolve', () => {
+      expect(tryEvaluateRuleExpression(expression, user)).toBe('unevaluable');
+    });
+
+    it('is unaffected by an unresolved branch it did not choose', () => {
+      expect(tryEvaluateRuleExpression(expression, userWith({ userType: 'CONTRACTOR' }))).toBe(
+        'no-match',
+      );
+    });
+  });
+
+  describe('nested conditionals', () => {
+    const expression =
+      '(user.userType == "EMPLOYEE" ? (user.region == "EU" ? "EMEA" : "AMER") : "EXTERNAL") == user.division';
+
+    it('resolves through the inner conditional', () => {
+      expect(tryEvaluateRuleExpression(expression, user)).toBe('match');
+      expect(tryEvaluateRuleExpression(expression, userWith({ region: 'US' }))).toBe('no-match');
+    });
+
+    it('resolves through the outer alternate', () => {
+      const external = userWith({ userType: 'CONTRACTOR', division: 'EXTERNAL' });
+      expect(tryEvaluateRuleExpression(expression, external)).toBe('match');
+    });
+  });
+
+  it('is accepted by the grammar gate only when every part is supported', () => {
+    expect(gateAccepts('user.userType == "EMPLOYEE" ? "a" : "b"')).toBe(true);
+    // The alternate is a bare identifier — not a shape this module models.
+    expect(gateAccepts('user.userType == "EMPLOYEE" ? "a" : department')).toBe(false);
+    // The test is an array literal.
+    expect(gateAccepts('["a"] ? "a" : "b"')).toBe(false);
+  });
+});
