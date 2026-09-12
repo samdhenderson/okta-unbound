@@ -11,31 +11,18 @@
  *
  * ## One anatomy, ranked
  *
- * Every attribute gets the **same card**. Severity is carried by *order* and by
- * *badges*, never by giving a flagged attribute a different shape. A second card
- * shape for "bad" attributes would mean a reader learns two layouts and then has
- * to diff them; it also quietly asserts that the quiet ones are a different kind
- * of thing, when the only difference is that today nothing is wrong with them.
+ * Every attribute gets the **same card** — and it is the same card the MFA
+ * coverage reports use, {@link module:sidepanel/components/shared/InsightCard},
+ * which owns the chrome, the disclosure and the badge strip. Severity is carried
+ * by *order* and by *badges*, never by giving a flagged attribute a different
+ * shape.
  *
- * ## Three stages, and the badges survive the first
+ * ## Three stages
  *
  * 1. **Collapsed** — title, signal badges, the spread bar, the value count.
  * 2. **Expanded** — the value breakdown, the blank line, the dependent rules.
  * 3. **Modal** — the full distribution, including everything folded into
  *    `Other`, via the caller's `onShowOther`.
- *
- * The badges are in stage one deliberately. A collapsed card that hid its
- * reasons would leave the ranking looking arbitrary: the reader sees an order
- * with no visible cause and has to open cards to find out why. Each badge is a
- * phrase rather than a bare number, and none of them depends on its colour to be
- * understood.
- *
- * ## The disclosure is a real control
- *
- * The header is covered by a {@link StretchedButton} carrying `aria-expanded` and
- * `aria-controls` — a real `<button>`, focusable, Enter/Space operable. The
- * overlay is scoped to the header, not the whole card, so clicking inside the
- * body it just opened does not collapse it.
  *
  * ## Outliers are marked, never corrected
  *
@@ -46,12 +33,11 @@
  * The `drift` **badge** is a different, wider claim: near-duplicate spellings
  * anywhere in the attribute, including inside the tail this card never names.
  */
-import React, { useId, useState } from 'react';
+import React from 'react';
 import RuleLinkRow from './RuleLinkRow';
 import AttributeSpreadBar from './AttributeSpreadBar';
 import { spreadSegments } from './attributeSpread';
-import { Badge, Button, ListRow, StretchedButton, type BadgeVariant } from '../../shared';
-import Icon from '../../shared/Icon';
+import { Badge, Button, InsightCard, type BadgeVariant } from '../../shared';
 import {
   attributeTailCount,
   outlierValues,
@@ -124,152 +110,27 @@ const AttributeHealthCard: React.FC<AttributeHealthCardProps> = ({
   onShowOther,
   defaultExpanded = false,
 }) => {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  const bodyId = useId();
-  const titleId = useId();
-
   const outliers = new Set(outlierValues(summary));
   const segments = spreadSegments(summary.rows);
   const blanks = summary.rows.find((row) => row.value === NONE_VALUE);
   const tailCount = attributeTailCount(summary);
 
   return (
-    <ListRow
-      headerClassName="relative"
-      body={
-        // `.disclose` animates `grid-template-rows` 0fr → 1fr with no JS
-        // measurement — and honours reduced motion through the global token
-        // contract rather than a check here. `inert` keeps the closed body out of
-        // the tab order and the accessibility tree.
-        <div id={bodyId} className="disclose" data-open={expanded} inert={!expanded || undefined}>
-          <div>
-            <div className="space-y-3 border-t border-neutral-100 px-(--sp-card) pb-(--sp-card) pt-3">
-              {segments.length > 0 && (
-                <ul className="space-y-1">
-                  {segments.map(({ row, background }) => (
-                    <li
-                      key={row.value}
-                      className="flex items-center justify-between gap-(--sp-inline) text-xs"
-                    >
-                      <span className="flex min-w-0 items-center gap-(--sp-inline)">
-                        <span
-                          aria-hidden="true"
-                          className="size-2 shrink-0 rounded-xs"
-                          style={{ background }}
-                        />
-                        <span
-                          className={`min-w-0 truncate font-mono ${
-                            outliers.has(row.value) ? 'text-warning-text' : 'text-neutral-700'
-                          }`}
-                          title={
-                            outliers.has(row.value) ? 'Diverges from the dominant value' : row.label
-                          }
-                        >
-                          {outliers.has(row.value) && (
-                            /* The marker is text, not colour alone: colour is not
-                             an accessible signal on its own, and this list is read
-                             as much as it is scanned. */
-                            <span className="me-1 font-sans font-medium">Outlier:</span>
-                          )}
-                          {row.label}
-                        </span>
-                      </span>
-                      <span className="shrink-0 tabular-nums text-neutral-500">
-                        {row.count.toLocaleString()} ({Math.round(row.pct)}%)
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {/* A blank is the absence of a value, not a value people share, so
-                it gets its own line rather than a row in the list above and a
-                segment in the bar. Omitted when the attribute is fully populated. */}
-              {blanks && blanks.count > 0 && (
-                <p className="border-t border-neutral-100 pt-2 text-xs text-neutral-500">
-                  Blank in {blanks.count.toLocaleString()} of {summary.total.toLocaleString()}{' '}
-                  members ({Math.round(blanks.pct)}%) — not a value.
-                </p>
-              )}
-
-              {/* Stage three. Offered only when a caller can answer it, and only
-                when there is genuinely something the card is not showing. */}
-              {onShowOther && tailCount > 0 && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  fullWidth
-                  icon="chevron-right"
-                  iconPosition="right"
-                  onClick={onShowOther}
-                >
-                  Show all {summary.distinct.toLocaleString()} values
-                </Button>
-              )}
-
-              {/* Empty is an answer: no rule depends on this attribute today.
-                Saying "0 rules" would read as a defect rather than as a fact
-                about coupling. */}
-              {rules.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-medium text-neutral-600">
-                    Depended on by {rules.length} rule{rules.length === 1 ? '' : 's'}
-                  </h3>
-                  <ul className="mt-1.5 space-y-1.5">
-                    {rules.map((rule) => (
-                      <li key={rule.ruleId}>
-                        <RuleLinkRow
-                          name={rule.ruleName}
-                          onSelect={
-                            onNavigateToRule ? () => onNavigateToRule(rule.ruleId) : undefined
-                          }
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      }
-    >
-      <StretchedButton
-        /*
-          The attribute key is *in* the name rather than left to `describedBy`
-          alone: a pane renders a grid of these, and `aria-describedby` is a
-          description, not a name — so without it every card's control would be
-          called the same thing in a list of names.
-        */
-        label={`${expanded ? 'Hide' : 'Show'} the value breakdown for ${summary.key}`}
-        describedBy={titleId}
-        expanded={expanded}
-        controls={bodyId}
-        onClick={() => setExpanded((open) => !open)}
-      />
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-(--sp-inline)">
-          <code
-            id={titleId}
-            className="truncate font-mono text-sm font-semibold text-neutral-900"
-            title={summary.label}
-          >
-            {summary.key}
-          </code>
-          <Icon
-            type="chevron-right"
-            size="sm"
-            aria-hidden="true"
-            className={`shrink-0 text-neutral-400 transition-transform duration-(--dur-quick) ${
-              expanded ? 'rotate-90' : ''
-            }`}
-          />
-        </div>
-
-        {/* Stage one keeps the badges. Without them the order the pane put these
-          cards in has no visible cause. */}
-        {signals.length > 0 && (
+    <InsightCard
+      title={(titleId) => (
+        <code
+          id={titleId}
+          className="truncate font-mono text-sm font-semibold text-neutral-900"
+          title={summary.label}
+        >
+          {summary.key}
+        </code>
+      )}
+      subject={summary.key}
+      revealName="value breakdown"
+      defaultExpanded={defaultExpanded}
+      badges={
+        signals.length > 0 ? (
           <ul className="flex flex-wrap gap-1.5">
             {signals.map((signal) => (
               <li key={signal.kind}>
@@ -279,16 +140,99 @@ const AttributeHealthCard: React.FC<AttributeHealthCardProps> = ({
               </li>
             ))}
           </ul>
-        )}
+        ) : undefined
+      }
+      headline={
+        <>
+          <AttributeSpreadBar rows={summary.rows} />
+          <p className="text-xs text-neutral-600">
+            {summary.distinct.toLocaleString()} value{summary.distinct === 1 ? '' : 's'} ·{' '}
+            {Math.round(summary.fillRate)}% populated
+          </p>
+        </>
+      }
+    >
+      {segments.length > 0 && (
+        <ul className="space-y-1">
+          {segments.map(({ row, background }) => (
+            <li
+              key={row.value}
+              className="flex items-center justify-between gap-(--sp-inline) text-xs"
+            >
+              <span className="flex min-w-0 items-center gap-(--sp-inline)">
+                <span
+                  aria-hidden="true"
+                  className="size-2 shrink-0 rounded-xs"
+                  style={{ background }}
+                />
+                <span
+                  className={`min-w-0 truncate font-mono ${
+                    outliers.has(row.value) ? 'text-warning-text' : 'text-neutral-700'
+                  }`}
+                  title={outliers.has(row.value) ? 'Diverges from the dominant value' : row.label}
+                >
+                  {outliers.has(row.value) && (
+                    /* The marker is text, not colour alone: colour is not an
+                     accessible signal on its own, and this list is read as much
+                     as it is scanned. */
+                    <span className="me-1 font-sans font-medium">Outlier:</span>
+                  )}
+                  {row.label}
+                </span>
+              </span>
+              <span className="shrink-0 tabular-nums text-neutral-500">
+                {row.count.toLocaleString()} ({Math.round(row.pct)}%)
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
-        <AttributeSpreadBar rows={summary.rows} />
-
-        <p className="text-xs text-neutral-600">
-          {summary.distinct.toLocaleString()} value{summary.distinct === 1 ? '' : 's'} ·{' '}
-          {Math.round(summary.fillRate)}% populated
+      {/* A blank is the absence of a value, not a value people share, so it gets
+        its own line rather than a row in the list above and a segment in the bar.
+        Omitted when the attribute is fully populated. */}
+      {blanks && blanks.count > 0 && (
+        <p className="border-t border-neutral-100 pt-2 text-xs text-neutral-500">
+          Blank in {blanks.count.toLocaleString()} of {summary.total.toLocaleString()} members (
+          {Math.round(blanks.pct)}%) — not a value.
         </p>
-      </div>
-    </ListRow>
+      )}
+
+      {/* Stage three. Offered only when a caller can answer it, and only when
+        there is genuinely something the card is not showing. */}
+      {onShowOther && tailCount > 0 && (
+        <Button
+          variant="secondary"
+          size="sm"
+          fullWidth
+          icon="chevron-right"
+          iconPosition="right"
+          onClick={onShowOther}
+        >
+          Show all {summary.distinct.toLocaleString()} values
+        </Button>
+      )}
+
+      {/* Empty is an answer: no rule depends on this attribute today. Saying
+        "0 rules" would read as a defect rather than as a fact about coupling. */}
+      {rules.length > 0 && (
+        <div>
+          <h3 className="text-xs font-medium text-neutral-600">
+            Depended on by {rules.length} rule{rules.length === 1 ? '' : 's'}
+          </h3>
+          <ul className="mt-1.5 space-y-1.5">
+            {rules.map((rule) => (
+              <li key={rule.ruleId}>
+                <RuleLinkRow
+                  name={rule.ruleName}
+                  onSelect={onNavigateToRule ? () => onNavigateToRule(rule.ruleId) : undefined}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </InsightCard>
   );
 };
 
