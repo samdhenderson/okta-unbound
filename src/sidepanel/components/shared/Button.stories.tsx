@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import Button from './Button';
+import Icon from './Icon';
 
 /**
  * The primary text button primitive — five variants, four sizes, optional
@@ -184,4 +185,29 @@ export const Disclosure: Story = {
     </div>
   ),
   args: { variant: 'ghost', size: 'sm' },
+};
+
+/**
+ * A label plus an **element** child — the shape a rotating disclosure chevron
+ * needs, because the `icon` prop renders its own `Icon` and cannot carry the
+ * `rotate-90` class the open state turns on.
+ *
+ * This is the regression case for the chevron that used to wrap onto its own
+ * line: the children wrapper is `display: contents`, so the label and the
+ * `<Icon>` sit directly in the button's flex row. Without it, Tailwind
+ * preflight's `svg { display: block }` broke the line at any width.
+ */
+export const LabelWithElementChild: Story = {
+  render: (args) => (
+    <div className="w-48">
+      <Button {...args} expanded controls="button-element-child-region">
+        Rules that use this group
+        <Icon type="chevron-right" size="sm" className="rotate-90" />
+      </Button>
+      <div id="button-element-child-region" className="sr-only">
+        The region this button shows and hides.
+      </div>
+    </div>
+  ),
+  args: { variant: 'ghost', size: 'xs' },
 };

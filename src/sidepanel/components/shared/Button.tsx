@@ -258,7 +258,17 @@ const Button: React.FC<ButtonProps> = ({
         </svg>
       )}
       {!loading && icon && iconPosition === 'left' && <Icon type={icon} size={iconSize(size)} />}
-      <span>{children}</span>
+      {/*
+        `display: contents` so the label and any element child sit directly in the
+        button's own `inline-flex items-center gap-2` row. A plain `<span>` here
+        opened a nested inline formatting context, and Tailwind's preflight makes
+        every `<svg>` `display: block` — so a caller passing text plus an `<Icon>`
+        (a disclosure chevron it needs to rotate, which the `icon` prop cannot
+        carry a class onto) got the chevron pushed onto its own line at any width.
+        The wrapper stays because `children` must be one flex item when it is one
+        string; `contents` keeps that true while letting real elements participate.
+      */}
+      <span className="contents">{children}</span>
       {!loading && icon && iconPosition === 'right' && <Icon type={icon} size={iconSize(size)} />}
       {badge && (
         <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-danger text-white">
