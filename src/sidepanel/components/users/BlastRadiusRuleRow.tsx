@@ -43,14 +43,16 @@
  * `dangerouslySetInnerHTML`, never a hand-built HTML string — and **nothing in
  * this module logs**.
  */
-import React from 'react';
+import React, { useId } from 'react';
 import {
   Badge,
+  Button,
   ListRow,
   RuleExpressionText,
   type BadgeVariant,
   type GroupNameResolver,
 } from '../shared';
+import BlastRadiusCascade, { type CascadeGroupBlock } from './BlastRadiusCascade';
 import Icon, { type IconType } from '../shared/Icon';
 import { unevaluableReasonText } from '../../../shared/rules/unevaluableReasonText';
 import { ruleStatusBadge } from '../../../shared/ruleUtils';
@@ -76,6 +78,24 @@ export interface BlastRadiusRuleRowProps {
    * Omitted, the text renders exactly as it did: verbatim, in mono.
    */
   resolveGroupName?: GroupNameResolver;
+  /**
+   * The cascades for the affected groups this rule assigns into — one block per
+   * group. Empty renders **no disclosure and no trigger**, never an absence claim.
+   *
+   * Scoped by the caller to groups the report actually moves, so a target this
+   * rule assigns but that nothing predicted a change for simply has no block.
+   */
+  cascadeBlocks?: readonly CascadeGroupBlock[];
+  /**
+   * Whether the cascade panel is open.
+   *
+   * Owned by the report rather than this row: the groups/rules pill switch
+   * unmounts every row, so local state would silently collapse an open panel on
+   * a switch.
+   */
+  expanded?: boolean;
+  /** Toggle the panel. Absent, no trigger renders — a verb with no handler is omitted. */
+  onToggle?: (ruleId: string) => void;
 }
 
 /** How one {@link RuleTransition} is presented: badge wording, treatment, glyph. */
@@ -141,7 +161,13 @@ const MetaLine: React.FC<{ label: string; value: string }> = ({ label, value }) 
  *
  * @param props - See {@link BlastRadiusRuleRowProps}.
  */
-const BlastRadiusRuleRow: React.FC<BlastRadiusRuleRowProps> = ({ effect, resolveGroupName }) => {
+const BlastRadiusRuleRow: React.FC<BlastRadiusRuleRowProps> = ({
+  effect,
+  resolveGroupName,
+  cascadeBlocks,
+  expanded = false,
+  onToggle,
+}) => {
   const presentation = transitionPresentation[effect.transition];
   // Absorbed from either side, so report whichever side gave up — after first,
   // since that is the state the admin is about to create.
@@ -151,8 +177,40 @@ const BlastRadiusRuleRow: React.FC<BlastRadiusRuleRowProps> = ({ effect, resolve
       : null;
   const broken = effect.status === 'INVALID' ? ruleStatusBadge('INVALID') : null;
 
+  // Never the rule id: a DOM id built from untrusted Okta data is a selector
+  // waiting to break, the reason `GroupMembershipRow` gives at its own.
+  const disclosureId = useId();
+  const blocks = cascadeBlocks ?? [];
+  const discloses = blocks.length > 0 && onToggle !== undefined;
+  /*
+    One disclosure per row, not one per target group. N triggers in the header
+    above a single panel would put the second trigger above the first one's
+    content; the panel captions its blocks instead when there is more than one.
+  */
+  const triggerLabel =
+    blocks.length === 1 ? `Rules that use ${blocks[0].groupName}` : 'Rules that use these groups';
+
   return (
-    <ListRow as="li" density="compact">
+    <ListRow
+      as="li"
+      density="compact"
+      body={
+        discloses ? (
+          <div
+            id={disclosureId}
+            className="disclose"
+            data-open={expanded}
+            inert={!expanded || undefined}
+          >
+            <div>
+              <div className="border-t border-neutral-200 px-(--sp-row-x) pt-2 pb-3">
+                <BlastRadiusCascade groups={blocks} />
+              </div>
+            </div>
+          </div>
+        ) : undefined
+      }
+    >
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex min-w-0 flex-wrap items-center gap-(--sp-inline)">
           {presentation.icon && (
@@ -210,6 +268,23 @@ const BlastRadiusRuleRow: React.FC<BlastRadiusRuleRowProps> = ({ effect, resolve
               resolveGroupName={resolveGroupName}
             />
           </div>
+        )}
+        {discloses && (
+          <Button
+            variant="ghost"
+            size="xs"
+            expanded={expanded}
+            controls={disclosureId}
+            onClick={() => onToggle?.(effect.ruleId)}
+            className="self-start"
+          >
+            {triggerLabel}
+            <Icon
+              type="chevron-right"
+              size="sm"
+              className={`transition-transform duration-(--dur-quick) ${expanded ? 'rotate-90' : ''}`}
+            />
+          </Button>
         )}
       </div>
     </ListRow>

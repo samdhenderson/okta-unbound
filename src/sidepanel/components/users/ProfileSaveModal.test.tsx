@@ -33,8 +33,7 @@ const emptyReport = (status: BlastRadiusReportData['status']): BlastRadiusReport
   groups: [],
   rules: [],
   counts: { added: 0, removed: 0, notPredicted: 0, starts: 0, stops: 0, undetermined: 0 },
-  secondOrderPossible: false,
-  secondOrderRuleNames: [],
+  cascades: [],
 });
 
 const SALES_GROUP: GroupEffect = {

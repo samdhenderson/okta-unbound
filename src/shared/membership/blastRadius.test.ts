@@ -490,32 +490,201 @@ describe('second-order cascades are reported, not resolved', () => {
     userAttributes: ['department'],
   });
 
-  const cascadeRule = (expression: string) =>
+  const cascadeRule = (expression: string, overrides: Partial<MembershipRule> = {}) =>
     ruleOf({
       id: '0prFAKEcascade',
       name: 'Downstream feeder',
       groupIds: [FINANCE.id],
       conditionExpression: expression,
+      ...overrides,
     });
 
-  it('flags the rule whose isMemberOf* names a group this edit would add', () => {
+  /** The cascade for one group, as `[ruleId, direction, matchedBy]` triples. */
+  const cascadeOf = (report: BlastRadiusReport, groupId: string) =>
+    report.cascades
+      .find((cascade) => cascade.groupId === groupId)
+      ?.rules.map((rule) => [rule.ruleId, rule.direction, rule.matchedBy]);
+
+  it('names the rule whose isMemberOf* reads a group this edit would add', () => {
     const report = analyze({
       rules: [newHireFeeder, cascadeRule('isMemberOfGroupName("New Hires")')],
     });
 
     expect(report.groups.map((g) => [g.groupId, g.kind])).toEqual([[NEW_HIRES.id, 'added']]);
-    expect(report.secondOrderPossible).toBe(true);
-    expect(report.secondOrderRuleNames).toEqual(['Downstream feeder']);
+    expect(report.cascades.map((c) => c.groupId)).toEqual([NEW_HIRES.id]);
+    expect(cascadeOf(report, NEW_HIRES.id)).toEqual([['0prFAKEcascade', 'toward-match', 'name']]);
   });
 
-  it('does not flag the same rule when its clause names an unrelated group', () => {
+  it('MIRROR: says nothing when the same rule reads an unrelated group', () => {
     const report = analyze({
       rules: [newHireFeeder, cascadeRule('isMemberOfGroupName("Some Other Group")')],
     });
 
     expect(report.counts.added).toBe(1);
-    expect(report.secondOrderPossible).toBe(false);
-    expect(report.secondOrderRuleNames).toEqual([]);
+    expect(report.cascades).toEqual([]);
+  });
+
+  it('turns away from matching when the clause excludes a group being added', () => {
+    const report = analyze({
+      rules: [newHireFeeder, cascadeRule(`!isMemberOfAnyGroup("${NEW_HIRES.id}")`)],
+    });
+
+    expect(cascadeOf(report, NEW_HIRES.id)).toEqual([['0prFAKEcascade', 'away-from-match', 'id']]);
+  });
+
+  it('MIRROR: the same exclusion turns toward matching when the group is removed', () => {
+    const report = analyze({
+      draft: { department: 'Sales' },
+      memberships: [ENG_BY_RULE],
+      rules: [ENG_FEEDER, cascadeRule(`!isMemberOfAnyGroup("${ENGINEERING.id}")`)],
+    });
+
+    expect(report.groups.map((g) => [g.groupId, g.kind])).toEqual([[ENGINEERING.id, 'removed']]);
+    expect(cascadeOf(report, ENGINEERING.id)).toEqual([['0prFAKEcascade', 'toward-match', 'id']]);
+  });
+
+  it('turns away from matching when a required group is removed', () => {
+    const report = analyze({
+      draft: { department: 'Sales' },
+      memberships: [ENG_BY_RULE],
+      rules: [ENG_FEEDER, cascadeRule(`isMemberOfGroup("${ENGINEERING.id}")`)],
+    });
+
+    expect(cascadeOf(report, ENGINEERING.id)).toEqual([
+      ['0prFAKEcascade', 'away-from-match', 'id'],
+    ]);
+  });
+
+  it('reads a group both ways as undetermined, never a coin-flip', () => {
+    const report = analyze({
+      rules: [
+        newHireFeeder,
+        cascadeRule('isMemberOfGroupName("New Hires") || !isMemberOfAnyGroupName("New Hires")'),
+      ],
+    });
+
+    expect(cascadeOf(report, NEW_HIRES.id)).toEqual([['0prFAKEcascade', 'undetermined', 'name']]);
+  });
+
+  it('MIRROR: two groups pulled opposite ways each keep their own direction', () => {
+    const report = analyze({
+      draft: { department: 'Sales' },
+      memberships: [ENG_BY_RULE],
+      rules: [
+        ENG_FEEDER,
+        newHireFeeder,
+        cascadeRule(`isMemberOfGroupName("New Hires") && isMemberOfGroup("${ENGINEERING.id}")`),
+      ],
+    });
+
+    expect(cascadeOf(report, NEW_HIRES.id)).toEqual([['0prFAKEcascade', 'toward-match', 'name']]);
+    expect(cascadeOf(report, ENGINEERING.id)).toEqual([
+      ['0prFAKEcascade', 'away-from-match', 'id'],
+    ]);
+  });
+
+  it('finds a membership call nested inside a disjunction', () => {
+    const report = analyze({
+      rules: [
+        newHireFeeder,
+        cascadeRule('user.title=="Nobody" || isMemberOfGroupName("New Hires")'),
+      ],
+    });
+
+    expect(cascadeOf(report, NEW_HIRES.id)).toEqual([['0prFAKEcascade', 'toward-match', 'name']]);
+  });
+
+  it('MIRROR: an unrelated group in the same nested position is not named', () => {
+    const report = analyze({
+      rules: [
+        newHireFeeder,
+        cascadeRule('user.title=="Nobody" || isMemberOfGroupName("Some Other Group")'),
+      ],
+    });
+
+    expect(report.cascades).toEqual([]);
+  });
+
+  it('resolves a runnable tenant regex against the affected group (ADR-0002)', () => {
+    const report = analyze({
+      rules: [newHireFeeder, cascadeRule('isMemberOfGroupNameRegex("New.*")')],
+    });
+
+    expect(cascadeOf(report, NEW_HIRES.id)).toEqual([
+      ['0prFAKEcascade', 'toward-match', 'nameRegex'],
+    ]);
+  });
+
+  it('MIRROR: a pattern the safe engine declines names nothing', () => {
+    const report = analyze({
+      rules: [newHireFeeder, cascadeRule('isMemberOfGroupNameRegex("(?=New).*")')],
+    });
+
+    expect(report.cascades).toEqual([]);
+  });
+
+  it('leaves out a rule that is already moving — it has its own row', () => {
+    const report = analyze({
+      rules: [
+        newHireFeeder,
+        // Reads New Hires *and* moves on this very draft, so it is reported as a
+        // transition rather than twice.
+        cascadeRule('isMemberOfGroupName("New Hires") || user.department=="Sales"'),
+      ],
+    });
+
+    expect(report.rules.find((r) => r.ruleId === '0prFAKEcascade')?.transition).toBe(
+      'starts-matching',
+    );
+    expect(report.cascades).toEqual([]);
+  });
+
+  it('MIRROR: the same clause on a rule that is not moving is named', () => {
+    const report = analyze({
+      rules: [newHireFeeder, cascadeRule('isMemberOfGroupName("New Hires") && user.title=="No"')],
+    });
+
+    expect(report.rules.find((r) => r.ruleId === '0prFAKEcascade')?.transition).toBe(
+      'unchanged-no-match',
+    );
+    expect(cascadeOf(report, NEW_HIRES.id)).toEqual([['0prFAKEcascade', 'toward-match', 'name']]);
+  });
+
+  it('leaves out an inactive rule — it places nobody', () => {
+    const report = analyze({
+      rules: [
+        newHireFeeder,
+        cascadeRule('isMemberOfGroupName("New Hires")', { status: 'INACTIVE' }),
+      ],
+    });
+
+    expect(report.cascades).toEqual([]);
+  });
+
+  it('MIRROR: the byte-identical ACTIVE rule is named', () => {
+    const report = analyze({
+      rules: [newHireFeeder, cascadeRule('isMemberOfGroupName("New Hires")', { status: 'ACTIVE' })],
+    });
+
+    expect(cascadeOf(report, NEW_HIRES.id)).toEqual([['0prFAKEcascade', 'toward-match', 'name']]);
+  });
+
+  it('never seeds a cascade from a group it declined to predict', () => {
+    // Engineering is held but not credited to any rule, so its removal is
+    // withheld — and a change we will not assert cannot have a consequence.
+    const report = analyze({
+      draft: { department: 'Sales' },
+      memberships: [
+        membershipOf(ENGINEERING, {
+          rules: [ENG_FEEDER],
+          provenance: { source: 'okta', rules: [] },
+        }),
+      ],
+      rules: [ENG_FEEDER, cascadeRule(`isMemberOfGroup("${ENGINEERING.id}")`)],
+    });
+
+    expect(report.groups.map((g) => g.kind)).toEqual(['not-predicted']);
+    expect(report.cascades).toEqual([]);
   });
 });
 
@@ -592,7 +761,7 @@ describe('the rule inventory state decides the report status', () => {
     expect(report.status).toBe('not-computed');
     expect(report.groups).toEqual([]);
     expect(report.rules).toEqual([]);
-    expect(report.secondOrderPossible).toBe(false);
+    expect(report.cascades).toEqual([]);
   });
 
   it('reports unavailable when an attempt completed and failed', () => {

@@ -46,7 +46,7 @@
  *
  * Gaining or losing a group can flip an `isMemberOf*` clause in some *other*
  * rule. This engine makes a **single pass** and then merely scans for that
- * possibility ({@link secondOrderScan}). It deliberately does not iterate to a
+ * possibility ({@link cascadeScan}). It deliberately does not iterate to a
  * fixed point:
  *
  * - an `added` group fed back into a round two is consumed by
@@ -56,8 +56,21 @@
  * - rule application is scheduled per rule, not transactional, so there is no
  *   moment at which the round-two input state is guaranteed to exist.
  *
- * Naming the rules that *could* cascade is the honest answer, and it is the one
- * an admin can act on.
+ * What ships instead is {@link BlastRadiusReport.cascades}: per affected group,
+ * the rules whose condition **reads** that group, and which way this edit turns
+ * each of those membership tests. Every part of that is structure, read off the
+ * rule text — the direction comes from the clause's own `member`/`non-member`
+ * sense, not from evaluating anything a second time. No cascade rule has been
+ * evaluated against the post-draft user, and none is claimed to fire.
+ *
+ * Naming those rules is the honest answer, and it is the one an admin can act on.
+ * Two things follow, and both are load-bearing rather than incidental:
+ *
+ * - the scan under-reports (see {@link cascadeScan}), so a surface may render
+ *   what a cascade holds but **never** its absence — "nothing reads this group"
+ *   is a claim the scan cannot back;
+ * - a count of cascade rules is the same claim in numeric form, so the UI does
+ *   not print one.
  *
  * @see {@link module:shared/membership/ruleImpact} — the rule-centric mirror of the removal test.
  * @see {@link module:sidepanel/components/users/comparison/accessCause} — the "why does this user NOT have it" seam.
@@ -71,8 +84,11 @@ import {
 } from '../ruleEvaluator';
 import {
   explainRuleExpression,
+  type ClauseGroupMatch,
   type ClauseGroupReference,
+  type ClauseGroupRequirement,
   type ClauseTreeNode,
+  type LeafClauseNode,
 } from '../rules/explainExpression';
 import { matchSafeRegex } from '../rules/safeRegex';
 import { groupContextOf } from './groupContext';
@@ -86,6 +102,9 @@ import type {
   BlastRadiusCounts,
   BlastRadiusInput,
   BlastRadiusReport,
+  CascadeDirection,
+  GroupCascade,
+  GroupCascadeRule,
   GroupEffect,
   GroupEffectKind,
   RuleEffect,
@@ -402,10 +421,18 @@ function removalEffect(
 // Second order
 // ---------------------------------------------------------------------------
 
-/** The affected groups, as the `isMemberOf*` arguments would have to name them. */
+/**
+ * The affected groups, as the `isMemberOf*` arguments would have to name them.
+ *
+ * {@link kind} is load-bearing, not decoration: the cascade's direction is the
+ * XOR of it and the reading clause's own `member`/`non-member` sense, so a group
+ * that lost its kind here would lose the direction downstream.
+ */
 interface AffectedGroup {
   readonly id: string;
   readonly name: string;
+  /** Whether this edit adds the group or takes it away. Never `not-predicted`. */
+  readonly kind: 'added' | 'removed';
 }
 
 /**
@@ -420,7 +447,7 @@ interface AffectedGroup {
  * full-match, never a `RegExp`. A decline there reads as "does not name this
  * group", which under-reports a possible cascade rather than inventing one — the
  * same safe direction as this scan's other blind spot, documented on
- * {@link secondOrderScan}.
+ * {@link cascadeScan}.
  */
 function referenceNames(reference: ClauseGroupReference, group: AffectedGroup): boolean {
   switch (reference.match) {
@@ -440,20 +467,46 @@ function referenceNames(reference: ClauseGroupReference, group: AffectedGroup): 
 }
 
 /**
- * Every `isMemberOf*` reference anywhere in one rule's explanation, in source
+ * Every leaf anywhere in one rule's explanation that names groups, in source
  * order.
  *
- * Walks the whole clause tree rather than its top level. A membership call
- * nested inside an `||` — `user.department == "Sales" || isMemberOfGroup("…")` —
- * is a leaf of that group, and the flat projection this replaced could only see
- * the group as a whole, which carries no references of its own. Those rules were
- * silently missing from the cascade scan; they are named now. Nothing that was
- * scanned before stops being scanned: a top-level membership clause is still a
- * leaf of the tree.
+ * Walks the whole clause tree rather than its top level. A membership call nested
+ * inside an `||` — `user.department == "Sales" || isMemberOfGroup("…")` — is a
+ * leaf of that group, and a flat top-level projection cannot see it.
+ *
+ * Collects **leaves**, not bare references, because a reference alone cannot say
+ * which way its clause asks: `groupRequirement` lives on the leaf and is what
+ * separates "this rule wants the group" from "this rule excludes it". Reading the
+ * references without it is the conflation {@link directionOf} exists to end.
  */
-function groupReferencesUnder(node: ClauseTreeNode): readonly ClauseGroupReference[] {
-  if (node.node === 'leaf') return node.groupReferences ?? [];
-  return node.children.flatMap(groupReferencesUnder);
+function membershipLeavesUnder(node: ClauseTreeNode): readonly LeafClauseNode[] {
+  if (node.node === 'leaf') return node.groupReferences?.length ? [node] : [];
+  return node.children.flatMap(membershipLeavesUnder);
+}
+
+/**
+ * Which way this edit turns one clause's test of one affected group.
+ *
+ * The whole rule in one line: a clause wanting membership of a group the edit
+ * *grants*, and a clause wanting non-membership of a group the edit *takes away*,
+ * both move toward being satisfied. The other two pairings move away.
+ *
+ * A leaf carrying references always carries a requirement (the type pairs them),
+ * so the `undefined` arm is unreachable in practice — it answers `undetermined`
+ * rather than guessing a direction, because a missing sense is exactly the
+ * half-known pair no caller may read a direction off.
+ *
+ * Note what this does **not** need: any correction for negation nesting. A
+ * directly negated call folds into the leaf's own `non-member`, and a negated
+ * *connective* (`!(a || b)`) yields no group references at all — so a reference
+ * that exists is always already correctly signed.
+ */
+function directionOf(
+  kind: AffectedGroup['kind'],
+  requirement: ClauseGroupRequirement | undefined,
+): CascadeDirection {
+  if (!requirement) return 'undetermined';
+  return (kind === 'added') === (requirement === 'member') ? 'toward-match' : 'away-from-match';
 }
 
 /** Transitions worth scanning: a rule already moving is reported on its own row. */
@@ -464,45 +517,115 @@ const SECOND_ORDER_TRANSITIONS: ReadonlySet<RuleTransition> = new Set<RuleTransi
 ]);
 
 /**
- * The rules that read membership of a group this draft is predicted to change.
+ * The one-hop cascade: per affected group, the rules whose condition reads it.
  *
  * Single pass, by design — see the module header for why a round two would
- * compound its own error.
+ * compound its own error. This names structure; it resolves nothing.
  *
- * Two known blind spots, both inherited and both in the safe direction (they
- * under-report a possibility rather than inventing one): an
- * `isMemberOfGroupNameRegex` clause whose pattern the safe engine declines
- * carries no structured group references at all (a runnable one does, since
- * ADR-0002); and an `added` group whose id is absent
- * from {@link BlastRadiusInput.groupNames} is matched by id only, since its
- * `groupName` is then the id itself.
+ * Three exclusions, each for its own reason. A rule already moving is skipped
+ * ({@link SECOND_ORDER_TRANSITIONS}) because it has its own report row. An
+ * inactive rule is skipped because it places nobody, so its verdict flipping
+ * changes nothing — the same ground the `rule-inactive` withheld reason stands
+ * on. And a group we declined to predict never reaches here at all, because a
+ * change we would not assert cannot seed a consequence.
+ *
+ * Two blind spots remain, both inherited and both in the safe direction — they
+ * under-report a possibility rather than inventing one:
+ *
+ * 1. a negated **connective** (`!(isMemberOfGroup("…") || …)`) carries no
+ *    structured group references, so its membership tests are invisible here;
+ * 2. an `isMemberOfGroupNameRegex` pattern the linear-time engine declines
+ *    (ADR-0002) likewise carries none — a runnable one does.
+ *
+ * Both are why {@link BlastRadiusReport.cascades} may only ever be rendered as
+ * what it holds, never as an absence: a surface that printed "nothing reads this
+ * group" would convert either gap into a false claim.
  *
  * @param evaluations - Every rule's report row.
- * @param affected - The groups predicted to be added or removed.
+ * @param affected - The groups predicted to be added or removed, with their kind.
  * @param drafted - The post-draft user, so the clause rows describe the state the cascade would start from.
  * @param context - The user's group list, for `isMemberOf*`.
- * @returns Rule names, de-duplicated and sorted. **Untrusted** — never log.
+ * @returns One entry per affected group that any rule reads, in `affected` order.
  */
-function secondOrderScan(
+function cascadeScan(
   evaluations: readonly RuleEvaluation[],
   affected: readonly AffectedGroup[],
   drafted: OktaUser,
   context: RuleGroupContext,
-): string[] {
+): GroupCascade[] {
   if (affected.length === 0) return [];
 
-  const names = new Set<string>();
+  // groupId -> ruleId -> what we know so far about that pair.
+  const found = new Map<
+    string,
+    Map<string, { direction: CascadeDirection; matchedBy: ClauseGroupMatch }>
+  >();
+
   for (const evaluation of evaluations) {
     if (!SECOND_ORDER_TRANSITIONS.has(evaluation.effect.transition)) continue;
+    if (!evaluation.effect.active) continue;
+
     const { tree } = explainRuleExpression(evaluation.effect.expression, drafted, {
       groups: context,
     });
-    const touches = groupReferencesUnder(tree).some((reference) =>
-      affected.some((group) => referenceNames(reference, group)),
-    );
-    if (touches) names.add(evaluation.effect.ruleName);
+
+    for (const leaf of membershipLeavesUnder(tree)) {
+      for (const reference of leaf.groupReferences ?? []) {
+        for (const group of affected) {
+          if (!referenceNames(reference, group)) continue;
+
+          const direction = directionOf(group.kind, leaf.groupRequirement);
+          let perRule = found.get(group.id);
+          if (!perRule) {
+            perRule = new Map();
+            found.set(group.id, perRule);
+          }
+          const existing = perRule.get(evaluation.effect.ruleId);
+          if (!existing) {
+            perRule.set(evaluation.effect.ruleId, { direction, matchedBy: reference.match });
+            continue;
+          }
+          // Absorbing, exactly as `transitionOf` treats a half-known pair: one
+          // rule reading the group both ways has no single direction, and
+          // picking either would be a coin-flip dressed as a finding.
+          if (existing.direction !== direction) {
+            perRule.set(evaluation.effect.ruleId, {
+              direction: 'undetermined',
+              matchedBy: existing.matchedBy,
+            });
+          }
+        }
+      }
+    }
   }
-  return [...names].sort((a, b) => a.localeCompare(b));
+
+  // Built once: the sort below needs a rule's display name per comparison, and
+  // scanning `evaluations` inside a comparator would make this quadratic.
+  const ruleNames = new Map(
+    evaluations.map((evaluation) => [evaluation.effect.ruleId, evaluation.effect.ruleName]),
+  );
+
+  // `affected` is already in report order, so iterating it keeps the cascades
+  // aligned with the group rows they belong to.
+  const cascades: GroupCascade[] = [];
+  for (const group of affected) {
+    const perRule = found.get(group.id);
+    if (!perRule || perRule.size === 0) continue;
+
+    const rules: GroupCascadeRule[] = [...perRule.entries()]
+      .map(([ruleId, pair]) => ({ ruleId, ...pair }))
+      .sort((a, b) =>
+        // Rank is meaningless inside one cascade, so a constant keeps
+        // `compareRanked`'s name-then-id tie-break — which is what makes the
+        // order total when two rules share a display name.
+        compareRanked(
+          { rank: 0, name: ruleNames.get(a.ruleId) ?? '', id: a.ruleId },
+          { rank: 0, name: ruleNames.get(b.ruleId) ?? '', id: b.ruleId },
+        ),
+      );
+    cascades.push({ groupId: group.id, rules });
+  }
+  return cascades;
 }
 
 // ---------------------------------------------------------------------------
@@ -562,8 +685,7 @@ function emptyReport(status: 'not-computed' | 'unavailable'): BlastRadiusReport 
     groups: [],
     rules: [],
     counts: NO_COUNTS,
-    secondOrderPossible: false,
-    secondOrderRuleNames: [],
+    cascades: [],
   };
 }
 
@@ -682,9 +804,12 @@ export function analyzeBlastRadius(input: BlastRadiusInput): BlastRadiusReport {
     .sort((a, b) => compareRanked(ruleRank(a), ruleRank(b)));
 
   const affected: AffectedGroup[] = groups
-    .filter((group) => group.kind !== 'not-predicted')
-    .map((group) => ({ id: group.groupId, name: group.groupName }));
-  const secondOrderRuleNames = secondOrderScan(evaluations, affected, drafted, groupContext);
+    .filter(
+      (group): group is GroupEffect & { kind: 'added' | 'removed' } =>
+        group.kind !== 'not-predicted',
+    )
+    .map((group) => ({ id: group.groupId, name: group.groupName, kind: group.kind }));
+  const cascades = cascadeScan(evaluations, affected, drafted, groupContext);
 
   const countKind = (kind: GroupEffectKind): number =>
     groups.filter((group) => group.kind === kind).length;
@@ -703,7 +828,6 @@ export function analyzeBlastRadius(input: BlastRadiusInput): BlastRadiusReport {
       stops: countTransition('stops-matching'),
       undetermined: countTransition('undetermined'),
     },
-    secondOrderPossible: secondOrderRuleNames.length > 0,
-    secondOrderRuleNames,
+    cascades,
   };
 }

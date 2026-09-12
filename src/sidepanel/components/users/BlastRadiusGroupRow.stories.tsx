@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, within } from 'storybook/test';
+import { expect, fn, within } from 'storybook/test';
 import BlastRadiusGroupRow from './BlastRadiusGroupRow';
 import type { GroupEffect } from '../../../shared/membership/blastRadiusTypes';
 
@@ -59,6 +59,9 @@ const meta = {
     },
   },
   args: {
+    // Spied so a disclosure story can assert the row reports the toggle rather
+    // than owning the state itself.
+    onToggle: fn(),
     effect: effect({
       groupId: '00gFAKE00000000000001',
       groupName: 'Sales-All',
@@ -264,5 +267,91 @@ export const Compact: Story = {
       currentlyHeld: true,
       currentBucket: 'rule',
     }),
+  },
+};
+
+/**
+ * Adding this group brings other rules into scope. The trigger carries **no
+ * count**: the cascade scan under-reports by design (a negated connective and a
+ * declined regex pattern both yield no group references), so a tally would be a
+ * completeness claim it cannot back.
+ *
+ * Controlled by the report rather than the row, because the groups/rules pill
+ * switch unmounts every row — local state would silently collapse an open panel.
+ */
+export const WithCascade: Story = {
+  args: {
+    effect: effect({
+      groupId: '00gFAKE00000000000011',
+      groupName: 'New Hires',
+      kind: 'added',
+      ruleId: RULE_ID,
+      ruleName: 'Sales onboarding',
+    }),
+    expanded: false,
+    cascade: [
+      {
+        ruleId: '0prFAKErule00021',
+        ruleName: 'Downstream feeder',
+        direction: 'toward-match',
+        matchedBy: 'name',
+        targetGroupNames: ['Finance'],
+      },
+      {
+        ruleId: '0prFAKErule00022',
+        ruleName: 'Contractor guard',
+        direction: 'away-from-match',
+        matchedBy: 'nameStartsWith',
+        targetGroupNames: ['Vendors', 'Temp Access'],
+      },
+    ],
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: /Rules that use this group/ });
+
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    trigger.click();
+    await expect(args.onToggle).toHaveBeenCalledWith('00gFAKE00000000000011');
+  },
+};
+
+/** The same row already open — the false→true pair `WithCascade` starts. */
+export const CascadeOpen: Story = {
+  args: { ...WithCascade.args, expanded: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole('button', { name: /Rules that use this group/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(canvas.getByText('Downstream feeder')).toBeInTheDocument();
+    await expect(canvas.getByText(/Finance/)).toBeInTheDocument();
+    await expect(canvas.getByText('Toward matching')).toBeInTheDocument();
+    // A pattern match says so: the link to the group above is not self-evident.
+    await expect(canvas.getByText(/Matched by name pattern/)).toBeInTheDocument();
+    await expect(canvas.getByText(/prediction stops at one hop/i)).toBeInTheDocument();
+  },
+};
+
+/**
+ * Nothing reads this group, so there is **no trigger at all** — not a disabled
+ * one, and never the sentence "no rules use this group". A verb with no wired
+ * handler is omitted, and an absence the scan cannot verify is never asserted.
+ */
+export const NoCascade: Story = {
+  args: {
+    effect: effect({
+      groupId: '00gFAKE00000000000012',
+      groupName: 'Sales-All',
+      kind: 'added',
+      ruleId: RULE_ID,
+      ruleName: 'Sales onboarding',
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: /Rules that use/ })).toBeNull();
   },
 };

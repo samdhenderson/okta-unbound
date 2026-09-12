@@ -86,8 +86,14 @@ const computed: BlastRadiusReportData = {
   groups,
   rules,
   counts: { added: 1, removed: 0, notPredicted: 1, starts: 1, stops: 0, undetermined: 0 },
-  secondOrderPossible: true,
-  secondOrderRuleNames: ['Managers of Sales'],
+  // 'Tokyo office' reads Sales-All and assigns Tokyo-Everyone — the one-hop
+  // cascade the disclosures render.
+  cascades: [
+    {
+      groupId: '00gFAKE00000000000001',
+      rules: [{ ruleId: '0prFAKErule00005', direction: 'toward-match', matchedBy: 'name' }],
+    },
+  ],
 };
 
 const emptyOf = (status: BlastRadiusReportData['status']): BlastRadiusReportData => ({
@@ -95,8 +101,7 @@ const emptyOf = (status: BlastRadiusReportData['status']): BlastRadiusReportData
   groups: [],
   rules: [],
   counts: { added: 0, removed: 0, notPredicted: 0, starts: 0, stops: 0, undetermined: 0 },
-  secondOrderPossible: false,
-  secondOrderRuleNames: [],
+  cascades: [],
 });
 
 describe('BlastRadiusReport', () => {
@@ -125,18 +130,54 @@ describe('BlastRadiusReport', () => {
     expect(screen.getByRole('heading', { name: 'Added' })).toBeInTheDocument();
   });
 
-  it('keeps the second-order caveat across a switch, and hedges nothing else', async () => {
+  it('keeps an open cascade across a switch, and hedges nothing else', async () => {
     render(<BlastRadiusReport report={computed} />);
 
-    expect(screen.getByText(/1 rule tests membership of a group/i)).toBeInTheDocument();
+    // Retargeted from the flat second-order footnote this replaced. The invariant
+    // is the same one: what the report says about the cascade survives the pill
+    // switch, and nothing on screen is hedged.
+    const trigger = screen.getByRole('button', { name: /Rules that use this group/ });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText(/prediction stops at one hop/i)).toBeInTheDocument();
     // The standing "predictions are likely, not certain" footnote is gone: the
     // report asserts its predictions rather than qualifying them.
     expect(screen.queryByText(/Predictions are likely, not certain/i)).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: 'Rules 1' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Groups 2' }));
 
-    expect(screen.getByText(/1 rule tests membership of a group/i)).toBeInTheDocument();
+    // Still open: the report owns the state, so the rows remounting does not
+    // silently collapse what the admin opened.
+    expect(screen.getByRole('button', { name: /Rules that use this group/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     expect(screen.queryByText(/Predictions are likely, not certain/i)).toBeNull();
+  });
+
+  it('states the cascade as structure, never as a prediction', async () => {
+    render(<BlastRadiusReport report={computed} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /Rules that use this group/ }));
+
+    expect(screen.getByText('Tokyo office')).toBeInTheDocument();
+    expect(screen.getByText(/Tokyo-Everyone/)).toBeInTheDocument();
+    expect(screen.getByText('Toward matching')).toBeInTheDocument();
+    // No hedge, and no count that would claim the listing is complete.
+    expect(screen.queryByText(/\bmay\b/i)).toBeNull();
+    expect(screen.queryByText(/\b1 rule uses\b/i)).toBeNull();
+  });
+
+  it('offers no cascade trigger for a group nothing reads', () => {
+    render(<BlastRadiusReport report={{ ...computed, cascades: [] }} />);
+
+    // Omitted entirely rather than shown empty or disabled: the scan
+    // under-reports, so an absence is a claim it cannot back.
+    expect(screen.queryByRole('button', { name: /Rules that use/ })).toBeNull();
+    expect(screen.queryByText(/prediction stops at one hop/i)).toBeNull();
   });
 
   it('names why a prediction was withheld instead of omitting the group', () => {
