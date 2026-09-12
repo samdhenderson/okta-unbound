@@ -67,12 +67,16 @@
  *
  * ## A folded section still answers something
  *
- * `summary` sits in the always-visible header, below the description. A stack of
- * sections that all start closed is otherwise a column of bare headers, and a
- * reader has to open each one to find out whether it was worth opening. The
- * summary is the section's headline fact, stated where it can be read without a
- * click — and it is subject to the same rule as everything else: a fact that has
- * not loaded is named as absent, never rendered as a `0`.
+ * `summary` is the section's headline fact, shown in the header **while the
+ * section is closed**. A stack of sections that all start closed is otherwise a
+ * column of bare headers, and a reader has to open each one to find out whether
+ * it was worth opening. It is subject to the same rule as everything else: a fact
+ * that has not loaded is named as absent, never rendered as a `0`.
+ *
+ * It is hidden once the section opens, because at that point it is a summary of
+ * something the reader can already see — and the body states it better than one
+ * line can. A summary that stayed would put the same number on screen twice, one
+ * above the other, which is the failure this whole shape exists to remove.
  */
 import React, { useId, useState } from 'react';
 import Badge from './Badge';
@@ -118,8 +122,11 @@ export interface DetailSectionProps {
   /** Optional count rendered as a badge beside the title. */
   itemCount?: number;
   /**
-   * The section's headline fact, kept visible whether the section is open or
-   * closed. Only worth supplying on a `collapsible` section — see the module docs.
+   * The section's headline fact, shown in the header **while the section is
+   * closed** and hidden once it opens, where the body states it better.
+   *
+   * Ignored on a non-collapsible section, which has no folded state for it to
+   * stand in for — the same way `headingId` is ignored without a `title`.
    */
   summary?: React.ReactNode;
   /** Section body. */
@@ -248,7 +255,9 @@ const DetailSection: React.FC<DetailSectionProps> = ({
               own — and clip — the rest. */}
           <div className="px-4 py-3">
             {header}
-            {summary && <div className="mt-2">{summary}</div>}
+            {/* Only while folded: once the body is on screen this line is a
+                second copy of a number the reader can already see. */}
+            {summary && !isOpen && <div className="mt-2">{summary}</div>}
           </div>
           {/*
             `.disclose` animates `grid-template-rows` between 1fr and 0fr, so the
@@ -269,8 +278,7 @@ const DetailSection: React.FC<DetailSectionProps> = ({
            identical to what it was when the padding sat on the section itself. */
         <div className="px-4 py-3">
           {header}
-          {summary && <div className="mt-2">{summary}</div>}
-          <div className={hasHeader || summary ? 'mt-3' : undefined}>{children}</div>
+          <div className={hasHeader ? 'mt-3' : undefined}>{children}</div>
         </div>
       )}
     </section>

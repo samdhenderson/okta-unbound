@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import DetailSection from './DetailSection';
 import Badge from './Badge';
 import Button from './Button';
@@ -27,7 +27,7 @@ const meta = {
           "**`band` is a slot, not call-site markup.** Filter chrome has to reach the card's edges to read as chrome rather than as content, and a call site cannot do that from inside a padded body without a negative margin. The card holds the padding boundary; the band sits outside it. `overflow-hidden` is applied only when a band is present, so a section without one keeps the box model it always had.\n\n" +
           '**What belongs in `actions`:** a verb scoped to *this section\'s data* — a gate button that loads it, a control that mutates it, a count of it. A verb whose object is the whole page belongs in `ActionBar`. The split is not cosmetic: a page-level slot has no view of whether this section is loaded, so putting "Add member" there would let a reader mutate a list still behind its gate.\n\n' +
           "**`collapsible` is a capability of this card, not a second card.** It lives here rather than in `CollapsibleSection` because that component's *entire header* is one `<button>`, so it can carry a title and a count and nothing else. A section that folds **and** owns a gate button cannot be built there without nesting a button inside a button. Here the trigger is scoped to the heading and `description`/`actions` stay beside it, outside the control. Every disclosure prop is additive — a call site that passes none renders exactly the markup it always did.\n\n" +
-          '**A folded section still answers something.** `summary` sits in the always-visible header. A stack of sections that all start closed is otherwise a column of bare headers, and a reader has to open each one to find out whether it was worth opening.',
+          '**A folded section still answers something.** `summary` is the headline fact, shown while the section is closed. A stack of sections that all start closed is otherwise a column of bare headers, and a reader has to open each one to find out whether it was worth opening. It yields once the section opens — at that point it is a second copy of a number the reader can already see, one line above it.',
       },
     },
   },
@@ -59,7 +59,7 @@ const meta = {
     itemCount: { description: 'Optional count rendered as a badge beside the title.' },
     summary: {
       description:
-        "The section's headline fact, kept visible whether the section is open or closed. Only worth supplying on a `collapsible` section.",
+        "The section's headline fact, shown in the header while the section is closed and hidden once it opens, where the body states it better. Ignored on a non-collapsible section.",
     },
     children: { description: 'Section body.' },
   },
@@ -309,4 +309,32 @@ export const ClosedStack: Story = {
       </DetailSection>
     </div>
   ),
+};
+
+/**
+ * The summary yields to the body. It stands in for the section while folded; once
+ * the section is open it would be a second copy of a fact already on screen.
+ *
+ * Note this is a real unmount of the header line, not a visibility trick — the
+ * *body* is the thing that stays mounted while collapsed, so a test that just
+ * counted matching text would find both copies either way.
+ */
+export const SummaryYieldsWhenOpened: Story = {
+  args: {
+    ...CollapsibleWithSummary.args,
+    summary: <p className="text-sm text-neutral-600">Summary: 2 of 40 have no MFA factor.</p>,
+    children: <p className="text-sm text-neutral-600">Body: 2 of 40 have no MFA factor.</p>,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Closed: the header speaks for the section.
+    expect(canvas.getByText('Summary: 2 of 40 have no MFA factor.')).toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: /MFA COVERAGE/i }));
+
+    // Open: the header line is gone from the DOM, not merely hidden.
+    expect(canvas.queryByText('Summary: 2 of 40 have no MFA factor.')).toBeNull();
+    expect(canvas.getByText('Body: 2 of 40 have no MFA factor.')).toBeInTheDocument();
+  },
 };
