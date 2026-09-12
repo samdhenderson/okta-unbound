@@ -309,6 +309,41 @@ describe('nesting, parentheses and negation', () => {
   });
 });
 
+describe('String.stringSwitch — matched cases and the required default', () => {
+  it('stringifies the call generically and reports the matched value', () => {
+    const { clauses } = explainRuleExpression(
+      'String.stringSwitch(user.department, "Other", "Eng", "yes") == "yes"',
+      user,
+    );
+    expect(clauses[0]).toEqual({
+      expressionText: 'String.stringSwitch(user.department, "Other", "Eng", "yes") == "yes"',
+      resolvedValue: 'yes',
+      status: 'pass',
+    });
+  });
+
+  it('reports the default value when no pair matches', () => {
+    const { clauses } = explainRuleExpression(
+      'String.stringSwitch(user.department, "Other", "Sales", "yes") == "Other"',
+      user,
+    );
+    expect(clauses[0]).toEqual({
+      expressionText: 'String.stringSwitch(user.department, "Other", "Sales", "yes") == "Other"',
+      resolvedValue: 'Other',
+      status: 'pass',
+    });
+  });
+
+  it('is not-evaluated with fn-arity for a lone trailing key, never a guess', () => {
+    const { clauses } = explainRuleExpression(
+      'String.stringSwitch(user.department, "Other", "Eng") == "Other"',
+      user,
+    );
+    expect(clauses[0].status).toBe('not-evaluated');
+    expect(clauses[0].reasonCode).toBe('fn-arity');
+  });
+});
+
 describe('unary minus and computed member access', () => {
   it('stringifies a negative literal faithfully', () => {
     const { clauses, summary } = explainRuleExpression('user.headcount >= -1', user);

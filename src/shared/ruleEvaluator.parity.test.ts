@@ -464,6 +464,32 @@ const OUTCOME_CASES: readonly OutcomeCase[] = [
     expected: 'no-match',
   },
   {
+    name: 'String.stringSwitch matching (substring containment, not equality)',
+    expression: 'String.stringSwitch(user.department, "Other", "Eng", "yes") == "yes"',
+    expected: 'match',
+  },
+  {
+    name: 'String.stringSwitch non-matching (no key contained, falls through to default)',
+    expression: 'String.stringSwitch(user.department, "Other", "Sales", "yes") == "yes"',
+    expected: 'no-match',
+  },
+  {
+    name: 'String.stringSwitch falls through to the required default',
+    expression: 'String.stringSwitch(user.department, "Other", "Sales", "yes") == "Other"',
+    expected: 'match',
+  },
+  {
+    name: 'String.stringSwitch picks the first pair listed, not the first occurring',
+    expression:
+      'String.stringSwitch(user.department, "Other", "Eng", "first", "Engineering", "second") == "first"',
+    expected: 'match',
+  },
+  {
+    name: 'String.stringSwitch rejects a lone trailing key as fn-arity',
+    expression: 'String.stringSwitch(user.department, "Other", "Eng")',
+    expected: 'unevaluable',
+  },
+  {
     name: 'Arrays.contains matching',
     expression: 'Arrays.contains(user.roles, "admin")',
     expected: 'match',

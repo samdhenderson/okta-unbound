@@ -153,7 +153,9 @@ export type RuleExprValue = ExprValue;
  * - `group-name-regex` — `isMemberOfGroupNameRegex`, which this module declines to
  *   run **even with** a group list. See {@link GROUP_MEMBERSHIP_FUNCTIONS}.
  * - `unknown-fn` — a call outside {@link SUPPORTED_FUNCTIONS}.
- * - `fn-arity` — an allow-listed function called with the wrong argument count.
+ * - `fn-arity` — an allow-listed function called with the wrong argument count,
+ *   or (for a variadic function like `String.stringSwitch`) trailing arguments
+ *   that do not come in complete key/value pairs.
  * - `unsupported-node` — a node shape we do not model (non-`user.*` member
  *   access, a non-string-literal or nested computed key (`user[x]`,
  *   `user["a"]["b"]`), a bare identifier, `this`, a regex literal, a
@@ -335,12 +337,37 @@ const SUPPORTED_BINARY_OPERATORS: ReadonlySet<string> = new Set([
   ...OR_OPERATORS,
 ]);
 
-/** An allow-listed Okta EL function: its exact arity plus a TypeScript implementation. */
+/**
+ * A variadic function's argument shape: at least `minArgs` arguments, and every
+ * argument from `pairsFrom` on must come in pairs (`(key, value)` slots) — a
+ * lone trailing key with no value is a malformed call, not a zero-argument one.
+ *
+ * `String.stringSwitch(input, defaultString, key1, value1, key2, value2, …)` is
+ * the one function this shape exists for: `minArgs: 2` (the input and the
+ * required default), `pairsFrom: 2` (everything after those two must pair up).
+ */
+interface VariadicPairsArity {
+  readonly minArgs: number;
+  readonly pairsFrom: number;
+}
+
+/** An allow-listed Okta EL function: its arity plus a TypeScript implementation. */
 interface SupportedFunction {
-  /** Exact number of arguments. Calls with any other count are unevaluable. */
-  arity: number;
+  /**
+   * Exact number of arguments, or a {@link VariadicPairsArity} shape for a
+   * function whose trailing arguments come in key/value pairs. Calls outside
+   * either shape are unevaluable (`fn-arity`).
+   */
+  arity: number | VariadicPairsArity;
   /** Pure implementation. Returns {@link UNRESOLVED} for argument types it cannot handle. */
   evaluate: (args: readonly ExprValue[]) => EvalResult;
+}
+
+/** Whether `argCount` satisfies a {@link SupportedFunction}'s `arity`. */
+function arityMatches(fn: SupportedFunction, argCount: number): boolean {
+  if (typeof fn.arity === 'number') return argCount === fn.arity;
+  const { minArgs, pairsFrom } = fn.arity;
+  return argCount >= minArgs && (argCount - pairsFrom) % 2 === 0;
 }
 
 /** Narrow an operand to a string, or give up. Okta EL string functions are string-typed. */
@@ -464,6 +491,36 @@ function substringBefore(source: string, separator: string): ExprValue | Unresol
 }
 
 /**
+ * `String.stringSwitch(input, defaultString, key1, value1, key2, value2, …)`.
+ *
+ * Okta's own documented examples pin every branch, and none of them is
+ * equality: `String.stringSwitch("Substrings count", "default", "ring", "value1")`
+ * returns `"value1"` because `"Substrings"` **contains** `"ring"` — matching is
+ * substring containment, the same discipline `String.stringContains` already
+ * uses. Pairs are tried **in the order supplied**, and the first key contained
+ * in the input wins even when a later key also matches — Okta's own worked
+ * example (`stringSwitch("First match wins", "default", "absent", "value1",
+ * "wins", "value2", "match", "value3")` → `"value2"`) picks the pair listed
+ * second over a substring match ("match") that occurs later in the key list
+ * but is also present in the input. No pair matching falls through to
+ * `defaultString` — a required positional argument, not an optional slot — so
+ * there is no branch left this function has to guess at. See
+ * docs/adr/0003-stringswitch-matched-cases.md.
+ */
+function evaluateStringSwitch(args: readonly ExprValue[]): EvalResult {
+  const input = asString(args[0]);
+  const fallback = asString(args[1]);
+  if (isUnresolved(input) || isUnresolved(fallback)) return UNRESOLVED;
+  for (let i = 2; i + 1 < args.length; i += 2) {
+    const key = asString(args[i]);
+    const value = asString(args[i + 1]);
+    if (isUnresolved(key) || isUnresolved(value)) return UNRESOLVED;
+    if (input.includes(key)) return value;
+  }
+  return fallback;
+}
+
+/**
  * The Okta Expression Language functions this evaluator implements, keyed by
  * their fully-qualified name.
  *
@@ -480,9 +537,6 @@ function substringBefore(source: string, separator: string): ExprValue | Unresol
  *   something this panel can read, so every answer would be right or wrong by up
  *   to a day depending on a fact we do not have. That is the definition of
  *   ambiguous.
- * - **`String.stringSwitch`** — its no-match behaviour is not pinned by Okta's
- *   published description, and guessing between "empty string" and "null"
- *   changes the verdict of the comparison it feeds.
  * - **`String.replaceFirst`** — Java, which Okta's expression language is built
  *   on, takes a **regular expression** as `replaceFirst`'s target. Implementing
  *   it as a literal replace would be wrong for any rule that relies on that;
@@ -498,6 +552,15 @@ function substringBefore(source: string, separator: string): ExprValue | Unresol
  * none, so every rule over a multi-valued profile attribute was unevaluable.
  * `Arrays.add` and `Arrays.flatten` remain absent: they *return* collections
  * rather than answering anything, so no group-rule condition ends in one.
+ *
+ * ## `String.stringSwitch` is supported, contrary to this map's former comment
+ *
+ * It used to sit in the "deliberately absent" list above on the theory that its
+ * no-match behaviour was unpinned. Okta's own published examples say otherwise:
+ * matching is substring containment (not equality), pairs are tried in the
+ * order supplied, and the fall-through case is a **required** `defaultString`
+ * argument, not an optional one — every branch has a documented answer. See
+ * {@link evaluateStringSwitch} and docs/adr/0003-stringswitch-matched-cases.md.
  */
 export const SUPPORTED_FUNCTIONS: ReadonlyMap<string, SupportedFunction> = new Map<
   string,
@@ -526,6 +589,13 @@ export const SUPPORTED_FUNCTIONS: ReadonlyMap<string, SupportedFunction> = new M
   ],
   ['String.replace', { arity: 3, evaluate: (a) => evaluateReplace(a) }],
   ['String.substring', { arity: 3, evaluate: (a) => evaluateSubstring(a) }],
+  [
+    'String.stringSwitch',
+    {
+      arity: { minArgs: 2, pairsFrom: 2 },
+      evaluate: (a) => evaluateStringSwitch(a),
+    },
+  ],
   [
     'String.substringAfter',
     { arity: 2, evaluate: (a) => withTwoStrings(a, (s, sep) => substringAfter(s, sep)) },
@@ -994,7 +1064,7 @@ function evaluateCall(node: jsep.CallExpression, options: EvaluationWalkOptions)
     }
     return giveUpLogged('unknown-fn', options);
   }
-  if (node.arguments.length !== fn.arity) {
+  if (!arityMatches(fn, node.arguments.length)) {
     return giveUpLogged('fn-arity', options);
   }
 
@@ -1215,7 +1285,7 @@ function isSupportedNode(node: jsep.Expression, options: GrammarWalkOptions = {}
       if (wrongArity) return reject('fn-arity', options);
       return node.arguments.every((argument) => isSupportedNode(argument, options));
     }
-    if (node.arguments.length !== fn.arity) return reject('fn-arity', options);
+    if (!arityMatches(fn, node.arguments.length)) return reject('fn-arity', options);
     // Arrow, not a bare reference: `every` would otherwise pass the index as the
     // options object.
     return node.arguments.every((argument) => isSupportedNode(argument, options));

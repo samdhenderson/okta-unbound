@@ -387,6 +387,95 @@ describe('supported subset', () => {
     );
   });
 
+  // `String.stringSwitch` — see docs/adr/0003-stringswitch-matched-cases.md. Okta's
+  // own documented examples pin *every* branch: a key matches by substring
+  // containment (not equality), pairs are tried in the order supplied so the
+  // first contained key wins even when a later key also matches, and the
+  // required `defaultString` argument (not an optional third slot) is the
+  // answer when no pair matches — so there is no branch left to guess at.
+  describe('String.stringSwitch', () => {
+    it('returns the value of the first pair whose key is contained in the input', () => {
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.department, "Other", "Engineering", "Eng") == "Eng"',
+          user,
+        ),
+      ).toBe('match');
+    });
+
+    it('matches by substring containment, not equality', () => {
+      // "Engineering" contains "Eng" but is not equal to it.
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.department, "Other", "Eng", "short") == "short"',
+          user,
+        ),
+      ).toBe('match');
+    });
+
+    it('picks the first pair listed even when a later pair also matches', () => {
+      // Mirrors Okta's own worked example: order of the pairs decides, not the
+      // position of the match inside the string.
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.department, "Other", "Eng", "first", "Engineering", "second") == "first"',
+          user,
+        ),
+      ).toBe('match');
+    });
+
+    it('falls through to the required default when no pair matches', () => {
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.department, "Other", "Sales", "S") == "Other"',
+          user,
+        ),
+      ).toBe('match');
+    });
+
+    it('returns the default with zero key-value pairs supplied', () => {
+      expect(
+        tryEvaluateRuleExpression('String.stringSwitch(user.department, "Other") == "Other"', user),
+      ).toBe('match');
+    });
+
+    it('rejects a non-string input as operand-type, never a guess', () => {
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.employeeNumber, "Other", "4", "x")',
+          user,
+        ),
+      ).toBe('unevaluable');
+    });
+
+    it('rejects too few arguments (no default) as fn-arity', () => {
+      expect(tryEvaluateRuleExpression('String.stringSwitch(user.department)', user)).toBe(
+        'unevaluable',
+      );
+    });
+
+    it('rejects an unpaired trailing key as fn-arity', () => {
+      expect(
+        tryEvaluateRuleExpression('String.stringSwitch(user.department, "Other", "Eng")', user),
+      ).toBe('unevaluable');
+    });
+
+    it('composes with the connectives and a conditional, same as any other call', () => {
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.department, "Other", "Eng", "yes") == "yes" && user.firstName == "Ada"',
+          user,
+        ),
+      ).toBe('match');
+      expect(
+        tryEvaluateRuleExpression(
+          'user.employeeNumber > 0 ? String.stringSwitch(user.department, "Other", "Eng", "yes") : "n/a"',
+          user,
+        ),
+      ).toBe('unevaluable'); // resolves to "yes", a string — not a boolean condition on its own.
+    });
+  });
+
   it('negates with the NOT word form as well as with !', () => {
     expect(tryEvaluateRuleExpression('NOT user.active', user)).toBe('no-match');
     expect(tryEvaluateRuleExpression('not user.active', user)).toBe('no-match');

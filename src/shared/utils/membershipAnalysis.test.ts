@@ -378,6 +378,21 @@ describe('analyzeMemberships — condition evaluation', () => {
     expect(m.attribution).toBe('inferred');
   });
 
+  it('attributes a matching String.stringSwitch rule exactly, not by the unevaluable fallback', () => {
+    // Pinned by docs/adr/0003-stringswitch-matched-cases.md: a matched case (or a
+    // documented fall-through to the required default) is a real answer, not a
+    // guess, so this rule's membership resolves at rung 2 (RULE_BASED, exact) —
+    // never a heuristic "inferred" attribution.
+    const stringSwitchRule = ruleWith(
+      'String.stringSwitch(user.department, "Other", "Engineering", "yes") == "yes"',
+      { id: 'string-switch' },
+    );
+    const [m] = analyzeMemberships([group()], [stringSwitchRule], engUser);
+    expect(m.membershipType).toBe('RULE_BASED');
+    expect(m.rules.map((r) => r.id)).toEqual(['string-switch']);
+    expect(m.attribution).toBe('exact');
+  });
+
   it('ignores a non-matching rule the user is excluded from', () => {
     // Exclusion is applied first, so the remaining evaluable rule decides.
     const excluded = ruleWith('user.department == "Engineering"', {
