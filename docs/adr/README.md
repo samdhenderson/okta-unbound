@@ -9,6 +9,7 @@ restarts at **0001**, and the shelf is deliberately near-empty.
 | Record                                    | Decision                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------- |
 | [0001](0001-rule-assessment-certainty.md) | Rule assessment: the certainty ladder, and which expression functions the evaluator refuses |
+| [0002](0002-linear-time-tenant-regex.md)  | Evaluate tenant-authored group-name regexes with a linear-time matcher, never `RegExp`      |
 
 ## What went wrong the first time
 
