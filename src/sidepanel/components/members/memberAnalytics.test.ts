@@ -3,6 +3,9 @@ import {
   computeAllBreakdowns,
   computeDimensionBreakdown,
   computeMfaBreakdown,
+  computeMfaEnrollment,
+  computeMfaFactorTypes,
+  mfaSignals,
   discoverAttributeBreakdowns,
   dimensionTitle,
   filterMembers,
@@ -174,11 +177,17 @@ describe('memberMatchesMfaValue', () => {
     { id: '2', factorType: 'sms', provider: 'OKTA', status: 'ACTIVE' },
   ]);
   const none = summarizeFactors('u', []);
+  const oneFactor = summarizeFactors('u', [
+    { id: '1', factorType: 'sms', provider: 'OKTA', status: 'ACTIVE' },
+  ]);
 
   it('evaluates none / multiple / has: / missing: / enrolled', () => {
     expect(memberMatchesMfaValue(none, 'none')).toBe(true);
     expect(memberMatchesMfaValue(enrolled, 'none')).toBe(false);
     expect(memberMatchesMfaValue(enrolled, 'multiple')).toBe(true);
+    expect(memberMatchesMfaValue(enrolled, 'single')).toBe(false);
+    expect(memberMatchesMfaValue(oneFactor, 'single')).toBe(true);
+    expect(memberMatchesMfaValue(none, 'single')).toBe(false);
     expect(memberMatchesMfaValue(enrolled, 'has:SMS')).toBe(true);
     expect(memberMatchesMfaValue(enrolled, 'has:Voice Call')).toBe(false);
     expect(memberMatchesMfaValue(enrolled, 'enrolled')).toBe(true);
@@ -922,5 +931,132 @@ describe('rankAttributes', () => {
 
   it('ranks an empty set to an empty result', () => {
     expect(rankAttributes([], () => 0)).toEqual([]);
+  });
+});
+
+describe('computeMfaEnrollment', () => {
+  const push = { id: '1', factorType: 'push', provider: 'OKTA', status: 'ACTIVE' } as const;
+  const sms = { id: '2', factorType: 'sms', provider: 'OKTA', status: 'ACTIVE' } as const;
+
+  /** alice: two factors, bob: one, carol: none. dave is deliberately unscanned. */
+  const scan = new Map<string, MemberMfaResult>([
+    ['alice', summarizeFactors('alice', [push, sms])],
+    ['bob', summarizeFactors('bob', [sms])],
+    ['carol', summarizeFactors('carol', [])],
+  ]);
+
+  it('withholds rather than zeroing when no scan has run', () => {
+    expect(computeMfaEnrollment(members, null)).toBeNull();
+  });
+
+  it('partitions the scanned members, and the buckets sum to the scanned count', () => {
+    const summary = computeMfaEnrollment(members, scan);
+    expect(summary).not.toBeNull();
+    const byValue = Object.fromEntries(summary!.rows.map((r) => [r.value, r.count]));
+    expect(byValue).toEqual({ none: 1, single: 1, multiple: 1 });
+
+    // The property `computeMfaBreakdown` deliberately does not have: these rows
+    // are mutually exclusive, which is what lets a spread bar draw them.
+    const summed = summary!.rows.reduce((total, row) => total + row.count, 0);
+    expect(summed).toBe(summary!.scanned);
+  });
+
+  it('divides by the scanned count, not the roster, on a partial scan', () => {
+    const summary = computeMfaEnrollment(members, scan)!;
+    expect(summary.scanned).toBe(3);
+    expect(summary.total).toBe(4);
+    // 1 of 3 scanned, not 1 of 4 members. `computeMfaBreakdown` reports 25% here.
+    expect(summary.rows.find((r) => r.value === 'none')!.pct).toBeCloseTo(33.33, 1);
+    expect(computeMfaBreakdown(members, scan).find((r) => r.value === 'none')!.pct).toBe(25);
+  });
+
+  it('reports every bucket as empty rather than omitting it when nobody is in it', () => {
+    const allCovered = new Map<string, MemberMfaResult>([
+      ['alice', summarizeFactors('alice', [push, sms])],
+    ]);
+    const summary = computeMfaEnrollment([members[0]], allCovered)!;
+    expect(summary.rows.map((r) => r.value)).toEqual(['none', 'single', 'multiple']);
+    expect(summary.rows.find((r) => r.value === 'none')!.count).toBe(0);
+  });
+
+  it('does not divide by zero when the scan reached nobody', () => {
+    const summary = computeMfaEnrollment(members, new Map())!;
+    expect(summary.scanned).toBe(0);
+    expect(summary.rows.every((r) => r.pct === 0)).toBe(true);
+  });
+});
+
+describe('mfaSignals', () => {
+  const push = { id: '1', factorType: 'push', provider: 'OKTA', status: 'ACTIVE' } as const;
+  const sms = { id: '2', factorType: 'sms', provider: 'OKTA', status: 'ACTIVE' } as const;
+
+  it('flags the unprotected, the single-factor, and an incomplete scan', () => {
+    const scan = new Map<string, MemberMfaResult>([
+      ['alice', summarizeFactors('alice', [push, sms])],
+      ['bob', summarizeFactors('bob', [sms])],
+      ['carol', summarizeFactors('carol', [])],
+    ]);
+    const kinds = mfaSignals(computeMfaEnrollment(members, scan)!).map((s) => s.kind);
+    expect(kinds).toEqual(['unprotected', 'single-factor', 'partial-scan']);
+  });
+
+  it('says nothing about a fully scanned group that is fully multi-factor', () => {
+    const scan = new Map<string, MemberMfaResult>(
+      members.map((m) => [m.id, summarizeFactors(m.id, [push, sms])]),
+    );
+    expect(mfaSignals(computeMfaEnrollment(members, scan)!)).toEqual([]);
+  });
+
+  it('omits partial-scan once the scan covers the whole roster', () => {
+    const scan = new Map<string, MemberMfaResult>(
+      members.map((m) => [m.id, summarizeFactors(m.id, [])]),
+    );
+    const kinds = mfaSignals(computeMfaEnrollment(members, scan)!).map((s) => s.kind);
+    expect(kinds).toEqual(['unprotected']);
+  });
+
+  it('carries its reason in the kind, and a self-contained phrase in the label', () => {
+    const scan = new Map<string, MemberMfaResult>([['carol', summarizeFactors('carol', [])]]);
+    const [signal] = mfaSignals(computeMfaEnrollment([members[2]], scan)!);
+    expect(signal.kind).toBe('unprotected');
+    expect(signal.label).toBe('1 with no factor');
+    expect(signal.description).toContain('no active MFA factor');
+  });
+});
+
+describe('computeMfaFactorTypes', () => {
+  const push = { id: '1', factorType: 'push', provider: 'OKTA', status: 'ACTIVE' } as const;
+  const sms = { id: '2', factorType: 'sms', provider: 'OKTA', status: 'ACTIVE' } as const;
+
+  it('withholds rather than zeroing when no scan has run', () => {
+    expect(computeMfaFactorTypes(members, null)).toBeNull();
+  });
+
+  it('distinguishes "scan ran, nobody holds a factor" from "no scan"', () => {
+    const scan = new Map<string, MemberMfaResult>([['carol', summarizeFactors('carol', [])]]);
+    expect(computeMfaFactorTypes([members[2]], scan)).toEqual([]);
+  });
+
+  it('counts a member once per factor they hold, so the rows do not partition', () => {
+    const scan = new Map<string, MemberMfaResult>([
+      ['alice', summarizeFactors('alice', [push, sms])],
+      ['bob', summarizeFactors('bob', [sms])],
+    ]);
+    const rows = computeMfaFactorTypes([members[0], members[1]], scan)!;
+    // Two members, three rows' worth of counts — the property that forbids a bar.
+    expect(rows.reduce((total, row) => total + row.count, 0)).toBe(3);
+    expect(rows[0].count).toBe(2);
+    expect(rows.map((r) => r.value)).toContain('has:SMS');
+  });
+
+  it('sorts by count descending and divides by the scanned count', () => {
+    const scan = new Map<string, MemberMfaResult>([
+      ['alice', summarizeFactors('alice', [push, sms])],
+      ['bob', summarizeFactors('bob', [sms])],
+    ]);
+    const rows = computeMfaFactorTypes(members, scan)!;
+    expect(rows[0].count).toBeGreaterThanOrEqual(rows[1].count);
+    // 2 of the 2 scanned hold SMS — not 2 of the 4 members in the roster.
+    expect(rows.find((r) => r.value === 'has:SMS')!.pct).toBe(100);
   });
 });
