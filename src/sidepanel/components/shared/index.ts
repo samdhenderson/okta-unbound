@@ -48,6 +48,11 @@ export { default as SelectionChips } from './SelectionChips';
 export { default as JsonViewer } from './JsonViewer';
 export { default as JsonNode } from './JsonNode';
 export { default as RuleExpressionText } from './RuleExpressionText';
+export { default as ClauseLedger } from './ClauseLedger';
+export { default as ClauseLedgerBranch, ClauseTreeNodeView } from './ClauseLedgerBranch';
+export { default as ClauseLedgerClause } from './ClauseLedgerClause';
+export { default as GroupReferenceChip } from './GroupReferenceChip';
+export { default as RawExpressionWell } from './RawExpressionWell';
 
 // Re-export commonly used types
 export type { ButtonVariant, ButtonSize } from './Button';
@@ -68,6 +73,13 @@ export type {
   RuleExpressionTone,
   GroupNameResolver,
 } from './RuleExpressionText';
+export type { ClauseLedgerProps } from './ClauseLedger';
+export type { ClauseLedgerBranchProps, ClauseTreeNodeViewProps } from './ClauseLedgerBranch';
+export type { ClauseLedgerClauseProps } from './ClauseLedgerClause';
+export type { GroupReferenceChipProps } from './GroupReferenceChip';
+export type { RawExpressionWellProps } from './RawExpressionWell';
+export type { UseClauseLedgerOptions, UseClauseLedgerResult } from './useClauseLedger';
+export { useClauseLedger } from './useClauseLedger';
 export type { StableWidthProps } from './StableWidth';
 export type { StatusType, UserStatusVariant } from './status';
 export { userStatusVariant } from './status';

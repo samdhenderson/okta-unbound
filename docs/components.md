@@ -62,7 +62,22 @@ const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' }
 `Textarea`, `PageHeader`, `EntityIdentity`, `EntityLink`, `Badge`, `Breadcrumbs`, `Tabs`, `Tooltip`,
 `CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`, `Eyebrow`,
 `StableWidth`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`, `SearchDropdown`,
-`SelectionChips`, `RuleExpressionText`.
+`SelectionChips`, `RuleExpressionText`, `ClauseLedger`, `ClauseLedgerBranch`, `ClauseLedgerClause`,
+`GroupReferenceChip`, `RawExpressionWell`.
+
+- [`ClauseLedger`](#clauseledger-family) — the tree-shaped rule-condition explanation (below)
+
+### `ClauseLedger` family
+
+Renders {@link module:shared/rules/explainExpression.explainRuleExpression}'s **tree**
+projection — `&&`/`||` structure intact, unlike the flat row-per-clause
+{@link module:sidepanel/components/groups/detail/ClauseChecklist}, which this family does
+not replace or adopt into anywhere yet. `ClauseLedger` composes `ClauseLedgerBranch` (a
+connective group, indented under a rail, with the Kleene-shortcut sentence when the
+structured fields say one applies) and `ClauseLedgerClause` (one leaf, including the
+plain-language label for a group-membership clause and its `GroupReferenceChip` row).
+`RawExpressionWell` is the toggled-to raw-EL view. Logic lives in `useClauseLedger`
+(memoised explanation, view-toggle state) per `docs/state-management.md`.
 
 These carry a written contract; read it before using one:
 
