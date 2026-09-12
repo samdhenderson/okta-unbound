@@ -27,11 +27,6 @@ export const UNEVALUABLE_REASON_TEXT: Record<RuleUnevaluableReason, string> = {
   'parse-error': 'The condition could not be parsed here.',
   'unsupported-operator': 'Uses an operator this panel cannot evaluate.',
   'group-membership-fn': "Needs the user's full group list, which this panel does not have.",
-  // Retired from the emit path by ADR-0002 — group-name regexes are evaluated
-  // now. Kept until the flat-explanation cleanup removes the code itself, so a
-  // value stored before that change still renders a true sentence.
-  'group-name-regex':
-    'Matches group names with a regular expression, which was not run for this rule.',
   'regex-unsupported-syntax':
     'Matches group names with a regular expression using syntax this panel does not implement, so it was not run.',
   'regex-too-complex':

@@ -51,13 +51,22 @@
  *   quoting plus the spreadsheet-formula-injection guard); a rule expression
  *   beginning `=` is exactly the payload that guard exists for.
  *
- * ## Two projections, one walk
+ * ## The tree is THE projection
  *
- * The flat {@link RuleExplanation.clauses} list and the nested
- * {@link RuleExplanation.tree} are built from the **same** parse, the same
- * per-node evaluations and the same group-reference resolution — memoised per
- * call — so a row and the node above it can never disagree about a clause.
- * Consumers migrating from the flat list to the tree get the same verdicts.
+ * {@link RuleExplanation.tree} is the only shape this module hands out: the
+ * condition's connective groups nested as written, with one
+ * {@link LeafClauseNode} per indivisible clause. A flat `clauses` list sat beside
+ * it for one migration and is gone — it could only describe the *top* level, so
+ * every consumer that wanted the inside of an `||` had to re-walk a second field
+ * (`alternatives`) that existed for no other reason.
+ *
+ * One walk still feeds everything. The tree, the per-clause verdicts and the
+ * {@link RuleExplanationSummary} counts come from the **same** parse, the same
+ * per-node evaluations and the same group-reference resolution, memoised per
+ * call, so the number above the ledger can never disagree with the nodes under
+ * it. The summary keeps counting the condition's **top-level requirements**
+ * (conjuncts of the root, a disjunction counted as one), which is what it always
+ * counted and what the sentence above the ledger says.
  *
  * @see {@link explainRuleExpression}
  */
@@ -140,8 +149,52 @@ export interface ClauseGroupReference {
   readonly matchedGroupName?: string;
 }
 
-/** One clause of a rule condition, explained against one user. */
-export interface ClauseExplanation {
+/**
+ * The value of a profile attribute a clause read, when the profile does not
+ * carry that attribute at all.
+ *
+ * A unique symbol rather than `undefined` or `null`, mirroring `ruleEvaluator`'s
+ * own `UNRESOLVED` sentinel: **absent is not zero, and absent is not null.** An
+ * attribute present and explicitly `null` records `null`; one the user's profile
+ * has never had records this. The two render differently, and collapsing them is
+ * the bug class that made `user.status == "ACTIVE"` answer "no match" for a whole
+ * org (D-114).
+ */
+export const ATTRIBUTE_ABSENT: unique symbol = Symbol('attribute-absent');
+
+/**
+ * One profile attribute a clause read, with what it held for this user.
+ *
+ * Collected off the AST, so the path is exactly what the rule dereferenced —
+ * never recovered by scanning the clause text, where a quoted `"user.department"`
+ * naming a group would be indistinguishable from a read.
+ */
+export interface AttributeRead {
+  /**
+   * The display path, normalised: `user.department` for the dotted form,
+   * `user["cost center"]` (always double-quoted) for a string-literal computed
+   * key. Deduplicated on this, so `user['x']` and `user["x"]` are one read.
+   * **Untrusted:** an attribute name is tenant-authored — render escaped.
+   */
+  readonly path: string;
+  /**
+   * What the attribute held, or {@link ATTRIBUTE_ABSENT} when this user's
+   * profile does not carry it. **PII:** render escaped, never log, escape for CSV.
+   */
+  readonly value: RuleExprValue | typeof ATTRIBUTE_ABSENT;
+}
+
+/**
+ * A leaf of {@link RuleExplanation.tree}: one indivisible clause of a rule
+ * condition, explained against one user.
+ *
+ * A disjunction is a {@link ConnectiveNode} here rather than a leaf carrying a
+ * list of alternatives, so the parts of an `||` are reached by descending into
+ * `children` like any other group — there is no second, flatter way to ask.
+ */
+export interface LeafClauseNode {
+  /** Discriminant of {@link ClauseTreeNode}. */
+  readonly node: 'leaf';
   /**
    * The clause, reconstructed from the AST. Whitespace and redundant parentheses
    * are normalised, so this is equivalent to — not byte-identical with — the
@@ -185,80 +238,6 @@ export interface ClauseExplanation {
    */
   readonly groupRequirement?: ClauseGroupRequirement;
   /**
-   * Present exactly when this clause is a **disjunction**: the alternatives it
-   * offers, each explained in its own right, in source order.
-   *
-   * The clause itself is the whole OR group, because its parts are alternatives
-   * rather than requirements and listing them as siblings of a conjunct claims
-   * that every one of them must hold. That is what this field exists to avoid
-   * having to do: the row stays honest about being one requirement, and the
-   * detail underneath is still available to anything that wants to show which
-   * alternative holds.
-   *
-   * Never empty when present, and never nested more than one level: an OR
-   * inside an OR is flattened by the same walk that collects these.
-   */
-  readonly alternatives?: readonly ClauseExplanation[];
-}
-
-/**
- * The value of a profile attribute a clause read, when the profile does not
- * carry that attribute at all.
- *
- * A unique symbol rather than `undefined` or `null`, mirroring `ruleEvaluator`'s
- * own `UNRESOLVED` sentinel: **absent is not zero, and absent is not null.** An
- * attribute present and explicitly `null` records `null`; one the user's profile
- * has never had records this. The two render differently, and collapsing them is
- * the bug class that made `user.status == "ACTIVE"` answer "no match" for a whole
- * org (D-114).
- */
-export const ATTRIBUTE_ABSENT: unique symbol = Symbol('attribute-absent');
-
-/**
- * One profile attribute a clause read, with what it held for this user.
- *
- * Collected off the AST, so the path is exactly what the rule dereferenced —
- * never recovered by scanning the clause text, where a quoted `"user.department"`
- * naming a group would be indistinguishable from a read.
- */
-export interface AttributeRead {
-  /**
-   * The display path, normalised: `user.department` for the dotted form,
-   * `user["cost center"]` (always double-quoted) for a string-literal computed
-   * key. Deduplicated on this, so `user['x']` and `user["x"]` are one read.
-   * **Untrusted:** an attribute name is tenant-authored — render escaped.
-   */
-  readonly path: string;
-  /**
-   * What the attribute held, or {@link ATTRIBUTE_ABSENT} when this user's
-   * profile does not carry it. **PII:** render escaped, never log, escape for CSV.
-   */
-  readonly value: RuleExprValue | typeof ATTRIBUTE_ABSENT;
-}
-
-/**
- * A leaf of {@link RuleExplanation.tree}: one indivisible clause.
- *
- * The same facts as a {@link ClauseExplanation} row, minus `alternatives` —
- * a disjunction is a {@link ConnectiveNode} here, so there is no flattened list
- * to carry — plus the {@link AttributeRead}s underneath it.
- */
-export interface LeafClauseNode {
-  /** Discriminant of {@link ClauseTreeNode}. */
-  readonly node: 'leaf';
-  /** See {@link ClauseExplanation.expressionText}. **Untrusted.** */
-  readonly expressionText: string;
-  /** See {@link ClauseExplanation.resolvedValue}. **PII.** */
-  readonly resolvedValue: RuleExprValue | undefined;
-  /** See {@link ClauseExplanation.status}. */
-  readonly status: ClauseStatus;
-  /** See {@link ClauseExplanation.reasonCode}. */
-  readonly reasonCode?: RuleUnevaluableReason;
-  /** See {@link ClauseExplanation.groupReferences}. */
-  readonly groupReferences?: readonly ClauseGroupReference[];
-  /** See {@link ClauseExplanation.groupRequirement}. */
-  readonly groupRequirement?: ClauseGroupRequirement;
-  /**
    * Every `user.*` attribute read anywhere under this leaf, in source order and
    * deduplicated by {@link AttributeRead.path}.
    *
@@ -274,11 +253,28 @@ export interface LeafClauseNode {
 export type ClauseConnectiveKind = 'and' | 'or';
 
 /**
+ * **Which** bound dropped something under a {@link ConnectiveNode}.
+ *
+ * Two different losses, and a reader can act on only one of them, so they are
+ * not collapsed into a bare `true`:
+ *
+ * - `depth` — a child group nested past {@link MAX_TREE_DEPTH} was folded into a
+ *   single leaf. Nothing is missing from the list; the leaf carries the whole
+ *   sub-expression's text and its verdict. Only the *structure* below it is gone.
+ * - `clause-cap` — sibling clauses past the `maxClauses` budget were dropped
+ *   outright. Those clauses are **not on screen at all**, and
+ *   {@link RuleExplanationSummary.totalClauses} is the count that was kept.
+ *
+ * A node that suffered both reports `clause-cap`: losing whole clauses is the
+ * larger claim about what the reader is not seeing.
+ */
+export type ClauseTruncation = 'depth' | 'clause-cap';
+
+/**
  * An interior node of {@link RuleExplanation.tree}: an `&&` or `||` group.
  *
  * Adjacent connectives of the same kind flatten into one n-ary node, so
- * `a && b && c` is a single AND over three children rather than a chain — the
- * same shape the flat clause list has always produced.
+ * `a && b && c` is a single AND over three children rather than a chain.
  */
 export interface ConnectiveNode {
   /** Discriminant of {@link ClauseTreeNode}. */
@@ -322,12 +318,14 @@ export interface ConnectiveNode {
   /** Nesting depth, `0` at the root. Bounded by {@link MAX_TREE_DEPTH}. */
   readonly depth: number;
   /**
-   * Present and `true` when something under this node was dropped: a child
-   * connective collapsed into one leaf by {@link MAX_TREE_DEPTH}, or sibling
-   * leaves dropped at the `maxClauses` cap. Set on the nearest **surviving**
-   * ancestor, and always accompanied by {@link RuleExplanationSummary.truncated}.
+   * Present exactly when something under this node was dropped, naming **which**
+   * bound dropped it — see {@link ClauseTruncation}. Absent means nothing was
+   * lost here.
+   *
+   * Set on the nearest **surviving** ancestor, and always accompanied by
+   * {@link RuleExplanationSummary.truncated}.
    */
-  readonly truncated?: boolean;
+  readonly truncation?: ClauseTruncation;
 }
 
 /** One node of {@link RuleExplanation.tree}: a connective group, or a clause. */
@@ -344,9 +342,17 @@ export type ClauseTreeNode = ConnectiveNode | LeafClauseNode;
  */
 export const MAX_TREE_DEPTH = 8;
 
-/** Per-rule counts the UI renders above the clause list. */
+/**
+ * Per-rule counts the UI renders above the ledger.
+ *
+ * Every count below is over the condition's **top-level requirements**: the
+ * conjuncts of the root, with a disjunction counted as ONE requirement whatever
+ * its width. That is the unit the sentence above the ledger speaks in ("3 of 4
+ * clauses evaluated"), and counting an `||` group's alternatives individually
+ * would state that every one of them has to hold.
+ */
 export interface RuleExplanationSummary {
-  /** Clause rows returned. Equals `clauses.length`. */
+  /** Top-level requirements counted. `0` when the expression never parsed. */
   readonly totalClauses: number;
   /** Rows with a real verdict (`pass` + `fail`) — the "3 of 4 clauses evaluated". */
   readonly evaluatedClauses: number;
@@ -361,9 +367,10 @@ export interface RuleExplanationSummary {
    * "1 needs group context" of the summary line.
    *
    * Always `0` once {@link ExplainRuleOptions.groups} is supplied: those clauses
-   * then carry a real verdict. It does **not** count the `group-name-regex`
-   * rows, which are unevaluated for a different reason and would not be fixed by
-   * any group list.
+   * then carry a real verdict. It does **not** count a clause the safe regex
+   * engine declined (`regex-unsupported-syntax`, `regex-too-complex`), which is
+   * unevaluated for a different reason and would not be fixed by any group
+   * list.
    */
   readonly needsGroupContext: number;
   /**
@@ -381,25 +388,17 @@ export interface RuleExplanationSummary {
   readonly truncated: boolean;
 }
 
-/** A rule condition explained against one user: the clause rows plus their summary. */
+/** A rule condition explained against one user: the clause tree plus its summary. */
 export interface RuleExplanation {
   /**
-   * One row per clause, in source order. Empty when the expression never parsed.
-   *
-   * The flat projection: conjunctions are split, a disjunction stays whole with
-   * its parts in {@link ClauseExplanation.alternatives}. Unchanged, and built
-   * from the same walk as {@link tree}.
-   */
-  readonly clauses: readonly ClauseExplanation[];
-  /**
-   * The same explanation as a tree — connective groups nested as written, rather
-   * than flattened to one level.
+   * The explanation itself — connective groups nested as written, one
+   * {@link LeafClauseNode} per indivisible clause.
    *
    * The root of a rule with no top-level connective is a {@link LeafClauseNode};
    * so is `!(a && b)`, whose negation applies to the combination and whose parts
-   * would invert if reported separately — the same boundary {@link clauses}
-   * draws. An expression that never parsed roots at a leaf with empty text
-   * carrying the reason code.
+   * would invert if reported separately. An expression that never parsed roots at
+   * a leaf with empty text carrying the reason code — there is always a root to
+   * render.
    */
   readonly tree: ClauseTreeNode;
   /** Per-rule counts and the authoritative whole-expression verdict. */
@@ -424,9 +423,10 @@ export interface ExplainRuleOptions {
    * honestly unevaluated, whereas a subset would report groups the user *is* in
    * as clauses they failed. See {@link RuleGroupContext}.
    *
-   * `isMemberOfGroupNameRegex` stays unevaluated either way, under its own
-   * `group-name-regex` reason — the evaluator declines to run tenant-authored
-   * patterns.
+   * `isMemberOfGroupNameRegex` is answered from the same list (ADR-0002 runs the
+   * pattern in linear time rather than refusing it). It stays unevaluated only
+   * when the safe engine declines that particular pattern, under
+   * `regex-unsupported-syntax` or `regex-too-complex`.
    */
   readonly groups?: RuleGroupContext;
 }
@@ -538,15 +538,21 @@ function stringifyOperand(node: jsep.Expression): string {
 }
 
 // ---------------------------------------------------------------------------
-// One walk, two projections
+// One walk
 // ---------------------------------------------------------------------------
 
-/** A clause's facts without the flat projection's `alternatives` list. */
-type ClauseCore = Omit<ClauseExplanation, 'alternatives'>;
+/**
+ * A clause's own facts, without the {@link AttributeRead}s a leaf also carries.
+ *
+ * The memoised unit: the summary tallies these for the top-level requirements
+ * and every leaf of the tree is one of them plus its reads, so a count and a node
+ * can never be two different evaluations of the same clause.
+ */
+type ClauseCore = Omit<LeafClauseNode, 'node' | 'reads'>;
 
 /**
  * Everything one call to {@link explainRuleExpression} carries, including the
- * memos that make the flat and nested projections **one** walk.
+ * memos that make the tree and the summary **one** walk.
  *
  * The caches are per call, never module-level: `parseRuleExpression` memoises the
  * AST, so the very same node objects come back for a later call against a
@@ -555,7 +561,7 @@ type ClauseCore = Omit<ClauseExplanation, 'alternatives'>;
 interface ExplainContext {
   readonly user: OktaUser;
   readonly groups: RuleGroupContext | undefined;
-  /** Node → its explained facts. Keyed by node identity, so both projections share it. */
+  /** Node → its explained facts. Keyed by node identity, so every reader shares it. */
   readonly clauseCache: WeakMap<jsep.Expression, ClauseCore>;
   /** Node → its value against the user alone, shared by `resolvedValue` and by the reads. */
   readonly valueCache: WeakMap<jsep.Expression, RuleNodeEvaluation>;
@@ -565,7 +571,7 @@ interface ExplainContext {
  * One node's value against the user's profile, evaluated at most once per call.
  *
  * Deliberately without the group context: this feeds
- * {@link ClauseExplanation.resolvedValue} and {@link AttributeRead.value}, both
+ * {@link LeafClauseNode.resolvedValue} and {@link AttributeRead.value}, both
  * of which are profile reads. The clause *verdict* is a separate, group-aware
  * evaluation.
  */
@@ -588,7 +594,8 @@ interface ClauseCollection {
 }
 
 /**
- * Split a condition into clauses by descending through **conjunctions only**.
+ * Split a condition into its **top-level requirements** by descending through
+ * **conjunctions only** — the unit {@link RuleExplanationSummary} counts in.
  *
  * `a && (b || c)` yields TWO clauses, `a` and `b || c`; `!(a && b)` yields one,
  * because the negation applies to the *combination* and reporting its parts
@@ -604,12 +611,8 @@ interface ClauseCollection {
  * rendered as four flat failing clauses including `countryCode == "GB"` and
  * `countryCode == "DE"` side by side, which describes a rule that can never
  * match anybody. It also inflated every failing-clause count by the width of
- * each OR group.
- *
- * Keeping the disjunction whole makes one clause whose text is the group, whose
- * status is the group's own result, and whose resolved value is the attribute
- * they all read. Parentheses leave no node in jsep's AST, so the reconstructed
- * text is normalised rather than byte-identical.
+ * each OR group — which is why the counts still stop here even though the tree
+ * goes on to nest that group's alternatives underneath.
  */
 function collectClauseNodes(
   node: jsep.Expression,
@@ -631,7 +634,7 @@ function collectClauseNodes(
 
 /**
  * The sub-expressions a clause compares, in source order — the candidates for
- * {@link ClauseExplanation.resolvedValue}. A clause that is itself an operand
+ * {@link LeafClauseNode.resolvedValue}. A clause that is itself an operand
  * (a bare `user.active`) is its own candidate; a negation looks *through* itself,
  * so `!(user.department == "Sales")` still offers the department, not the `false`
  * it inverted.
@@ -795,23 +798,6 @@ function groupClauseFactsOf(
 }
 
 /**
- * The leaves of a disjunction, in source order.
- *
- * Descends through OR connectives only, so nested disjunctions flatten into one
- * list of alternatives while anything else (including a conjunction inside an
- * OR) is left whole as a single alternative.
- */
-function collectAlternativeNodes(node: jsep.Expression, into: jsep.Expression[]): void {
-  const binary = asBinaryExpression(node);
-  if (binary && RULE_DISJUNCTIVE_OPERATORS.has(binary.operator)) {
-    collectAlternativeNodes(binary.left, into);
-    collectAlternativeNodes(binary.right, into);
-    return;
-  }
-  into.push(node);
-}
-
-/**
  * Explain one clause: grammar gate first, then evaluation, then the
  * "is it actually a condition?" gate.
  *
@@ -859,28 +845,8 @@ function computeClauseCore(node: jsep.Expression, ctx: ExplainContext): ClauseCo
   return { ...base, status: evaluation.value ? 'pass' : 'fail' };
 }
 
-/**
- * The flat projection of one clause: its {@link clauseCore} facts, plus the
- * alternatives of a disjunction.
- *
- * The alternatives are explained whatever the clause's own outcome — knowing
- * WHICH alternative could not be read is most of the value of an unevaluable
- * group — and they go through the same memo, so the {@link RuleExplanation.tree}
- * children below them are the same evaluations, not a second opinion.
- */
-function explainClause(node: jsep.Expression, ctx: ExplainContext): ClauseExplanation {
-  const core = clauseCore(node, ctx);
-
-  const disjunction = asBinaryExpression(node);
-  if (!disjunction || !RULE_DISJUNCTIVE_OPERATORS.has(disjunction.operator)) return core;
-
-  const nodes: jsep.Expression[] = [];
-  collectAlternativeNodes(node, nodes);
-  return { ...core, alternatives: nodes.map((alt) => explainClause(alt, ctx)) };
-}
-
 // ---------------------------------------------------------------------------
-// The tree projection
+// The tree
 // ---------------------------------------------------------------------------
 
 /**
@@ -992,7 +958,7 @@ function connectiveKindOf(node: jsep.Expression): ClauseConnectiveKind | undefin
  *
  * `a && b && c` is three operands, not a nested pair; `a && (b || c)` is two,
  * the second of which is the OR group. This is the same flattening
- * {@link collectClauseNodes} and {@link collectAlternativeNodes} already apply.
+ * {@link collectClauseNodes} applies to the conjunctive half.
  */
 function collectConnectiveOperands(
   node: jsep.Expression,
@@ -1064,8 +1030,8 @@ function buildLeafNode(node: jsep.Expression, ctx: ExplainContext): LeafClauseNo
  * Connectives nest until {@link MAX_TREE_DEPTH}, below which the whole
  * sub-expression becomes one leaf whose status is that sub-expression evaluated
  * whole — structure is lost, never a verdict. Statuses come from
- * {@link clauseCore}, the same memo the flat rows are built from, so the two
- * projections cannot disagree.
+ * {@link clauseCore}, the same memo the summary counts, so a node and the count
+ * above it cannot disagree.
  */
 function buildTreeNode(
   node: jsep.Expression,
@@ -1080,16 +1046,17 @@ function buildTreeNode(
     collectConnectiveOperands(node, kind, operands);
 
     const children: ClauseTreeNode[] = [];
-    let truncated = false;
+    // `clause-cap` outranks `depth`: see {@link ClauseTruncation}.
+    let truncation: ClauseTruncation | undefined;
     for (const operand of operands) {
       const built = buildTreeNode(operand, depth + 1, ctx, state);
       if (!built) {
-        truncated = true;
+        truncation = 'clause-cap';
         state.truncated = true;
         continue;
       }
       if (built.collapsed) {
-        truncated = true;
+        truncation ??= 'depth';
         state.truncated = true;
       }
       children.push(built.node);
@@ -1109,7 +1076,7 @@ function buildTreeNode(
         undecidedChildCount: children.filter((child) => treeNodeStatus(child) === 'not-evaluated')
           .length,
         depth,
-        ...(truncated ? { truncated: true } : {}),
+        ...(truncation ? { truncation } : {}),
       },
       collapsed: false,
     };
@@ -1139,9 +1106,17 @@ function buildTree(
   return buildTreeNode(ast, 0, ctx, state)?.node ?? buildLeafNode(ast, ctx);
 }
 
-/** Tally the clause rows into the summary the UI renders above them. */
+/**
+ * Tally the top-level requirements into the summary the UI renders above the
+ * ledger.
+ *
+ * Takes the memoised {@link ClauseCore} facts, not the tree: the tree's leaves go
+ * one level further into every disjunction, and counting those would report an
+ * `||` group's alternatives as separate requirements — the exact
+ * over-count {@link collectClauseNodes} exists to prevent.
+ */
 function summarise(
-  clauses: readonly ClauseExplanation[],
+  clauses: readonly ClauseCore[],
   result: RuleMatchResult,
   truncated: boolean,
 ): RuleExplanationSummary {
@@ -1172,7 +1147,7 @@ function summarise(
 }
 
 /**
- * An explanation with no clause rows — the expression never became an AST.
+ * An explanation with no clauses to count — the expression never became an AST.
  *
  * The tree still has a root, because every consumer has one to render: a leaf
  * with **empty** text carrying the reason code. The expression's own text is not
@@ -1181,7 +1156,6 @@ function summarise(
  */
 function unparsedExplanation(reasonCode: RuleUnevaluableReason): RuleExplanation {
   return {
-    clauses: [],
     tree: {
       node: 'leaf',
       expressionText: '',
@@ -1220,18 +1194,20 @@ function clauseLimit(maxClauses: number | undefined): number {
  * @param expression - The rule's condition expression (untrusted Okta data).
  * @param user - The user to explain the condition against.
  * @param options - {@link ExplainRuleOptions}; also the seam for future context.
- * @returns Clause rows plus a {@link RuleExplanationSummary}. Both
- *   `expressionText` and `resolvedValue` are untrusted/PII: render them escaped,
- *   never log them, and run them through `csvUtils.escapeCSV` before export.
+ * @returns The clause {@link RuleExplanation.tree} plus a
+ *   {@link RuleExplanationSummary}. Both `expressionText` and `resolvedValue` are
+ *   untrusted/PII: render them escaped, never log them, and run them through
+ *   `csvUtils.escapeCSV` before export.
  *
  * @example
- * const { clauses, summary } = explainRuleExpression(
+ * const { tree, summary } = explainRuleExpression(
  *   'user.department == "Engineering" && user.title != "Intern"',
  *   user,
  * );
- * // clauses[0] → { expressionText: 'user.department == "Engineering"',
- * //                resolvedValue: 'Engineering', status: 'pass' }
- * // summary    → { evaluatedClauses: 2, failedClauses: 1, … }
+ * // tree    → { node: 'connective', kind: 'and', verdict: 'fail', children: [
+ * //              { node: 'leaf', expressionText: 'user.department == "Engineering"',
+ * //                resolvedValue: 'Engineering', status: 'pass', reads: […] }, … ] }
+ * // summary → { evaluatedClauses: 2, failedClauses: 1, … }
  */
 export function explainRuleExpression(
   expression: string,
@@ -1252,15 +1228,14 @@ export function explainRuleExpression(
       clauseCache: new WeakMap(),
       valueCache: new WeakMap(),
     };
-    const clauses = collection.nodes.map((node) => explainClause(node, ctx));
+    const clauses = collection.nodes.map((node) => clauseCore(node, ctx));
 
     // Built second, off the same memos: every status below is an evaluation the
-    // rows above already paid for.
+    // counts above already paid for.
     const treeState: TreeBuildState = { leafBudget: limit, truncated: false };
     const tree = buildTree(parsed.ast, ctx, treeState);
 
     return {
-      clauses,
       tree,
       summary: summarise(
         clauses,

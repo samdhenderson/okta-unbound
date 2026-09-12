@@ -1,12 +1,12 @@
 /*
- * The nested projection of the clause explainer: `RuleExplanation.tree`.
+ * The clause explainer's one projection: `RuleExplanation.tree`.
  *
- * The flat `clauses` list and this tree are two views of ONE walk, so the
- * properties asserted here are mostly agreement properties — a leaf says what its
- * row says, a connective's verdict is the verdict the app acts on, and the root
- * can never contradict `summary.result`. The last of those is the load-bearing
- * one: a tree that disagreed with the summary above it would put two different
- * answers to the same question on one screen.
+ * The tree and the `summary` above it are built from ONE walk, so the properties
+ * asserted here are mostly agreement properties — a leaf carries the clause facts
+ * the counts were tallied from, a connective's verdict is the verdict the app
+ * acts on, and the root can never contradict `summary.result`. The last of those
+ * is the load-bearing one: a tree that disagreed with the summary above it would
+ * put two different answers to the same question on one screen.
  *
  * Fixtures use obviously fake placeholders only.
  */
@@ -126,29 +126,31 @@ describe('tree shape', () => {
     expect(connective(tree).children).toHaveLength(2);
   });
 
-  it('roots at a leaf for a single-clause rule', () => {
-    const { tree, clauses } = explainRuleExpression('user.department == "Engineering"', user);
+  it('roots at a leaf for a single-clause rule, counted as one requirement', () => {
+    const { tree, summary } = explainRuleExpression('user.department == "Engineering"', user);
 
     expect(leaf(tree).expressionText).toBe('user.department == "Engineering"');
     expect(leaf(tree).status).toBe('pass');
-    expect(leaf(tree).expressionText).toBe(clauses[0]?.expressionText);
+    expect(summary.totalClauses).toBe(1);
   });
 
-  it('keeps a negated conjunction whole, exactly as the flat row does', () => {
+  it('keeps a negated conjunction whole, as one leaf and one requirement', () => {
     const expression = '!(user.department == "Engineering" && user.title == "Intern")';
-    const { tree, clauses } = explainRuleExpression(expression, user);
+    const { tree, summary } = explainRuleExpression(expression, user);
 
     // Reporting the parts of `!(a && b)` separately would invert their meaning,
-    // so the negation is one leaf in both projections.
-    expect(leaf(tree).expressionText).toBe(clauses[0]?.expressionText);
-    expect(leaf(tree).status).toBe(clauses[0]?.status);
-    expect(clauses).toHaveLength(1);
+    // so the negation is one leaf — never an AND group — and one counted clause.
+    expect(leaf(tree).expressionText).toBe(
+      '!((user.department == "Engineering") && (user.title == "Intern"))',
+    );
+    expect(leaf(tree).status).toBe('fail');
+    expect(summary.totalClauses).toBe(1);
   });
 
   it('roots at a leaf carrying the reason when nothing parsed', () => {
-    const { tree, clauses } = explainRuleExpression('user.department ==', user);
+    const { tree, summary } = explainRuleExpression('user.department ==', user);
 
-    expect(clauses).toEqual([]);
+    expect(summary.totalClauses).toBe(0);
     expect(leaf(tree)).toEqual({
       node: 'leaf',
       expressionText: '',
@@ -272,24 +274,35 @@ describe('connective verdicts', () => {
 // ===========================================================================
 // Leaves carry the same facts as the rows
 // ===========================================================================
-describe('leaves and rows are the same walk', () => {
-  it('gives a leaf the row facts, minus the flat alternatives list', () => {
-    const { tree, clauses } = explainRuleExpression(
+describe('leaves and the summary are the same walk', () => {
+  it('gives a leaf the full clause facts, and a disjunction its alternatives as children', () => {
+    const { tree, summary } = explainRuleExpression(
       'user.department == "Engineering" && (user.city == "Berlin" || user.title == "Intern")',
       user,
     );
 
     const root = connective(tree);
-    const first = leaf(childAt(root, 0));
-    expect(first).toEqual({ ...clauses[0], node: 'leaf', reads: first.reads });
+    expect(leaf(childAt(root, 0))).toEqual({
+      node: 'leaf',
+      expressionText: 'user.department == "Engineering"',
+      resolvedValue: 'Engineering',
+      status: 'pass',
+      reads: [{ path: 'user.department', value: 'Engineering' }],
+    });
 
-    // The disjunction is a row with `alternatives` and a node with children: the
-    // same verdicts, from the same evaluations.
+    // The alternatives of the OR are its children — the only place they live now
+    // that the flat `alternatives` list is gone.
     const or = connective(childAt(root, 1));
-    expect(or.verdict).toBe(clauses[1]?.status);
-    expect(or.children.map((child) => leaf(child).status)).toEqual(
-      clauses[1]?.alternatives?.map((alternative) => alternative.status),
-    );
+    expect(or.verdict).toBe('pass');
+    expect(or.children.map((child) => leaf(child).expressionText)).toEqual([
+      'user.city == "Berlin"',
+      'user.title == "Intern"',
+    ]);
+    expect(or.children.map((child) => leaf(child).status)).toEqual(['fail', 'pass']);
+
+    // Two requirements, not three clauses: the OR is counted once.
+    expect(summary.totalClauses).toBe(2);
+    expect(summary.passedClauses).toBe(2);
   });
 
   it('carries the group references and polarity of a membership leaf', () => {
@@ -412,8 +425,9 @@ describe('bounded depth', () => {
     for (let depth = 0; depth < MAX_TREE_DEPTH; depth += 1) {
       const group = connective(node);
       expect(group.depth).toBe(depth);
-      // Only the last surviving group lost anything.
-      expect(group.truncated).toBe(depth === MAX_TREE_DEPTH - 1 ? true : undefined);
+      // Only the last surviving group lost anything — and it lost NESTING, not
+      // clauses, which is the distinction the warning copy turns on.
+      expect(group.truncation).toBe(depth === MAX_TREE_DEPTH - 1 ? 'depth' : undefined);
       node = childAt(group, 1);
     }
 
@@ -424,6 +438,51 @@ describe('bounded depth', () => {
     expect(summary.truncated).toBe(true);
     expect(statusOf(tree)).toBe('pass');
     expect(summary.result).toEqual({ outcome: 'match' });
+  });
+
+  /**
+   * The chain of {@link nested}, but its deepest surviving group has THREE
+   * children: one connective the depth cap will fold up, and two leaves the
+   * clause cap can drop. The only shape in which one node suffers both losses.
+   */
+  function nestedWithWideTail(levels: number): string {
+    if (levels === 0) return `(${LEAF} || ${LEAF}) && ${LEAF} && ${LEAF}`;
+    return `${LEAF} ${levels % 2 === 0 ? '&&' : '||'} (${nestedWithWideTail(levels - 1)})`;
+  }
+
+  /** The node at the end of the right-hand spine, `depth` levels down. */
+  function spine(tree: ClauseTreeNode, depth: number): ClauseTreeNode {
+    let node = tree;
+    for (let i = 0; i < depth; i += 1) node = childAt(node, 1);
+    return node;
+  }
+
+  it('reports a depth collapse alone as `depth`', () => {
+    const { tree } = explainRuleExpression(nestedWithWideTail(MAX_TREE_DEPTH - 1), user, {
+      maxClauses: 256,
+    });
+
+    // Budget to spare, so the ONLY loss at the deepest group is the folded-up
+    // `||` — every clause is still listed, which is what `depth` claims.
+    const deepest = connective(spine(tree, MAX_TREE_DEPTH - 1));
+    expect(deepest.depth).toBe(MAX_TREE_DEPTH - 1);
+    expect(deepest.children).toHaveLength(3);
+    expect(deepest.truncation).toBe('depth');
+  });
+
+  it('reports `clause-cap` on a node that lost both nesting and whole clauses', () => {
+    const { tree, summary } = explainRuleExpression(nestedWithWideTail(MAX_TREE_DEPTH - 1), user, {
+      // Exactly the spine's leaves plus the collapsed group: the two trailing
+      // conjuncts of the tail cannot be afforded.
+      maxClauses: MAX_TREE_DEPTH,
+    });
+
+    const deepest = connective(spine(tree, MAX_TREE_DEPTH - 1));
+    expect(deepest.children).toHaveLength(1);
+    // Both happened here. Saying `depth` would tell the reader the clauses are
+    // merely nested out of view when two of them are not in the tree at all.
+    expect(deepest.truncation).toBe('clause-cap');
+    expect(summary.truncated).toBe(true);
   });
 
   it('keeps a tree exactly at the cap whole', () => {
@@ -452,9 +511,11 @@ describe('bounded depth', () => {
 
     const root = connective(tree);
     expect(leaves(tree)).toHaveLength(2);
-    // The third leaf and the top-level `user.headcount` conjunct are gone.
-    expect(root.truncated).toBe(true);
-    expect(connective(childAt(root, 1)).truncated).toBe(true);
+    // The third leaf and the top-level `user.headcount` conjunct are gone —
+    // clauses missing from the list, not nesting folded up, and each ancestor
+    // says which.
+    expect(root.truncation).toBe('clause-cap');
+    expect(connective(childAt(root, 1)).truncation).toBe('clause-cap');
     expect(connective(childAt(root, 1)).children).toHaveLength(1);
     expect(summary.truncated).toBe(true);
 

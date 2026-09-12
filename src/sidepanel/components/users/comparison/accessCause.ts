@@ -130,10 +130,10 @@ export interface AccessCause {
    * — atomic clauses, never a connective group — collected by walking only the
    * subtrees whose own verdict is `fail`, so a clause that failed inside a
    * sibling OR the rule's overall verdict never needed (because that OR still
-   * passed) is never listed here. Carrying leaves rather than the flat
-   * projection's rows is what lets each one render with its own
-   * `reads` — the attribute evidence ("why does this user lack this") that the
-   * flat `ClauseExplanation` shape did not carry.
+   * passed) is never listed here. Carrying tree leaves rather than the top-level
+   * rows the explainer used to flatten out is what lets each one render with its
+   * own `reads` — the attribute evidence ("why does this user lack this") that
+   * the retired flat shape did not carry.
    *
    * **PII:** `resolvedValue` and `reads[].value` are profile data. Render
    * escaped, never log, and escape for CSV.
@@ -357,13 +357,11 @@ function assessRule(
  * Descends only into a subtree whose own verdict already reads `fail`: a leaf
  * that individually failed inside a sibling `OR` group the rule's outcome never
  * needed (because that `OR` still passed on another alternative) is never
- * visited, let alone collected. This is what keeps the result equivalent to the
- * old flat projection's `clauses.filter(status === 'fail')` at the top level,
- * while going one level deeper: where the flat list kept a failing `OR` group
- * whole (with its parts tucked into `alternatives`, never rendered by this
- * seam's UI), this walk reports each of that group's individually-failing
- * leaves — every one of which genuinely failed, since an `OR` fails only when
- * every child does.
+ * visited, let alone collected. At the top level this is exactly the set the
+ * retired flat projection gave, filtered to `fail`; it goes one level deeper,
+ * because that projection kept a failing `OR` group whole and this walk reports
+ * each of the group's individually-failing leaves — every one of which genuinely
+ * failed, since an `OR` fails only when every child does.
  */
 function collectFailingLeaves(node: ClauseTreeNode): readonly LeafClauseNode[] {
   if (node.node === 'leaf') return node.status === 'fail' ? [node] : [];

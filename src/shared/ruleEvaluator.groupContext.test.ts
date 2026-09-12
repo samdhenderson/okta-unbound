@@ -102,7 +102,8 @@ describe('isMemberOf* without a group context', () => {
 
 describe('isMemberOfGroupNameRegex is answered like its siblings', () => {
   it('resolves against the group list instead of refusing', () => {
-    // Was `unevaluable` / `group-name-regex` for the module's whole life. ADR-0002
+    // Was `unevaluable`, under a refusal code of its own, for the module's whole
+    // life. ADR-0002
     // kept the ban on building a RegExp from tenant text and removed the refusal:
     // the pattern runs in `shared/rules/safeRegex`, which cannot backtrack.
     expect(

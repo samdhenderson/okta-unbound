@@ -22,6 +22,11 @@
  * `decidedByChildIndices` is empty, which is also true whenever the verdict
  * itself is `not-evaluated`.
  *
+ * The truncation warning works the same way: which of the two sentences appears
+ * is keyed off `ConnectiveNode.truncation`, a two-valued union, so the copy says
+ * what was actually lost — nesting folded up, or clauses left off the list —
+ * rather than one sentence covering both and being wrong half the time.
+ *
  * ## Security
  *
  * This module renders only structural facts (a connective kind, counts, and
@@ -33,7 +38,11 @@ import Eyebrow from './Eyebrow';
 import AlertMessage from './AlertMessage';
 import ClauseLedgerClause from './ClauseLedgerClause';
 import type { GroupNameResolver } from './RuleExpressionText';
-import type { ClauseTreeNode, ConnectiveNode } from '../../../shared/rules/explainExpression';
+import type {
+  ClauseTreeNode,
+  ClauseTruncation,
+  ConnectiveNode,
+} from '../../../shared/rules/explainExpression';
 
 /** Props for {@link ClauseLedgerBranch}. */
 export interface ClauseLedgerBranchProps {
@@ -55,6 +64,23 @@ export interface ClauseTreeNodeViewProps {
 const CONNECTIVE_LABEL: Record<ConnectiveNode['kind'], string> = {
   and: 'All must match · AND',
   or: 'Any satisfies · OR',
+};
+
+/**
+ * Which bound dropped something → what the reader is actually not seeing.
+ *
+ * Two different losses, so two different sentences: a depth collapse still shows
+ * the sub-expression and its verdict on one line and has only folded up the
+ * structure beneath it, whereas the clause cap has left whole clauses off the
+ * screen. Keyed off {@link module:shared/rules/explainExpression.ClauseTruncation}
+ * — a structured field — so neither sentence can be rewritten into the other's
+ * meaning by accident.
+ */
+const TRUNCATION_TEXT: Record<ClauseTruncation, string> = {
+  depth:
+    'Part of this condition is nested deeper than this view expands, so some of it is not shown.',
+  'clause-cap':
+    'This condition has more clauses than this view lists, so some of them are not shown.',
 };
 
 /**
@@ -137,13 +163,8 @@ const ClauseLedgerBranch: React.FC<ClauseLedgerBranchProps> = ({ node, resolveGr
         <p className="mt-2 border-t border-neutral-100 pt-2 text-xs text-neutral-600">{note}</p>
       )}
 
-      {node.truncated && (
-        <AlertMessage
-          message={{
-            text: 'Part of this condition is nested deeper than this view expands, so some of it is not shown.',
-            type: 'warning',
-          }}
-        />
+      {node.truncation && (
+        <AlertMessage message={{ text: TRUNCATION_TEXT[node.truncation], type: 'warning' }} />
       )}
     </div>
   );

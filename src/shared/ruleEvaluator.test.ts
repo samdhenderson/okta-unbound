@@ -1018,8 +1018,8 @@ describe('conditional expressions', () => {
 // ===========================================================================
 // isMemberOfGroupNameRegex — answered by the linear-time engine, not refused.
 //
-// This function was a standing refusal (`group-name-regex`) for the module's
-// whole life, because a `RegExp` built from a tenant pattern is a backtracking
+// This function was a standing refusal, under a reason code of its own, for the
+// module's whole life, because a `RegExp` built from a tenant pattern is a backtracking
 // lever pointed at the panel's only thread. ADR-0002 kept that ban and removed
 // the refusal: `shared/rules/safeRegex` runs the pattern in linear time, and
 // says so explicitly when it will not run one.

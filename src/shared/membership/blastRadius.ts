@@ -69,7 +69,11 @@ import {
   type RuleGroupContext,
   type RuleMatchResult,
 } from '../ruleEvaluator';
-import { explainRuleExpression, type ClauseGroupReference } from '../rules/explainExpression';
+import {
+  explainRuleExpression,
+  type ClauseGroupReference,
+  type ClauseTreeNode,
+} from '../rules/explainExpression';
 import { matchSafeRegex } from '../rules/safeRegex';
 import { groupContextOf } from './groupContext';
 import { conditionExpressionOf } from './ruleExpression';
@@ -435,6 +439,23 @@ function referenceNames(reference: ClauseGroupReference, group: AffectedGroup): 
   }
 }
 
+/**
+ * Every `isMemberOf*` reference anywhere in one rule's explanation, in source
+ * order.
+ *
+ * Walks the whole clause tree rather than its top level. A membership call
+ * nested inside an `||` — `user.department == "Sales" || isMemberOfGroup("…")` —
+ * is a leaf of that group, and the flat projection this replaced could only see
+ * the group as a whole, which carries no references of its own. Those rules were
+ * silently missing from the cascade scan; they are named now. Nothing that was
+ * scanned before stops being scanned: a top-level membership clause is still a
+ * leaf of the tree.
+ */
+function groupReferencesUnder(node: ClauseTreeNode): readonly ClauseGroupReference[] {
+  if (node.node === 'leaf') return node.groupReferences ?? [];
+  return node.children.flatMap(groupReferencesUnder);
+}
+
 /** Transitions worth scanning: a rule already moving is reported on its own row. */
 const SECOND_ORDER_TRANSITIONS: ReadonlySet<RuleTransition> = new Set<RuleTransition>([
   'unchanged-match',
@@ -473,11 +494,10 @@ function secondOrderScan(
   const names = new Set<string>();
   for (const evaluation of evaluations) {
     if (!SECOND_ORDER_TRANSITIONS.has(evaluation.effect.transition)) continue;
-    const { clauses } = explainRuleExpression(evaluation.effect.expression, drafted, {
+    const { tree } = explainRuleExpression(evaluation.effect.expression, drafted, {
       groups: context,
     });
-    const references = clauses.flatMap((clause) => clause.groupReferences ?? []);
-    const touches = references.some((reference) =>
+    const touches = groupReferencesUnder(tree).some((reference) =>
       affected.some((group) => referenceNames(reference, group)),
     );
     if (touches) names.add(evaluation.effect.ruleName);

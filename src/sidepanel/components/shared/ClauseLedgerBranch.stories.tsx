@@ -104,7 +104,11 @@ export const NoKleeneNoteWhenFullyEvaluated: Story = {
   },
 };
 
-/** A subtree collapsed by the depth cap: the AlertMessage pattern names what was lost. */
+/**
+ * A subtree collapsed by the depth cap (`truncation: 'depth'`): every clause is
+ * still on screen with its verdict — only the nesting under one of them was
+ * folded up — and the warning says exactly that.
+ */
 export const TruncatedSubtree: Story = {
   args: {
     node: {
@@ -115,7 +119,28 @@ export const TruncatedSubtree: Story = {
       decidedByChildIndices: [1],
       undecidedChildCount: 0,
       depth: 0,
-      truncated: true,
+      truncation: 'depth',
+    } satisfies ConnectiveNode,
+  },
+};
+
+/**
+ * The other truncation (`truncation: 'clause-cap'`): clauses past the cap were
+ * dropped outright, so the warning has to say clauses are **missing from the
+ * list** rather than merely nested out of view. The count that was kept is on
+ * `summary.totalClauses`, above this branch.
+ */
+export const TruncatedClauseCap: Story = {
+  args: {
+    node: {
+      node: 'connective',
+      kind: 'and',
+      children: [passingLeaf, failingLeaf],
+      verdict: 'fail',
+      decidedByChildIndices: [1],
+      undecidedChildCount: 0,
+      depth: 0,
+      truncation: 'clause-cap',
     } satisfies ConnectiveNode,
   },
 };

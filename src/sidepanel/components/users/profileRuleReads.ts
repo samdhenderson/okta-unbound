@@ -28,15 +28,22 @@
  * claims "rules that read this and feed a group you are in", and that is what it
  * computes.
  *
- * ## No I/O, no second parser
+ * ## No I/O, no second parser, and no scan of clause text
  *
  * Pure and synchronous, like
  * {@link module:sidepanel/components/users/comparison/comparisonAnalytics}. The
- * attribute references come from clause text already produced by
- * {@link explainRuleExpression} — the app's one parse of a rule condition — plus
- * {@link FormattedRule.userAttributes}, which the API boundary already extracted
- * and which is the only source that survives an expression the parser rejects.
- * Nothing here fetches, and no new API call is needed to render a chip.
+ * attribute references are the {@link AttributeRead}s
+ * {@link explainRuleExpression} already collected off the AST — the app's one
+ * parse of a rule condition — plus {@link FormattedRule.userAttributes}, which
+ * the API boundary extracted and which is the only source that survives an
+ * expression the parser rejects. Nothing here fetches, and no new API call is
+ * needed to render a chip.
+ *
+ * This module used to re-scan each clause's *rendered text* with three regular
+ * expressions, one of which existed only to blank out string literals so that
+ * `isMemberOfAnyGroupName("user.department")` would not be counted as a read.
+ * The explainer answers that from the syntax tree, where a quoted argument is a
+ * literal and can never be mistaken for a dereference, so the regexes are gone.
  *
  * ## Security
  *
@@ -47,36 +54,43 @@
  * map even if a tenant rule references one.
  */
 import type { FormattedRule, GroupMembership, OktaUser } from '../../../shared/types';
-import { explainRuleExpression } from '../../../shared/rules/explainExpression';
+import {
+  explainRuleExpression,
+  type ClauseTreeNode,
+} from '../../../shared/rules/explainExpression';
 import { isExcludedProfileField } from '../../../shared/utils/profileFields';
 
-/** `user.department` — the ordinary dotted reference. */
-const DOT_REFERENCE = /\buser\.([A-Za-z_$][A-Za-z0-9_$]*)/g;
-
 /**
- * `user["department"]` — the computed form. Rare in tenant-authored rules, but
- * the AST unparser emits it verbatim, and dropping it would silently under-count
- * a chip rather than fail loudly.
- */
-const BRACKET_REFERENCE = /\buser\[(['"])([^'"]*)\1\]/g;
-
-/**
- * A quoted string literal, escapes included.
+ * The Okta attribute name behind one {@link AttributeRead.path}, or `undefined`
+ * for a path this module cannot name.
  *
- * Literals are blanked out *before* references are collected, because a rule may
- * legitimately carry `user.department` inside a quoted argument —
- * `isMemberOfAnyGroupName("user.department")` names a group, it does not read an
- * attribute — and counting that would put a chip beside `department` for a rule
- * that never looks at it. The bracket form is matched from the original text
- * first, since its attribute name *is* a literal.
+ * The explainer normalises every read to one of two forms — `user.<identifier>`
+ * or `user["<key>"]`, always double-quoted — so this is an un-normalisation of a
+ * known shape, not a parse of tenant text. Anything else is skipped rather than
+ * guessed at: a key the map cannot name is one no attribute row could match.
  */
-const STRING_LITERAL = /(['"])(?:\\.|(?!\1)[^\\])*\1/g;
+function attributeNameOf(path: string): string | undefined {
+  if (path.startsWith('user.')) return path.slice('user.'.length) || undefined;
+  if (path.startsWith('user["') && path.endsWith('"]')) {
+    try {
+      const parsed: unknown = JSON.parse(path.slice('user['.length, -1));
+      return typeof parsed === 'string' && parsed !== '' ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
 
-/** Add every `user.<attr>` / `user["<attr>"]` reference in `text` to `into`. */
-function collectReferences(text: string, into: Set<string>): void {
-  for (const match of text.matchAll(BRACKET_REFERENCE)) into.add(match[2]);
-  for (const match of text.replace(STRING_LITERAL, '""').matchAll(DOT_REFERENCE)) {
-    into.add(match[1]);
+/** Add every attribute read under one clause-tree node to `into`. */
+function collectReads(node: ClauseTreeNode, into: Set<string>): void {
+  if (node.node === 'connective') {
+    for (const child of node.children) collectReads(child, into);
+    return;
+  }
+  for (const read of node.reads) {
+    const name = attributeNameOf(read.path);
+    if (name !== undefined) into.add(name);
   }
 }
 
@@ -84,10 +98,16 @@ function collectReferences(text: string, into: Set<string>): void {
  * The profile attributes one rule's condition reads.
  *
  * Two sources, unioned rather than ranked, because each covers the other's gap:
- * the clause explanation is AST-derived (so it sees a computed reference and
- * cannot be fooled by a quoted string), while `userAttributes` was extracted at
- * the API boundary and still answers for an expression the parser rejected — in
- * which case `clauses` is empty and the attribute would otherwise vanish.
+ *
+ * - the explainer's {@link AttributeRead}s are AST-derived, so they see a
+ *   computed reference (`user["cost center"]`) and cannot be fooled by an
+ *   attribute name inside a quoted argument; but a read whose value the evaluator
+ *   could not resolve *for a reason other than absence* — an object-valued
+ *   attribute, say — is deliberately not recorded there;
+ * - `userAttributes` was extracted at the API boundary and still answers for an
+ *   expression the parser rejected outright, in which case the tree is a single
+ *   reasonCode-carrying leaf with no reads at all and the attribute would
+ *   otherwise vanish from the map.
  */
 function attributesReadBy(rule: FormattedRule, user: OktaUser): Set<string> {
   const names = new Set<string>();
@@ -97,9 +117,7 @@ function attributesReadBy(rule: FormattedRule, user: OktaUser): Set<string> {
     // `rule.condition` is deliberately not consulted: it is the display string,
     // which has had `user.` stripped out of it, so it cannot be parsed for
     // references at all.
-    for (const clause of explainRuleExpression(expression, user).clauses) {
-      collectReferences(clause.expressionText, names);
-    }
+    collectReads(explainRuleExpression(expression, user).tree, names);
   }
 
   for (const name of rule.userAttributes ?? []) names.add(name);

@@ -154,11 +154,6 @@ export type RuleExprValue = ExprValue;
  *   or a unary minus whose argument is not a numeric literal (`-user.x`, `-(expr)`, `-"a"`).
  * - `group-membership-fn` — a {@link GROUP_MEMBERSHIP_FUNCTIONS} call made without
  *   a {@link RuleGroupContext}; answering it needs the user's full group list.
- * - `group-name-regex` — retired from the emit path by ADR-0002, which replaced the
- *   blanket refusal of `isMemberOfGroupNameRegex` with the linear-time engine in
- *   `shared/rules/safeRegex`. Nothing produces this code any more; it stays in the
- *   union (and in the copy table) until the flat-explanation cleanup lands, so a
- *   stored or in-flight value still renders.
  * - `regex-unsupported-syntax` — `isMemberOfGroupNameRegex` was given a pattern the
  *   safe engine does not implement (lookaround, a backreference, `{n,m}`) or cannot
  *   parse at all. Declined, never approximated.
@@ -190,7 +185,6 @@ export type RuleUnevaluableReason =
   | 'parse-error'
   | 'unsupported-operator'
   | 'group-membership-fn'
-  | 'group-name-regex'
   | 'regex-unsupported-syntax'
   | 'regex-too-complex'
   | 'unknown-fn'

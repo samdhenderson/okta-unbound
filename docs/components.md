@@ -69,8 +69,9 @@ const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' }
 
 ### `ClauseLedger` family
 
-Renders {@link module:shared/rules/explainExpression.explainRuleExpression}'s **tree**
-projection — `&&`/`||` structure intact, rather than a flattened row-per-clause list.
+Renders {@link module:shared/rules/explainExpression.explainRuleExpression}'s
+**tree** — `&&`/`||` structure intact. It is the explainer's only projection; the
+flat row-per-clause list it sat beside during the migration is gone.
 It replaced `groups/detail/ClauseChecklist`, which no longer exists;
 `users/MembershipRuleEvidence` is the production adopter. `ClauseLedger` composes
 `ClauseLedgerBranch` (a connective group, indented under a rail, with the
