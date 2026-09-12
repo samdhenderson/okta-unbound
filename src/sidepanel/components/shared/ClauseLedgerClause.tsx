@@ -1,9 +1,22 @@
 /**
  * @module sidepanel/components/shared/ClauseLedgerClause
  * @description One {@link module:shared/rules/explainExpression.LeafClauseNode} of
- * a {@link ClauseLedger} tree: the clause text (or, for a group-membership
- * clause, a plain-language label), its outcome chip, the group references it
- * named, and the profile evidence that drove it.
+ * a {@link ClauseLedger} tree: what the clause asks, its outcome chip, the group
+ * references it named, and the profile evidence that drove it.
+ *
+ * ## A clause is read, not printed
+ *
+ * A leaf carrying a
+ * {@link module:shared/rules/explainExpression.LeafPredicate} is stated as a
+ * sentence by {@link ClausePhrase} — **department** (lowercased) equals
+ * `"sales"` — **instead of** its expression text, not as well as it: printing
+ * both would make the reader diff two renderings of one fact. The verbatim
+ * expression stays one toggle away in the ledger's raw view.
+ *
+ * A group-membership clause keeps its own plain-language label, and a clause the
+ * explainer could not describe exactly falls back to its verbatim text through
+ * {@link RuleExpressionText} — exact text is always better than an approximate
+ * sentence (`docs/claims.md`).
  *
  * ## `not-evaluated` is never a failure
  *
@@ -31,6 +44,8 @@ import Icon, { type IconType } from './Icon';
 import RuleExpressionText, { type GroupNameResolver } from './RuleExpressionText';
 import StableWidth from './StableWidth';
 import GroupReferenceChip from './GroupReferenceChip';
+import ClausePhrase from './ClausePhrase';
+import { formatRuleValue } from './ruleValueText';
 import { UNEVALUABLE_REASON_TEXT } from '../../../shared/rules/unevaluableReasonText';
 import {
   ATTRIBUTE_ABSENT,
@@ -38,7 +53,6 @@ import {
   type ClauseStatus,
   type LeafClauseNode,
 } from '../../../shared/rules/explainExpression';
-import type { RuleExprValue } from '../../../shared/ruleEvaluator';
 
 /** Props for {@link ClauseLedgerClause}. */
 export interface ClauseLedgerClauseProps {
@@ -121,18 +135,6 @@ const GroupClauseLabel: React.FC<{ leaf: LeafClauseNode }> = ({ leaf }) => {
   );
 };
 
-/**
- * Render one attribute value: strings keep their quotes, `null` prints as
- * `null`, and a multi-valued attribute joins its entries — never through
- * `String(value)`, which would make `["a","b"]` indistinguishable from the
- * single string `"a,b"`.
- */
-function formatAttributeValue(value: RuleExprValue): string {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return value.map(formatAttributeValue).join(', ');
-  return typeof value === 'string' ? JSON.stringify(value) : String(value);
-}
-
 /** One `path → value` evidence line. Absent is never zero — see the module header. */
 const AttributeReadLine: React.FC<{ read: AttributeRead }> = ({ read }) => (
   <p className="text-xs text-neutral-500">
@@ -140,7 +142,7 @@ const AttributeReadLine: React.FC<{ read: AttributeRead }> = ({ read }) => (
     {read.value === ATTRIBUTE_ABSENT ? (
       <span>not set</span>
     ) : (
-      <span className="font-mono text-xs text-neutral-700">{formatAttributeValue(read.value)}</span>
+      <span className="font-mono text-xs text-neutral-700">{formatRuleValue(read.value)}</span>
     )}
   </p>
 );
@@ -160,6 +162,8 @@ const ClauseLedgerClause: React.FC<ClauseLedgerClauseProps> = ({ leaf, resolveGr
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
         {isGroupClause ? (
           <GroupClauseLabel leaf={leaf} />
+        ) : leaf.predicate ? (
+          <ClausePhrase predicate={leaf.predicate} className="min-w-0" />
         ) : (
           <RuleExpressionText
             text={leaf.expressionText}

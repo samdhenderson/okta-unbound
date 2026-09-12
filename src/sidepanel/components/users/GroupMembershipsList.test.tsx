@@ -57,6 +57,26 @@ const base = { memberships: [formattedRuleMembership], isLoading: false };
 const openRow = (groupName: string) =>
   userEvent.click(screen.getByRole('button', { name: `Show how ${groupName} was granted` }));
 
+/**
+ * Every clause sentence the ledger rendered, flattened.
+ *
+ * `ClauseLedgerClause` now states a recognised clause in words
+ * (**department** equals `"Engineering"`) instead of printing its expression
+ * text, so a clause is asserted by the sentence it reads as. Each sentence is
+ * the parent of the bold attribute name at its head.
+ */
+const clauseSentences = (): string[] =>
+  Array.from(document.querySelectorAll('b')).map((bold) =>
+    (bold.parentElement?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+  );
+
+/** The "Reads" chip row of the rule evidence, which names attributes verbatim. */
+const readsSection = (): HTMLElement => {
+  const section = screen.getByText('Reads').parentElement;
+  if (!section) throw new Error('no Reads section rendered');
+  return section;
+};
+
 /** One row's subtree, via the row-identity attribute `ListRow` carries. */
 const rowFor = (groupId: string): HTMLElement => {
   const row = document.querySelector<HTMLElement>(`[data-group-id="${groupId}"]`);
@@ -71,7 +91,7 @@ describe('GroupMembershipsList', () => {
 
     // Previously this surface rendered nothing at all: it read
     // `rule.conditions.expression.value`, which a FormattedRule never has.
-    expect(screen.getByText('user.department == "Engineering"')).toBeInTheDocument();
+    expect(clauseSentences()).toContain('department equals "Engineering"');
     expect(screen.getByText('Pass')).toBeInTheDocument();
   });
 
@@ -80,7 +100,7 @@ describe('GroupMembershipsList', () => {
     await openRow('Engineering');
 
     expect(screen.getByText('Reads')).toBeInTheDocument();
-    expect(screen.getByText('department')).toBeInTheDocument();
+    expect(within(readsSection()).getByText('department')).toBeInTheDocument();
   });
 
   it('reads an attribute named inside a string literal as text, not as an attribute', async () => {
@@ -104,8 +124,9 @@ describe('GroupMembershipsList', () => {
     await openRow('Engineering');
 
     // One attribute is read; the other is a value the rule compares against.
-    expect(screen.getByText('department')).toBeInTheDocument();
-    expect(screen.queryByText('title')).not.toBeInTheDocument();
+    expect(within(readsSection()).getByText('department')).toBeInTheDocument();
+    expect(within(readsSection()).queryByText('title')).not.toBeInTheDocument();
+    expect(clauseSentences()).toContain('department equals "user.title"');
   });
 
   /**
@@ -201,7 +222,7 @@ describe('GroupMembershipsList', () => {
     );
     await openRow('Engineering');
 
-    expect(screen.getByText('user.title == "Intern"')).toBeInTheDocument();
+    expect(clauseSentences()).toContain('title equals "Intern"');
     expect(screen.getByText('Pass')).toBeInTheDocument();
   });
 
@@ -761,7 +782,7 @@ describe('GroupMembershipsList — proving one membership against Okta', () => {
 
     // The clause-by-clause explanation of the candidate rule is still there: the
     // proof adds Okta's answer, it does not delete the evidence behind the guess.
-    expect(screen.getByText('user.department == "Engineering"')).toBeInTheDocument();
+    expect(clauseSentences()).toContain('department equals "Engineering"');
     expect(screen.getByText('Rule:')).toBeInTheDocument();
   });
 

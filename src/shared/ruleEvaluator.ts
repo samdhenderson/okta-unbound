@@ -97,8 +97,16 @@ for (const operator of WORD_UNARY_OPERATORS) {
  * `operator === '-'` branch): it negates a constant rather than negating a
  * boolean, so it does not belong in this set. Anything else (`+`, `~`) is not
  * a group-rule condition and stays unevaluable.
+ *
+ * Exported because `shared/rules/explainExpression` has to recognise the same
+ * negations when it describes a clause in words: a second, hand-restated list
+ * there would be free to drift, and a negation missed is a description that
+ * says the opposite of what the rule asks.
  */
-const NEGATION_OPERATORS: ReadonlySet<string> = new Set(['!', ...WORD_UNARY_OPERATORS]);
+export const RULE_NEGATION_OPERATORS: ReadonlySet<string> = new Set(['!', ...WORD_UNARY_OPERATORS]);
+
+/** Module-internal alias of {@link RULE_NEGATION_OPERATORS}. */
+const NEGATION_OPERATORS = RULE_NEGATION_OPERATORS;
 
 /**
  * Hard cap on the expression length we will parse at all. Rule expressions are

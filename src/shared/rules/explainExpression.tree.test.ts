@@ -288,6 +288,14 @@ describe('leaves and the summary are the same walk', () => {
       resolvedValue: 'Engineering',
       status: 'pass',
       reads: [{ path: 'user.department', value: 'Engineering' }],
+      // "The full clause facts" now include what the clause *asks*, which is
+      // what lets the ledger state it in words instead of printing it.
+      predicate: {
+        form: 'compare',
+        subject: { path: 'user.department', transforms: [] },
+        operator: 'eq',
+        operand: 'Engineering',
+      },
     });
 
     // The alternatives of the OR are its children — the only place they live now

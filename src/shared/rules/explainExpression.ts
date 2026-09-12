@@ -68,6 +68,15 @@
  * (conjuncts of the root, a disjunction counted as one), which is what it always
  * counted and what the sentence above the ledger says.
  *
+ * ## A clause also says what it asks
+ *
+ * Beside its text, a recognisable leaf carries a {@link LeafPredicate}: the
+ * subject attribute, the transforms wrapped around it, the comparison, and the
+ * operand, as **data**. That is what lets the UI state
+ * `String.toLowerCase(user.department) == "sales"` as a sentence instead of
+ * printing it. Recognition is syntactic, off the same AST nodes the clause is
+ * evaluated from, and exact or absent — never approximate.
+ *
  * @see {@link explainRuleExpression}
  */
 
@@ -75,6 +84,7 @@ import type jsep from 'jsep';
 import {
   RULE_CONJUNCTIVE_OPERATORS,
   RULE_DISJUNCTIVE_OPERATORS,
+  RULE_NEGATION_OPERATORS,
   checkRuleNodeSupport,
   evaluateParsedRule,
   evaluateRuleNode,
@@ -185,6 +195,84 @@ export interface AttributeRead {
 }
 
 /**
+ * A value-transforming Okta EL function this module can describe in words.
+ *
+ * Deliberately a closed set, and deliberately not every function the evaluator
+ * supports: a transform is listed here only when there is an unambiguous English
+ * reading of it (`String.toLowerCase` → "lowercased"). `String.substring` and
+ * `String.stringSwitch` have no such reading, so a clause using one carries no
+ * {@link LeafPredicate} at all rather than an approximate description.
+ */
+export type SubjectTransform =
+  'toLowerCase' | 'toUpperCase' | 'removeSpaces' | 'len' | 'size' | 'toCsvString';
+
+/** The attribute a clause is *about*, plus the functions wrapped around it. */
+export interface SubjectDescription {
+  /**
+   * The attribute's display path, in the same normalised form as
+   * {@link AttributeRead.path} (`user.department`, `user["cost center"]`), so a
+   * description and the evidence line under it name the attribute identically.
+   * **Untrusted:** render escaped.
+   */
+  readonly path: string;
+  /**
+   * The transforms wrapped around {@link path}, **innermost first**:
+   * `String.toLowerCase(String.removeSpaces(user.x))` is
+   * `['removeSpaces', 'toLowerCase']`. Empty for a bare attribute read.
+   */
+  readonly transforms: readonly SubjectTransform[];
+}
+
+/** The comparison a `compare` predicate makes, normalised to subject-on-left. */
+export type ComparisonOperator = 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte';
+
+/**
+ * What a leaf clause *says*, as data — the structured half of
+ * {@link LeafClauseNode.expressionText}.
+ *
+ * Recognised purely syntactically off the very AST nodes the clause was
+ * evaluated from, so a description can never disagree with the verdict beside
+ * it, and **no evaluation is involved**: this states what the rule asks, never
+ * what the answer was. Where recognition is uncertain the field is absent
+ * rather than approximate (`docs/claims.md`) — a caller with no predicate falls
+ * back to printing the clause text, which is always exact.
+ *
+ * Data, never prose: the wording lives in the UI, and nothing may branch on a
+ * display string.
+ */
+export type LeafPredicate =
+  | {
+      readonly form: 'compare';
+      readonly subject: SubjectDescription;
+      readonly operator: ComparisonOperator;
+      readonly operand: RuleExprValue;
+    }
+  | {
+      readonly form: 'compare-subjects';
+      readonly left: SubjectDescription;
+      readonly operator: ComparisonOperator;
+      readonly right: SubjectDescription;
+    }
+  | {
+      readonly form: 'contains' | 'starts-with' | 'ends-with';
+      readonly subject: SubjectDescription;
+      readonly operand: string;
+      readonly negated: boolean;
+    }
+  | {
+      readonly form: 'array-contains';
+      readonly subject: SubjectDescription;
+      readonly operand: RuleExprValue;
+      readonly negated: boolean;
+    }
+  | { readonly form: 'empty'; readonly subject: SubjectDescription; readonly negated: boolean }
+  | {
+      readonly form: 'boolean-attribute';
+      readonly subject: SubjectDescription;
+      readonly negated: boolean;
+    };
+
+/**
  * A leaf of {@link RuleExplanation.tree}: one indivisible clause of a rule
  * condition, explained against one user.
  *
@@ -247,6 +335,18 @@ export interface LeafClauseNode {
    * Empty for a clause that reads no attribute at all.
    */
   readonly reads: readonly AttributeRead[];
+  /**
+   * What this clause asks, structurally — present only when the clause is one
+   * of the shapes {@link LeafPredicate} recognises, so a caller can compose a
+   * sentence instead of printing `String.toLowerCase(user.department) ==
+   * "sales"` at the reader.
+   *
+   * **Absent is the normal case for anything unusual**, and absent means
+   * "describe this clause by its text", never "this clause is simple". A
+   * group-membership clause never carries one: it is described from
+   * {@link groupRequirement} and {@link groupReferences} instead.
+   */
+  readonly predicate?: LeafPredicate;
 }
 
 /** Whether a {@link ConnectiveNode} joins its children with `&&` or with `||`. */
@@ -797,6 +897,243 @@ function groupClauseFactsOf(
   return { requirement: negated ? 'non-member' : 'member', references };
 }
 
+// ---------------------------------------------------------------------------
+// Predicate description
+//
+// Purely syntactic recognition over the same AST nodes the clause is evaluated
+// from. Nothing here evaluates anything, so a description cannot disagree with
+// the verdict printed beside it; anything not recognised exactly yields no
+// description at all.
+// ---------------------------------------------------------------------------
+
+/** Fully-qualified callee name — `String.toLowerCase`, or a bare `isMemberOfGroup`. */
+function calleeNameOf(call: jsep.CallExpression): string | undefined {
+  const identifier = asIdentifier(call.callee);
+  if (identifier) return identifier.name;
+  const member = asMemberExpression(call.callee);
+  if (!member || member.computed) return undefined;
+  const object = asIdentifier(member.object);
+  const property = asIdentifier(member.property);
+  return object && property ? `${object.name}.${property.name}` : undefined;
+}
+
+/** Okta EL function → the {@link SubjectTransform} it applies to its one argument. */
+const SUBJECT_TRANSFORM_BY_FUNCTION = new Map<string, SubjectTransform>([
+  ['String.toLowerCase', 'toLowerCase'],
+  ['String.toUpperCase', 'toUpperCase'],
+  ['String.removeSpaces', 'removeSpaces'],
+  ['String.len', 'len'],
+  ['Arrays.size', 'size'],
+  ['Arrays.toCsvString', 'toCsvString'],
+]);
+
+/** Binary operator (symbolic and Okta's word forms) → {@link ComparisonOperator}. */
+const COMPARISON_OPERATORS = new Map<string, ComparisonOperator>([
+  ['==', 'eq'],
+  ['===', 'eq'],
+  ['eq', 'eq'],
+  ['!=', 'ne'],
+  ['!==', 'ne'],
+  ['ne', 'ne'],
+  ['<', 'lt'],
+  ['<=', 'lte'],
+  ['>', 'gt'],
+  ['>=', 'gte'],
+]);
+
+/**
+ * A `user.*` read, optionally wrapped in {@link SUBJECT_TRANSFORM_BY_FUNCTION}
+ * calls — or `undefined` for anything else.
+ *
+ * Transforms come back **innermost first**, which is the order they are applied
+ * in and therefore the order they read in.
+ */
+function subjectDescriptionOf(node: jsep.Expression): SubjectDescription | undefined {
+  const path = attributePathOf(node);
+  if (path !== undefined) return { path, transforms: [] };
+
+  const call = asCallExpression(node);
+  if (!call || call.arguments.length !== 1) return undefined;
+  const name = calleeNameOf(call);
+  const transform = name === undefined ? undefined : SUBJECT_TRANSFORM_BY_FUNCTION.get(name);
+  if (!transform) return undefined;
+
+  const argument = call.arguments[0];
+  const inner = argument ? subjectDescriptionOf(argument) : undefined;
+  if (!inner) return undefined;
+  return { path: inner.path, transforms: [...inner.transforms, transform] };
+}
+
+/** A scalar literal's value, or `undefined` for any other node. `null` is a value. */
+function scalarLiteralValueOf(node: jsep.Expression): RuleExprValue | undefined {
+  const literal = asLiteral(node);
+  if (!literal) return undefined;
+  const { value } = literal;
+  if (value === null) return null;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  return undefined;
+}
+
+/** The mirror of a comparison, for normalising a literal-on-the-left clause. */
+function mirrorOperator(operator: ComparisonOperator): ComparisonOperator {
+  switch (operator) {
+    case 'lt':
+      return 'gt';
+    case 'lte':
+      return 'gte';
+    case 'gt':
+      return 'lt';
+    case 'gte':
+      return 'lte';
+    default:
+      return operator;
+  }
+}
+
+/**
+ * The **exact complement** of a comparison, for describing `!(…)`.
+ *
+ * Sound because the evaluator's relational operators resolve only when both
+ * operands are genuine numbers (`evaluateRelational`), so trichotomy holds for
+ * every verdict that exists to be described: if `a < b` resolved to `false`
+ * then `a >= b` is `true`, with no third case where both are false. Equality is
+ * strict `===`/`!==`, whose complement is likewise total.
+ */
+function complementOperator(operator: ComparisonOperator): ComparisonOperator {
+  switch (operator) {
+    case 'eq':
+      return 'ne';
+    case 'ne':
+      return 'eq';
+    case 'lt':
+      return 'gte';
+    case 'gte':
+      return 'lt';
+    case 'gt':
+      return 'lte';
+    case 'lte':
+      return 'gt';
+  }
+}
+
+/** `!p` as a predicate of its own: comparisons invert, flag-carrying forms flip. */
+function negatePredicate(predicate: LeafPredicate): LeafPredicate {
+  switch (predicate.form) {
+    case 'compare':
+      return { ...predicate, operator: complementOperator(predicate.operator) };
+    case 'compare-subjects':
+      return { ...predicate, operator: complementOperator(predicate.operator) };
+    default:
+      return { ...predicate, negated: !predicate.negated };
+  }
+}
+
+/** The `compare` / `compare-subjects` forms, normalised to subject-on-the-left. */
+function comparisonPredicateOf(binary: jsep.BinaryExpression): LeafPredicate | undefined {
+  const operator = COMPARISON_OPERATORS.get(binary.operator);
+  if (!operator) return undefined;
+
+  const left = subjectDescriptionOf(binary.left);
+  const right = subjectDescriptionOf(binary.right);
+  if (left && right) return { form: 'compare-subjects', left, operator, right };
+
+  if (left) {
+    const operand = scalarLiteralValueOf(binary.right);
+    return operand === undefined
+      ? undefined
+      : { form: 'compare', subject: left, operator, operand };
+  }
+  if (right) {
+    // `"sales" == user.department` says the same thing the other way round; the
+    // relational operators mirror so the sentence still reads subject-first.
+    const operand = scalarLiteralValueOf(binary.left);
+    return operand === undefined
+      ? undefined
+      : { form: 'compare', subject: right, operator: mirrorOperator(operator), operand };
+  }
+  return undefined;
+}
+
+/** The call forms — `String.stringContains`, `Arrays.contains`, `Arrays.isEmpty`. */
+function callPredicateOf(call: jsep.CallExpression): LeafPredicate | undefined {
+  const name = calleeNameOf(call);
+  if (name === undefined) return undefined;
+
+  const [first, second] = call.arguments;
+  const subject = first ? subjectDescriptionOf(first) : undefined;
+  if (!subject) return undefined;
+
+  if (name === 'Arrays.isEmpty' && call.arguments.length === 1) {
+    return { form: 'empty', subject, negated: false };
+  }
+  if (call.arguments.length !== 2 || !second) return undefined;
+
+  if (name === 'Arrays.contains') {
+    const operand = scalarLiteralValueOf(second);
+    return operand === undefined
+      ? undefined
+      : { form: 'array-contains', subject, operand, negated: false };
+  }
+
+  const stringForm =
+    name === 'String.stringContains'
+      ? 'contains'
+      : name === 'String.startsWith'
+        ? 'starts-with'
+        : name === 'String.endsWith'
+          ? 'ends-with'
+          : undefined;
+  if (!stringForm) return undefined;
+  const operand = scalarLiteralValueOf(second);
+  if (typeof operand !== 'string') return undefined;
+  return { form: stringForm, subject, operand, negated: false };
+}
+
+/**
+ * A clause's predicate **without** looking through a negation — the positive
+ * shapes only.
+ *
+ * Kept separate from {@link leafPredicateOf} so that `!!x` describes nothing:
+ * the inner `!` is a unary expression, which is not a positive shape, exactly
+ * as `ruleEvaluator` declines to reason about double negation.
+ */
+function positivePredicateOf(node: jsep.Expression): LeafPredicate | undefined {
+  const binary = asBinaryExpression(node);
+  if (binary) return comparisonPredicateOf(binary);
+
+  const call = asCallExpression(node);
+  if (call) return callPredicateOf(call);
+
+  // A bare attribute standing as a whole clause is a boolean question about it.
+  // The evaluator resolves such a clause only when the attribute really is a
+  // boolean, so "is true"/"is false" is the whole of what it can say.
+  const subject = subjectDescriptionOf(node);
+  return subject && subject.transforms.length === 0
+    ? { form: 'boolean-attribute', subject, negated: false }
+    : undefined;
+}
+
+/**
+ * What one leaf clause asks, or `undefined` when it is not a shape this module
+ * can state exactly.
+ *
+ * One level of negation is looked through and folded into the predicate — see
+ * {@link negatePredicate}. Group-membership calls are never described here:
+ * their arguments are groups, not attributes, so `subjectDescriptionOf` finds
+ * no subject and they keep their existing
+ * {@link LeafClauseNode.groupRequirement} treatment.
+ */
+function leafPredicateOf(node: jsep.Expression): LeafPredicate | undefined {
+  const unary = asUnaryExpression(node);
+  if (unary && RULE_NEGATION_OPERATORS.has(unary.operator)) {
+    const inner = positivePredicateOf(unary.argument);
+    return inner ? negatePredicate(inner) : undefined;
+  }
+  return positivePredicateOf(node);
+}
+
 /**
  * Explain one clause: grammar gate first, then evaluation, then the
  * "is it actually a condition?" gate.
@@ -821,9 +1158,14 @@ function computeClauseCore(node: jsep.Expression, ctx: ExplainContext): ClauseCo
   // naming the groups a clause asks about is useful even when we could not
   // answer it.
   const groupFacts = groupClauseFactsOf(node, groups);
+  // Syntactic, and independent of both gates below: a clause the evaluator
+  // could not resolve is still worth stating in words, and the description says
+  // only what the rule asks, never what the answer was.
+  const predicate = leafPredicateOf(node);
   const base = {
     expressionText: stringifyNode(node),
     resolvedValue: resolveClauseValue(node, ctx),
+    ...(predicate ? { predicate } : {}),
     ...(groupFacts
       ? { groupReferences: groupFacts.references, groupRequirement: groupFacts.requirement }
       : {}),
