@@ -31,6 +31,7 @@ export { default as Tooltip } from './Tooltip';
 export { default as CollapsibleSection } from './CollapsibleSection';
 export { default as DetailSection } from './DetailSection';
 export { default as InsightCard } from './InsightCard';
+export { default as SpreadBar } from './SpreadBar';
 export { default as ActionBar } from './ActionBar';
 export { default as Badge } from './Badge';
 export { default as EntityIdentity } from './EntityIdentity';
@@ -60,6 +61,7 @@ export type { ListRowDensity, ListRowState, ListRowAs, ListRowProps } from './Li
 export type { AlertMessageData, AlertAction } from './AlertMessage';
 export type { DetailSectionProps } from './DetailSection';
 export type { InsightCardProps } from './InsightCard';
+export type { SpreadBarProps, SpreadBarSegment } from './SpreadBar';
 export type { ActionBarProps, ActionDescriptor, ActionPriority, ActionRegister } from './ActionBar';
 export type { BadgeVariant, BadgeProps } from './Badge';
 export type { EntityLinkProps } from './EntityLink';
