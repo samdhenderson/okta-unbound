@@ -146,4 +146,57 @@ describe('ClauseLedger', () => {
     render(<ClauseLedger expression='user.department == "Engineering"' user={user} />);
     expect(screen.getByText('Rule matches this user')).toBeInTheDocument();
   });
+
+  it('names a genuine no-match verdict, distinct from an unevaluable one', () => {
+    render(<ClauseLedger expression='user.title == "Staff Engineer"' user={user} />);
+    expect(screen.getByText('Rule does not match')).toBeInTheDocument();
+  });
+
+  it('names an unevaluable verdict as "cannot be determined", never as a match or no-match', () => {
+    render(<ClauseLedger expression="user.department ==" user={user} />);
+    expect(screen.getByText('Cannot be determined')).toBeInTheDocument();
+  });
+
+  it('states the evaluated/not-evaluated/needs-group-context counts above the tree', () => {
+    render(
+      <ClauseLedger
+        expression={
+          'user.department == "Engineering" && user.title != "Intern" && isMemberOfGroup("00gFAKELEDGERTEST9")'
+        }
+        user={user}
+      />,
+    );
+
+    expect(screen.getByText(/2 of 3 clauses evaluated/)).toBeInTheDocument();
+    expect(screen.getByText(/1 not evaluated/)).toBeInTheDocument();
+    expect(screen.getByText(/1 needs group context/)).toBeInTheDocument();
+  });
+
+  it('treats an absent condition as not evaluated, never as "matches nothing"', () => {
+    render(<ClauseLedger expression="" user={user} />);
+
+    expect(screen.getByText(UNEVALUABLE_REASON_TEXT['empty'])).toBeInTheDocument();
+    expect(screen.queryByText('Fail')).not.toBeInTheDocument();
+  });
+
+  it('reports an unparseable condition as not evaluated, with its own reason', () => {
+    render(<ClauseLedger expression="user.department ==" user={user} />);
+
+    expect(screen.getByText(UNEVALUABLE_REASON_TEXT['parse-error'])).toBeInTheDocument();
+    expect(screen.queryByText('Fail')).not.toBeInTheDocument();
+  });
+
+  it('discloses truncation via an AlertMessage when the clause cap drops siblings', () => {
+    // 70 flat OR'd clauses — past the explainer's default 64-clause cap — with no
+    // nesting at all, so this exercises the sibling-drop path rather than the
+    // depth-collapse path.
+    const hugeExpression = Array.from(
+      { length: 70 },
+      (_, i) => `user.department == "Team ${i}"`,
+    ).join(' || ');
+
+    render(<ClauseLedger expression={hugeExpression} user={user} />);
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
 });

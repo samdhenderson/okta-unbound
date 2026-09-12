@@ -15,7 +15,8 @@
  * client-side evaluator could not resolve. That is a limit of the evaluator,
  * **not** a failed match and not a member who does not belong — so it is spelled
  * out in words next to the strip and points at the surface that breaks the same
- * condition down clause by clause ({@link ClauseChecklist}). Demoting it to a
+ * condition down clause by clause
+ * ({@link module:sidepanel/components/shared/ClauseLedger}). Demoting it to a
  * segment `title` would make the correction invisible to anyone not hovering, and
  * ADR-0023 rules tooltip-only content out of tests for exactly that reason.
  *

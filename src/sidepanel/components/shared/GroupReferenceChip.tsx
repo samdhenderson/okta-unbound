@@ -11,8 +11,8 @@
  * {@link GroupReferenceChipProps.hasContext}. Without one, `reference.satisfied`
  * would read as a definite yes/no about membership nobody checked, so the chip
  * shows no glyph at all rather than a misleading one. This mirrors
- * `ClauseChecklist`'s own rule for `not-evaluated` clauses: an unanswered
- * question is never dressed up as an answer.
+ * {@link ClauseLedgerClause}'s own rule for `not-evaluated` clauses: an
+ * unanswered question is never dressed up as an answer.
  *
  * ## Security
  *

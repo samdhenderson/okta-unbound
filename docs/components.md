@@ -70,14 +70,15 @@ const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' }
 ### `ClauseLedger` family
 
 Renders {@link module:shared/rules/explainExpression.explainRuleExpression}'s **tree**
-projection — `&&`/`||` structure intact, unlike the flat row-per-clause
-{@link module:sidepanel/components/groups/detail/ClauseChecklist}, which this family does
-not replace or adopt into anywhere yet. `ClauseLedger` composes `ClauseLedgerBranch` (a
-connective group, indented under a rail, with the Kleene-shortcut sentence when the
-structured fields say one applies) and `ClauseLedgerClause` (one leaf, including the
-plain-language label for a group-membership clause and its `GroupReferenceChip` row).
-`RawExpressionWell` is the toggled-to raw-EL view. Logic lives in `useClauseLedger`
-(memoised explanation, view-toggle state) per `docs/state-management.md`.
+projection — `&&`/`||` structure intact, rather than a flattened row-per-clause list.
+It replaced `groups/detail/ClauseChecklist`, which no longer exists;
+`users/MembershipRuleEvidence` is the production adopter. `ClauseLedger` composes
+`ClauseLedgerBranch` (a connective group, indented under a rail, with the
+Kleene-shortcut sentence when the structured fields say one applies) and
+`ClauseLedgerClause` (one leaf, including the plain-language label for a
+group-membership clause and its `GroupReferenceChip` row). `RawExpressionWell` is
+the toggled-to raw-EL view. Logic lives in `useClauseLedger` (memoised explanation,
+view-toggle state) per `docs/state-management.md`.
 
 These carry a written contract; read it before using one:
 

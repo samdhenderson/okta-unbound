@@ -7,17 +7,17 @@
  * grouping the tenant actually wrote rather than three flattened rows that lose
  * which alternative goes with which.
  *
- * This is a new, additive component family
- * (`ClauseLedger`/`ClauseLedgerBranch`/`ClauseLedgerClause`/`GroupReferenceChip`/
- * `RawExpressionWell`). No existing surface adopts it yet —
- * {@link module:sidepanel/components/groups/detail/ClauseChecklist} is
- * unchanged and remains the flat-list view in production.
+ * The component family is `ClauseLedger`/`ClauseLedgerBranch`/
+ * `ClauseLedgerClause`/`GroupReferenceChip`/`RawExpressionWell`. It replaced the
+ * flat row-per-clause `groups/detail/ClauseChecklist`, which no longer exists;
+ * {@link module:sidepanel/components/users/MembershipRuleEvidence} is its sole
+ * production adopter.
  *
  * ## `not-evaluated` is never a failure
  *
- * Exactly `ClauseChecklist`'s own rule: a clause the evaluator could not
- * resolve renders neutrally, with a plain-language reason. It never borrows the
- * `danger` treatment reserved for a clause that genuinely resolved to `false`.
+ * A clause the evaluator could not resolve renders neutrally, with a
+ * plain-language reason. It never borrows the `danger` treatment reserved for a
+ * clause that genuinely resolved to `false`.
  *
  * ## Raw view never rounds "cannot tell" to `false`
  *
@@ -29,8 +29,7 @@
  *
  * `expression` and every value the tree carries are untrusted, end-user-
  * controllable tenant data (rule text and Okta profile attributes). Rendered
- * through React's escaping only, via the same child components `ClauseChecklist`
- * uses; this module logs nothing.
+ * through React's escaping only; this module logs nothing.
  */
 import React from 'react';
 import StableWidth from './StableWidth';
@@ -46,7 +45,7 @@ import type { OktaUser } from '../../../shared/types';
 export interface ClauseLedgerProps {
   /**
    * The rule's condition expression — untrusted Okta rule text. Callers read it
-   * through the same fallback `ClauseChecklist` documents
+   * through the same fallback every consumer of this module uses
    * (`rule.conditionExpression || rule.conditions?.expression?.value || ''`).
    */
   expression: string;
@@ -55,23 +54,23 @@ export interface ClauseLedgerProps {
   /**
    * The user's **complete** group list — turns every `isMemberOf*` clause from a
    * neutral "not evaluated" into a real pass/fail. **Omit it rather than
-   * passing a subset**: see
-   * {@link module:sidepanel/components/groups/detail/ClauseChecklist}'s
-   * `groupContext` doc for why a partial list is worse than none.
+   * passing a subset**: see {@link UseClauseLedgerOptions.groupContext} for why
+   * a partial list is worse than none.
    */
   groupContext?: RuleGroupContext;
   /** Cap on the clause rows / tree leaves. Defaults to the explainer's own default. */
   maxClauses?: number;
   /**
-   * Names group ids the {@link groupContext} cannot — see `ClauseChecklist`'s
-   * own doc for the two-source merge this feeds.
+   * Names group ids the {@link groupContext} cannot — see
+   * {@link UseClauseLedgerOptions.resolveGroupName} for the two-source merge
+   * this feeds.
    */
   resolveGroupName?: GroupNameResolver;
   /** Initial state of the raw/tree toggle. Defaults to `false` (tree view). */
   defaultShowRaw?: boolean;
 }
 
-/** Whole-expression verdict → its chip label and token classes. Verbatim from `ClauseChecklist`. */
+/** Whole-expression verdict → its chip label and token classes. */
 const resultPresentation = {
   match: { label: 'Rule matches this user', chipClass: 'bg-success-light text-success-text' },
   'no-match': { label: 'Rule does not match', chipClass: 'bg-danger-light text-danger-text' },

@@ -31,7 +31,7 @@ const meta = {
           '**`Could not be evaluated` is neutral, and it is not a fifth shade of “unchanged”.** At least one ' +
           'of the two evaluations produced no answer, so the pair cannot be compared. The sentence comes from ' +
           'the shared `unevaluableReasonText` table rather than being rewritten here, so this surface and ' +
-          '`ClauseChecklist` cannot end up saying different things about the same reason code. It renders ' +
+          '`ClauseLedger` cannot end up saying different things about the same reason code. It renders ' +
           'neutral because nothing failed, and a `danger` palette would assert in colour what the sentence ' +
           'declines to assert in words (ADR-0017, ADR-0020).\n\n' +
           '**The expression wraps; it never truncates.** A condition clipped at the row’s edge and set beside ' +

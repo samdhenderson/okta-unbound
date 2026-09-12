@@ -34,11 +34,11 @@
  * surface's components rather than growing a second vocabulary for the same
  * facts — which is the failure `shared/membership/sourceLine` was written to fix.
  * `users/MembershipRuleEvidence` already reaches the other way for
- * `groups/detail/ClauseChecklist`, so the direction is not new.
+ * `shared/ClauseLedger`, so the direction is not new.
  *
  * **No `groupContext` is passed**, and that is deliberate. This surface holds one
  * group's roster, not each member's complete group list, so an `isMemberOf*`
- * clause has nothing here to resolve against. `ClauseChecklist` reports those as
+ * clause has nothing here to resolve against. `ClauseLedger` reports those as
  * "Cannot be determined", which is true; a context built from the one group in
  * hand would instead report every *other* group a member belongs to as a clause
  * they failed (ADR-0021).

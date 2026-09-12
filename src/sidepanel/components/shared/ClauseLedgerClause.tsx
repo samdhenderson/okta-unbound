@@ -7,8 +7,7 @@
  *
  * ## `not-evaluated` is never a failure
  *
- * Exactly the rule `ClauseChecklist` states for its own rows: a clause the
- * evaluator could not resolve renders neutrally, with a reason sentence sourced
+ * A clause the evaluator could not resolve renders neutrally, with a reason sentence sourced
  * from {@link UNEVALUABLE_REASON_TEXT} — never the `danger` treatment reserved
  * for a clause that genuinely resolved to `false`.
  *
@@ -49,7 +48,7 @@ export interface ClauseLedgerClauseProps {
   resolveGroupName?: GroupNameResolver;
 }
 
-/** How one {@link ClauseStatus} is presented — copied verbatim from `ClauseChecklist`. */
+/** How one {@link ClauseStatus} is presented. */
 interface StatusPresentation {
   readonly label: string;
   readonly icon: IconType;

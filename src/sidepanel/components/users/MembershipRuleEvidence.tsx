@@ -17,8 +17,7 @@
  */
 import React from 'react';
 import type jsep from 'jsep';
-import { Badge, EntityLink, Eyebrow, type GroupNameResolver } from '../shared';
-import ClauseChecklist from '../groups/detail/ClauseChecklist';
+import { Badge, ClauseLedger, EntityLink, Eyebrow, type GroupNameResolver } from '../shared';
 import { parseRuleExpression, type RuleGroupContext } from '../../../shared/ruleEvaluator';
 import { conditionExpressionOf } from '../../../shared/membership/ruleExpression';
 import type { MembershipRule, OktaUser } from '../../../shared/types';
@@ -113,7 +112,7 @@ export interface RuleEvidenceProps {
   /** The user to explain the rule's condition against; omitted, the raw condition is shown. */
   user?: OktaUser;
   /**
-   * The same user's **complete** group list, so the checklist can resolve
+   * The same user's **complete** group list, so the ledger can resolve
    * `isMemberOfAnyGroup` / `isMemberOfGroup*` instead of reporting them as
    * "Cannot be determined". Threaded down from the pane that already holds the
    * memberships, never rebuilt here — see
@@ -127,7 +126,7 @@ export interface RuleEvidenceProps {
   /**
    * Names the group ids {@link groupContext} cannot — the ones this user is not
    * a member of, which is usually the group the reader most needs named. Passed
-   * straight through to the checklist; see its own prop for why the two sources
+   * straight through to the ledger; see its own prop for why the two sources
    * are both needed.
    */
   resolveGroupName?: GroupNameResolver;
@@ -167,7 +166,7 @@ const MembershipRuleEvidence: React.FC<RuleEvidenceProps> = ({
       <div className="mt-2">
         <Eyebrow className="mb-1 block">Condition</Eyebrow>
         {user ? (
-          <ClauseChecklist
+          <ClauseLedger
             expression={expression}
             user={user}
             groupContext={groupContext}

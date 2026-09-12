@@ -32,6 +32,11 @@ function nested(levels: number): string {
   return `${leaf} ${levels % 2 === 0 ? '&&' : '||'} (${nested(levels - 1)})`;
 }
 
+/** `count` flat, unnested `||`-joined clauses — past the explainer's 64-clause default cap. */
+function flatOr(count: number): string {
+  return Array.from({ length: count }, (_, i) => `user.department == "Team ${i}"`).join(' || ');
+}
+
 const meta = {
   title: 'Shared/ClauseLedger',
   component: ClauseLedger,
@@ -40,7 +45,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Explains a rule condition against one user as a **tree** — the `&&`/`||` structure a tenant actually wrote, rather than the flattened row-per-clause list `ClauseChecklist` renders. A new, additive component family: nothing yet adopts it in place of `ClauseChecklist`.\n\n' +
+          'Explains a rule condition against one user as a **tree** — the `&&`/`||` structure a tenant actually wrote, rather than a flattened row-per-clause list. It replaced `groups/detail/ClauseChecklist`, which no longer exists; `users/MembershipRuleEvidence` is its production adopter.\n\n' +
           'A `not-evaluated` clause is never dressed up as a failure, and a connective whose outcome is already decided by some children states so in one sentence — "one alternative passes, so the OR passes" — sourced entirely from structured fields, never by re-reading rendered text.\n\n' +
           'A "Raw expression" toggle switches to the tenant\'s own EL text, whose footer states `true`/`false` or, for an unevaluable condition, the reason instead of a value it never rounds "cannot tell" down to `false`.\n\n' +
           '**Related internals:** [Shared](?path=/docs/internals-shared--docs)',
@@ -59,7 +64,7 @@ const meta = {
     user: { description: 'The user the condition is explained against.' },
     groupContext: {
       description:
-        "The user's **complete** group list. Omit rather than passing a subset — see `ClauseChecklist`'s doc for why.",
+        'The user\'s **complete** group list. Omit rather than passing a subset — a partial list is read as a confident "not a member" for every group it leaves out.',
     },
     maxClauses: { description: "Cap on tree leaves; defaults to the explainer's own default." },
     resolveGroupName: { description: 'Names group ids the `groupContext` cannot. Never fetches.' },
@@ -101,6 +106,15 @@ export const Unevaluable: Story = {
 /** Nesting past `MAX_TREE_DEPTH`: the collapsed subtree's nearest surviving ancestor says so. */
 export const TruncatedDeepNesting: Story = {
   args: { expression: nested(10), maxClauses: 256 },
+};
+
+/**
+ * Past the clause cap with **no nesting at all**: 70 flat `||`-joined clauses
+ * exceed the default 64-clause cap, and the same disclosure fires for a dropped
+ * sibling as for a collapsed subtree.
+ */
+export const TruncatedClauseCap: Story = {
+  args: { expression: flatOr(70) },
 };
 
 /** Opened straight to the raw EL text, whose footer states the resolved value. */

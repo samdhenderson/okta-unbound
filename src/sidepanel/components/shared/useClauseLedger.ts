@@ -21,9 +21,19 @@ export interface UseClauseLedgerOptions {
   /** Cap on clause rows / tree leaves. See {@link module:shared/rules/explainExpression.ExplainRuleOptions.maxClauses}. */
   maxClauses?: number;
   /**
-   * The user's **complete** group list — see
-   * {@link module:sidepanel/components/groups/detail/ClauseChecklist}'s prop doc
-   * for why a partial list must never be passed.
+   * The user's **complete** group list, which turns every `isMemberOf*` clause
+   * from a neutral "not evaluated" into a real `pass`/`fail`.
+   *
+   * **Omit it rather than passing a subset.** `isMemberOf*` is two-valued over
+   * the list it is given (ADR-0021): a group missing from here is not
+   * "unknown", it is a confident "they are not in it". A filtered or
+   * still-loading list would report groups the user *is* in as clauses they
+   * failed — worse than the honest "not evaluated" this prop replaces.
+   *
+   * Absent, the ledger behaves exactly as it would with no group data at all.
+   * With it, all seven `isMemberOf*` functions answer — `isMemberOfGroupNameRegex`
+   * included, via the linear-time engine in `shared/rules/safeRegex` (ADR-0002),
+   * which declines a pattern outside its subset rather than guessing at it.
    */
   groupContext?: RuleGroupContext;
   /** Names group ids the {@link groupContext} cannot. Never fetches. */
@@ -73,8 +83,8 @@ export function useClauseLedger(
     [expression, user, maxClauses, groupContext],
   );
 
-  // Same merge `ClauseChecklist` uses: membership names first (Okta returned
-  // these rows for this user), the host's resolver second.
+  // Membership names first (Okta returned these rows for this user), the
+  // host's resolver second.
   const resolveGroupName = useMemo<GroupNameResolver | undefined>(() => {
     const namesById = new Map((groupContext ?? []).map((entry) => [entry.id, entry.name]));
     if (namesById.size === 0 && !resolveFromHost) return undefined;

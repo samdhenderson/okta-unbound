@@ -8,7 +8,7 @@
  *
  * `added` is `success`, `removed` is `warning`, and
  * `not-predicted` is **neutral**. That last one is the load-bearing choice:
- * `ClauseChecklist` already settled that a clause this panel declines to
+ * `ClauseLedger` already settled that a clause this panel declines to
  * evaluate is *not evaluated*, never *failed*, and painting a withheld
  * prediction `danger` would restate in colour exactly what
  * {@link withheldReasonText}'s sentences carefully avoid saying. A removal is

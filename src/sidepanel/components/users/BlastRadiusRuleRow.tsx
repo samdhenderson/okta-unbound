@@ -12,7 +12,7 @@
  * ## `undetermined` is neutral, and it is not a fifth shade of "unchanged"
  *
  * At least one of the two evaluations produced no answer, so the pair cannot be
- * compared — the row says exactly that, in the same words `ClauseChecklist`
+ * compared — the row says exactly that, in the same words `ClauseLedger`
  * uses, read from the shared `unevaluableReasonText` table rather than rewritten
  * here. Two surfaces giving different sentences for the same reason code is the
  * drift that table exists to prevent. It renders **neutral**: nothing failed,

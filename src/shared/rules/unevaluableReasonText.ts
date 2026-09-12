@@ -3,8 +3,8 @@
  * @description Plain-language sentences for the reasons a rule expression could
  * not be evaluated here.
  *
- * Extracted from `ClauseChecklist` so the blast-radius report says the *same*
- * thing about the *same* reason code. Two copies of this table would drift, and
+ * Shared so `ClauseLedger`, the blast-radius report and every other consumer say
+ * the *same* thing about the *same* reason code. Two copies of this table would drift, and
  * the drift would land in the one place it does most harm: a surface predicting
  * someone's access telling them something different from the surface explaining
  * their membership.
