@@ -33,7 +33,7 @@
  *
  * The whole explanation stack already consumes one — `membershipSourceLine`,
  * `membershipVerdict`/`membershipBucket`, `MembershipRuleEvidence` and its
- * `ClauseChecklist`, `MembershipProofAction`. A parallel vocabulary for the same
+ * `ClauseLedger`, `MembershipProofAction`. A parallel vocabulary for the same
  * facts is the exact failure `shared/membership/sourceLine` was written to fix,
  * where a surface rendered nothing at all for three of six cases because it had
  * its own idea of the shape. Reuse means a group-side row explains a membership

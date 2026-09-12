@@ -107,11 +107,15 @@ produces a confident wrong answer, which is strictly worse than the
 reason for each refusal beside it, so a settled refusal stays distinguishable
 from a stale one.
 
-`isMemberOfGroupNameRegex` is refused permanently and on security grounds: the
-pattern is tenant-authored, JS `RegExp` backtracking cannot be bounded, and
-evaluating one hands an expression author a denial-of-service lever inside the
-admin's own browser. The reason sentence says the check was not performed. It
-never says the user failed it.
+`isMemberOfGroupNameRegex` used to be refused outright on exactly those
+grounds: the pattern is tenant-authored and JS `RegExp` backtracking cannot be
+bounded. `shared/rules/safeRegex.ts` (ADR-0002) resolves it now, without ever
+constructing a `RegExp` from tenant text — a hand-written linear-time engine
+(Thompson NFA, no backtracking) evaluates the pattern under hard caps on
+length, state count, and step budget. A pattern outside its supported syntax
+subset, or over a cap, declines rather than guesses: `unevaluable` with reason
+`regex-unsupported-syntax` or `regex-too-complex`. The reason sentence still
+says the check was not performed. It never says the user failed it.
 
 ## Evidence is structural, never lexical
 
@@ -193,9 +197,14 @@ PROFILE_MASTERING` — a fact about the user, not a guess from the schema.
 - **A second-order effect.** Prediction runs one pass. A rule that fires because
   another rule fired is not chased — compounding a model's own error does not
   make it more certain, and the panel says plainly that it stops at one hop.
-- **A regex-matched group clause.** `isMemberOfGroupNameRegex` is never
-  evaluated; the other six `isMemberOf*` forms resolve only from a **complete**
-  supplied group list, in both directions.
+- **Any `isMemberOf*` clause without a complete group list.** All seven forms,
+  including `isMemberOfGroupNameRegex` (ADR-0002), resolve only from a
+  **complete** supplied group list, in both directions — a partial list is
+  worse than none.
+- **A regex clause outside the safe engine's supported subset.** A pattern the
+  linear-time matcher declines (`regex-unsupported-syntax`) or that exceeds its
+  length/state/step caps (`regex-too-complex`) stays `unevaluable`; the engine
+  never falls back to `RegExp` on tenant text.
 
 ## Voice
 
@@ -232,7 +241,7 @@ of three, taken because the first two were not available _yet_ — so it comes w
 an obligation: file the gap, so that the feature gets refined into one that can
 guarantee its answer rather than sitting behind a reason code forever.
 
-Both of the gaps this section used to list are now closed, which is what the
+Three of the gaps this section used to list are now closed, which is what the
 obligation is for:
 
 - Blast radius could not see a rule's exclusion list, because a cache-served
@@ -241,11 +250,20 @@ obligation is for:
 - A deduced membership attribution was established only on demand, behind a
   per-row click. It is now the ladder's fourth rung and runs automatically for
   anything the first three could not settle.
+- `isMemberOfGroupNameRegex` was withheld on security grounds, not scope —
+  evaluating a tenant regex safely was the missing capability, not missing
+  data. ADR-0002's linear-time engine closed it the same way: not by loosening
+  the rule, but by building the thing that lets the rule keep holding.
 
-What remains withheld is `isMemberOfGroupNameRegex`, and that one is not
-scheduled work — it is a stated permanent refusal on security grounds. It is the
-only entry allowed to sit here indefinitely, and the reason is written down
-rather than implied.
+What remains permanently withheld, on the same never-guess grounds as
+"Never guess a function's semantics" above, is Okta EL's `Time.*` and
+`Convert.*` functions (rejected by Okta itself inside a group-rule condition),
+`Instant`/`DateTime` (the org's timezone is not readable from where the panel
+evaluates), `String.replaceFirst` (its target is a Java regex — the same
+tenant-pattern hazard ADR-0002 solved for `isMemberOfGroupNameRegex`, not yet
+extended to this function), and `Arrays.add`/`Arrays.flatten` (they return a
+collection, which is not an operand any comparison here accepts). Each reason
+is a stated limit, not an oversight — see ADR-0001 §3.
 
 Closing a gap is always the better answer than loosening a rule here. The rule is
 not the obstacle — it is the thing that keeps the gap visible until someone

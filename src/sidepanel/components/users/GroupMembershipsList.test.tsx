@@ -57,6 +57,26 @@ const base = { memberships: [formattedRuleMembership], isLoading: false };
 const openRow = (groupName: string) =>
   userEvent.click(screen.getByRole('button', { name: `Show how ${groupName} was granted` }));
 
+/**
+ * Every clause sentence the ledger rendered, flattened.
+ *
+ * `ClauseLedgerClause` now states a recognised clause in words
+ * (**department** equals `"Engineering"`) instead of printing its expression
+ * text, so a clause is asserted by the sentence it reads as. Each sentence is
+ * the parent of the bold attribute name at its head.
+ */
+const clauseSentences = (): string[] =>
+  Array.from(document.querySelectorAll('b')).map((bold) =>
+    (bold.parentElement?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+  );
+
+/** The "Reads" chip row of the rule evidence, which names attributes verbatim. */
+const readsSection = (): HTMLElement => {
+  const section = screen.getByText('Reads').parentElement;
+  if (!section) throw new Error('no Reads section rendered');
+  return section;
+};
+
 /** One row's subtree, via the row-identity attribute `ListRow` carries. */
 const rowFor = (groupId: string): HTMLElement => {
   const row = document.querySelector<HTMLElement>(`[data-group-id="${groupId}"]`);
@@ -71,7 +91,7 @@ describe('GroupMembershipsList', () => {
 
     // Previously this surface rendered nothing at all: it read
     // `rule.conditions.expression.value`, which a FormattedRule never has.
-    expect(screen.getByText('user.department == "Engineering"')).toBeInTheDocument();
+    expect(clauseSentences()).toContain('department equals "Engineering"');
     expect(screen.getByText('Pass')).toBeInTheDocument();
   });
 
@@ -80,7 +100,7 @@ describe('GroupMembershipsList', () => {
     await openRow('Engineering');
 
     expect(screen.getByText('Reads')).toBeInTheDocument();
-    expect(screen.getByText('department')).toBeInTheDocument();
+    expect(within(readsSection()).getByText('department')).toBeInTheDocument();
   });
 
   it('reads an attribute named inside a string literal as text, not as an attribute', async () => {
@@ -104,8 +124,9 @@ describe('GroupMembershipsList', () => {
     await openRow('Engineering');
 
     // One attribute is read; the other is a value the rule compares against.
-    expect(screen.getByText('department')).toBeInTheDocument();
-    expect(screen.queryByText('title')).not.toBeInTheDocument();
+    expect(within(readsSection()).getByText('department')).toBeInTheDocument();
+    expect(within(readsSection()).queryByText('title')).not.toBeInTheDocument();
+    expect(clauseSentences()).toContain('department equals "user.title"');
   });
 
   /**
@@ -113,8 +134,10 @@ describe('GroupMembershipsList', () => {
    * unevaluable branch through `isMemberOfGroup("00gFAKE2")`, which the pane can
    * now answer from the user's own membership list — so it would be asserting the
    * bug rather than the invariant. The invariant is unchanged and still pinned,
-   * against a condition that stays genuinely unevaluable: the evaluator declines
-   * to run tenant-authored regular expressions whatever group list it is handed.
+   * against a condition that stays genuinely unevaluable. ADR-0002 since taught
+   * the evaluator to run tenant regexes through a linear-time engine, so the
+   * stand-in is now a pattern **outside** that engine's subset — a lookahead,
+   * which is declined rather than approximated whatever group list is handed in.
    */
   it('explains an unevaluable condition neutrally rather than as a failure', async () => {
     render(
@@ -127,7 +150,7 @@ describe('GroupMembershipsList', () => {
             rules: [
               {
                 ...formattedRuleMembership.rules[0],
-                conditionExpression: 'isMemberOfGroupNameRegex("^Eng.*")',
+                conditionExpression: 'isMemberOfGroupNameRegex("(?=Eng)Eng.*")',
               },
             ],
           },
@@ -199,7 +222,7 @@ describe('GroupMembershipsList', () => {
     );
     await openRow('Engineering');
 
-    expect(screen.getByText('user.title == "Intern"')).toBeInTheDocument();
+    expect(clauseSentences()).toContain('title equals "Intern"');
     expect(screen.getByText('Pass')).toBeInTheDocument();
   });
 
@@ -226,7 +249,9 @@ describe('GroupMembershipsList', () => {
                 // Retargeted for D-001 for the same reason as the case above:
                 // an `isMemberOfGroup` call is now answerable from the pane's own
                 // membership list, so it no longer exercises "not evaluated".
-                conditionExpression: 'isMemberOfGroupNameRegex("^On-call.*")',
+                // The pattern carries a lookahead, which the safe regex engine
+                // declines (ADR-0002) — the remaining shape of "not evaluated".
+                conditionExpression: 'isMemberOfGroupNameRegex("(?=On-call).*")',
               },
             ],
           },
@@ -370,9 +395,10 @@ describe('GroupMembershipsList — isMemberOf* resolves against the loaded membe
   });
 
   /**
-   * The fallback stays exactly as it was. A group list answers `isMemberOf*`; it
-   * does not answer a clause the evaluator refuses to run, so this one still
-   * declines — with the reason spelled out, and never as a failure.
+   * The fallback stays exactly as it was. A group list answers `isMemberOf*`,
+   * including the regex variant (ADR-0002) — but not a pattern outside the safe
+   * engine's subset, so this one still declines, with the reason spelled out and
+   * never as a failure.
    */
   it('still declines a clause no group list could answer', async () => {
     renderPane([
@@ -381,7 +407,7 @@ describe('GroupMembershipsList — isMemberOf* resolves against the loaded membe
         rules: [
           {
             ...formattedRuleMembership.rules[0],
-            conditionExpression: 'isMemberOfGroupNameRegex("^Ops.*")',
+            conditionExpression: 'isMemberOfGroupNameRegex("(?=Ops).*")',
           },
         ],
       },
@@ -756,7 +782,7 @@ describe('GroupMembershipsList — proving one membership against Okta', () => {
 
     // The clause-by-clause explanation of the candidate rule is still there: the
     // proof adds Okta's answer, it does not delete the evidence behind the guess.
-    expect(screen.getByText('user.department == "Engineering"')).toBeInTheDocument();
+    expect(clauseSentences()).toContain('department equals "Engineering"');
     expect(screen.getByText('Rule:')).toBeInTheDocument();
   });
 

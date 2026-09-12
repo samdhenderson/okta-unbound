@@ -154,42 +154,43 @@ be reviewed with `security-logging-reviewer`.
 
 ## Routing table — read ONLY the matching row(s)
 
-| If the task is…                                  | Read                                               | Consider delegating to      |
-| ------------------------------------------------ | -------------------------------------------------- | --------------------------- |
-| Scoping a feature / adding a tab / a new verb    | `docs/product.md`, then `docs/features-plan.md`    | `feature-ideator`           |
-| **Putting a worked-out fact on screen**          | `docs/claims.md`                                   | `ui-reviewer`               |
-| **Writing user-facing copy**                     | `docs/claims.md`                                   | `ui-reviewer`               |
-| Styling / colors / tokens / typography           | `docs/design-system.md`                            | `ui-reviewer`               |
-| Cards, elevation, list-row chrome                | `docs/surfaces.md`                                 | `ui-reviewer`               |
-| Building / using a shared component              | `docs/components.md`, `docs/design-system.md`      | `component-builder`         |
-| Looking up one primitive's prop contract         | `docs/component-primitives.md`                     | `component-builder`         |
-| A verb strip, `primary` ranking, refresh         | `docs/action-bars.md`                              | `component-builder`         |
-| Shell layout, the rail, sticky bands, view stack | `docs/page-shell.md`                               | `component-builder`         |
-| Building / exploring a component visually        | `docs/component-explorer.md`                       | `component-builder`         |
-| Storybook viewports, framing, story-as-test      | `docs/storybook-infra.md`                          | —                           |
-| Modal / a11y / loading-empty-error UX            | `docs/ux-guidelines.md`                            | `ui-reviewer`               |
-| Motion / animation / reduced motion              | `docs/motion.md`                                   | `ui-reviewer`               |
-| A scroll-driven or multi-band choreography       | `docs/motion-recipes.md`                           | `ui-reviewer`               |
-| Refactoring a god component / pipeline / hooks   | `docs/architecture.md`, `docs/state-management.md` | `architecture-refactor`     |
-| Rate limits, concurrency, the plan ledger, 401s  | `docs/scheduler.md`                                | `architecture-refactor`     |
-| Adding / fixing tests                            | `docs/testing.md`                                  | `test-writer`               |
-| Logging / secrets / validation / `any` removal   | `docs/development.md`                              | `security-logging-reviewer` |
-| Security posture / threat model / controls       | `docs/security.md`                                 | `security-logging-reviewer` |
-| Residual risks, verifying the posture yourself   | `docs/security-risks.md`                           | `security-logging-reviewer` |
-| Build / lint / CI / release / versioning         | `docs/development.md`                              | —                           |
-| Finding / removing unused code                   | `docs/dead-code.md`                                | —                           |
-| Calling the Okta API / picking an endpoint       | `okta-api` skill                                   | —                           |
-| Documenting code / TypeDoc / API comments        | `docs/development.md`                              | `docs-maintainer`           |
-| Writing / updating a spec                        | `docs/README.md` + the affected doc                | `docs-maintainer`           |
-| Writing an ADR                                   | `docs/adr/README.md`                               | `docs-maintainer`           |
-| Understanding the whole system                   | `docs/architecture.md`                             | —                           |
-| The reel's or the ad's rules                     | `docs/reel.md`                                     | `reel-cutter`               |
-| Changing the reel's cut, beats, or narration     | `okta-reel` skill                                  | `reel-cutter`               |
-| Building a reel piece, diagram, or verb          | `okta-reel` skill                                  | `reel-smith`                |
-| Filming or re-filming a demo chapter             | `okta-reel` skill                                  | —                           |
-| Changing the store page ad or its sound effects  | `reel/AD.md`                                       | `reel-smith`                |
-| Unattended nightly maintenance run               | `SESSION.md`, `CONVENTIONS.md`                     | see `SESSION.md`'s roster   |
-| Fixing a named correctness bug (`DEBT.md`)       | the cited item's **Problem**/**Done when**         | `bugfix`                    |
+| If the task is…                                                             | Read                                                        | Consider delegating to      |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------------- |
+| Scoping a feature / adding a tab / a new verb                               | `docs/product.md`, then `docs/features-plan.md`             | `feature-ideator`           |
+| **Putting a worked-out fact on screen**                                     | `docs/claims.md`                                            | `ui-reviewer`               |
+| **Writing user-facing copy**                                                | `docs/claims.md`                                            | `ui-reviewer`               |
+| Styling / colors / tokens / typography                                      | `docs/design-system.md`                                     | `ui-reviewer`               |
+| Cards, elevation, list-row chrome                                           | `docs/surfaces.md`                                          | `ui-reviewer`               |
+| Building / using a shared component                                         | `docs/components.md`, `docs/design-system.md`               | `component-builder`         |
+| Looking up one primitive's prop contract                                    | `docs/component-primitives.md`                              | `component-builder`         |
+| A verb strip, `primary` ranking, refresh                                    | `docs/action-bars.md`                                       | `component-builder`         |
+| Shell layout, the rail, sticky bands, view stack                            | `docs/page-shell.md`                                        | `component-builder`         |
+| Building / exploring a component visually                                   | `docs/component-explorer.md`                                | `component-builder`         |
+| Storybook viewports, framing, story-as-test                                 | `docs/storybook-infra.md`                                   | —                           |
+| Modal / a11y / loading-empty-error UX                                       | `docs/ux-guidelines.md`                                     | `ui-reviewer`               |
+| Motion / animation / reduced motion                                         | `docs/motion.md`                                            | `ui-reviewer`               |
+| A scroll-driven or multi-band choreography                                  | `docs/motion-recipes.md`                                    | `ui-reviewer`               |
+| Refactoring a god component / pipeline / hooks                              | `docs/architecture.md`, `docs/state-management.md`          | `architecture-refactor`     |
+| Rate limits, concurrency, the plan ledger, 401s                             | `docs/scheduler.md`                                         | `architecture-refactor`     |
+| Extending the rule evaluator or explainer's coverage of an Okta EL function | `docs/claims.md` (never-guess rule), `docs/adr/0001`–`0003` | `security-logging-reviewer` |
+| Adding / fixing tests                                                       | `docs/testing.md`                                           | `test-writer`               |
+| Logging / secrets / validation / `any` removal                              | `docs/development.md`                                       | `security-logging-reviewer` |
+| Security posture / threat model / controls                                  | `docs/security.md`                                          | `security-logging-reviewer` |
+| Residual risks, verifying the posture yourself                              | `docs/security-risks.md`                                    | `security-logging-reviewer` |
+| Build / lint / CI / release / versioning                                    | `docs/development.md`                                       | —                           |
+| Finding / removing unused code                                              | `docs/dead-code.md`                                         | —                           |
+| Calling the Okta API / picking an endpoint                                  | `okta-api` skill                                            | —                           |
+| Documenting code / TypeDoc / API comments                                   | `docs/development.md`                                       | `docs-maintainer`           |
+| Writing / updating a spec                                                   | `docs/README.md` + the affected doc                         | `docs-maintainer`           |
+| Writing an ADR                                                              | `docs/adr/README.md`                                        | `docs-maintainer`           |
+| Understanding the whole system                                              | `docs/architecture.md`                                      | —                           |
+| The reel's or the ad's rules                                                | `docs/reel.md`                                              | `reel-cutter`               |
+| Changing the reel's cut, beats, or narration                                | `okta-reel` skill                                           | `reel-cutter`               |
+| Building a reel piece, diagram, or verb                                     | `okta-reel` skill                                           | `reel-smith`                |
+| Filming or re-filming a demo chapter                                        | `okta-reel` skill                                           | —                           |
+| Changing the store page ad or its sound effects                             | `reel/AD.md`                                                | `reel-smith`                |
+| Unattended nightly maintenance run                                          | `SESSION.md`, `CONVENTIONS.md`                              | see `SESSION.md`'s roster   |
+| Fixing a named correctness bug (`DEBT.md`)                                  | the cited item's **Problem**/**Done when**                  | `bugfix`                    |
 
 ## Where things are
 

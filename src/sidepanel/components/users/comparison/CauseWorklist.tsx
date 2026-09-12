@@ -56,7 +56,7 @@ interface RemedyPresentation {
  * Remedy → presentation.
  *
  * `cannot-determine` deliberately maps to the **neutral** palette, mirroring
- * `ClauseChecklist`'s `not-evaluated` treatment: it is not a `danger` and not a
+ * `ClauseLedger`'s `not-evaluated` treatment: it is not a `danger` and not a
  * `warning`, because nothing here is known to be wrong.
  */
 const remedyPresentation: Record<AccessRemedy, RemedyPresentation> = {

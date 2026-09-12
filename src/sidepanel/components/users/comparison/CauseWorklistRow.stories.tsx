@@ -3,11 +3,21 @@ import { fn } from 'storybook/test';
 import CauseWorklistRow from './CauseWorklistRow';
 import { NavigationProvider } from '../../../contexts/NavigationContext';
 import type { AccessCause } from './accessCause';
-import type { ClauseExplanation } from '../../../../shared/rules/explainExpression';
+import type { LeafClauseNode } from '../../../../shared/rules/explainExpression';
 
 /** Fixtures are hand-built — the row is the unit under review, not the classifier. */
-const failing = (expressionText: string, resolvedValue: ClauseExplanation['resolvedValue']) =>
-  ({ expressionText, resolvedValue, status: 'fail' }) satisfies ClauseExplanation;
+const failing = (
+  expressionText: string,
+  resolvedValue: LeafClauseNode['resolvedValue'],
+  reads: LeafClauseNode['reads'] = [],
+) =>
+  ({
+    node: 'leaf',
+    expressionText,
+    resolvedValue,
+    status: 'fail',
+    reads,
+  }) satisfies LeafClauseNode;
 
 const blocked: AccessCause = {
   groupId: '00gFAKE001',
@@ -15,7 +25,13 @@ const blocked: AccessCause = {
   remedy: 'blocked-by-attribute',
   ruleId: '0prFAKE001',
   ruleName: 'Platform engineers',
-  failingClauses: [failing('user.department == "Platform"', 'Support')],
+  // Carries the attribute read, so the row can answer "why does this user lack
+  // this" — `user.department → "Support"` — not just "a clause failed".
+  failingClauses: [
+    failing('user.department == "Platform"', 'Support', [
+      { path: 'user.department', value: 'Support' },
+    ]),
+  ],
 };
 
 /** One row of the cause worklist. */
@@ -130,6 +146,7 @@ const byGroupMembership: AccessCause = {
   remedy: 'needs-group-membership',
   failingClauses: [
     {
+      node: 'leaf',
       expressionText: 'isMemberOfAnyGroup("00gFAKE010", "00gFAKE099")',
       resolvedValue: undefined,
       status: 'fail',
@@ -138,6 +155,7 @@ const byGroupMembership: AccessCause = {
         { match: 'id', value: '00gFAKE010', satisfied: false },
         { match: 'id', value: '00gFAKE099', satisfied: false },
       ],
+      reads: [],
     },
   ],
 };

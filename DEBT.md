@@ -286,19 +286,17 @@ rationale that caching a join is only one more thing to invalidate.
 - **Category:** cleanup
 - **Priority:** P3
 - **Size:** S
-- **Files:** `src/sidepanel/components/groups/detail/ClauseChecklist.tsx`
-- **Verified:** 2026-08-25 — 309 lines after `I-002`, confirmed by
-  `ui-reviewer` (the implementing agent reported 312 and attributed the growth
-  to TypeDoc; roughly half of it is the `resolveGroupName` `useMemo`, the new
-  prop, and the `RuleExpressionText` wiring — real logic).
+- **Files:** formerly `src/sidepanel/components/groups/detail/ClauseChecklist.tsx`
+  (deleted by the clause-ledger program; its replacement family ships as five
+  sibling files, each 81–211 lines)
+- **Verified:** 2026-09-11 — the subject no longer exists; `ClauseLedger` and
+  its four siblings in `components/shared/` are each under the bar.
 - **Problem:** `CLAUDE.md` asks for components under ~300 lines with logic
-  pushed into hooks. The file was at 285 before `I-002` and is now just over.
-- **Done when:** `ClauseRow` and `ResolvedValue` are extracted as siblings —
-  the same move `ClauseGroupList.tsx` already records — and the file is back
-  under the bar without behavior changing.
-- **Risk:** Low — behavior-preserving extraction, route to
-  `architecture-refactor`.
-- **Status:** open
+  pushed into hooks. `ClauseChecklist.tsx` sat just over.
+- **Done when:** n/a — the file was deleted and its behavior retargeted into
+  the ClauseLedger family, whose components all sit under the bar.
+- **Risk:** none remaining.
+- **Status:** closed:overtaken-by-2ac9832
 
 ### D-037 · `useOktaApi`'s returned facade has no explicit interface
 

@@ -3,11 +3,11 @@
  * @description Rule-condition text with its **group-id literals resolved to named
  * badges** — `isMemberOfAnyGroup("00gFAKE1")` reads as the group, not as an opaque id.
  *
- * It began as a sibling of {@link module:sidepanel/components/groups/detail/ClauseChecklist}
- * because both surfaces that print reconstructed condition text needed it and either
- * copy of the tokeniser would have been free to drift. It now lives in `shared/`
- * because three features print condition text —
- * {@link module:sidepanel/components/groups/detail/ClauseChecklist},
+ * It began as a sibling of the groups-detail clause breakdown that has since been
+ * retired into {@link ClauseLedger}, because both surfaces that print
+ * reconstructed condition text needed it and either copy of the tokeniser would
+ * have been free to drift. It now lives in `shared/` because multiple features
+ * print condition text — {@link ClauseLedgerClause},
  * {@link module:sidepanel/components/users/comparison/CauseWorklistRow}, and the rule
  * views beside them — and a component consumed across features is a shared component
  * that happens to live in one of them (`I-016`). Pure: no I/O, no logging.
@@ -62,8 +62,8 @@ export type GroupNameResolver = (groupId: string) => string | undefined;
  *
  * - `default` — the condition the surface is actually about.
  * - `subdued` — a condition printed _under_ another one it qualifies, so it must
- *   not compete with its parent for the eye. `ClauseChecklist`'s "any one of these
- *   satisfies it" alternatives are the case.
+ *   not compete with its parent for the eye. `BlastRadiusRuleRow`'s
+ *   secondary expression is the case.
  *
  * Deliberately two values and not a colour: a caller that wants a third shade of
  * rule text is the drift this replaced a free-form `className` to stop.

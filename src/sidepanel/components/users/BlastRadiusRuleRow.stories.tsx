@@ -31,7 +31,7 @@ const meta = {
           '**`Could not be evaluated` is neutral, and it is not a fifth shade of “unchanged”.** At least one ' +
           'of the two evaluations produced no answer, so the pair cannot be compared. The sentence comes from ' +
           'the shared `unevaluableReasonText` table rather than being rewritten here, so this surface and ' +
-          '`ClauseChecklist` cannot end up saying different things about the same reason code. It renders ' +
+          '`ClauseLedger` cannot end up saying different things about the same reason code. It renders ' +
           'neutral because nothing failed, and a `danger` palette would assert in colour what the sentence ' +
           'declines to assert in words (ADR-0017, ADR-0020).\n\n' +
           '**The expression wraps; it never truncates.** A condition clipped at the row’s edge and set beside ' +
@@ -112,8 +112,8 @@ export const Undetermined: Story = {
       ruleId: '0prFAKErule00003',
       ruleName: 'Reviewers — by group',
       transition: 'undetermined',
-      afterReason: 'group-name-regex',
-      expression: 'isMemberOfGroupNameRegex("^sec-.*$")',
+      afterReason: 'regex-unsupported-syntax',
+      expression: 'isMemberOfGroupNameRegex("(?=sec)sec-.*")',
       targetGroupIds: ['00gFAKE00000000000003'],
       targetGroupNames: ['Security-Reviewers'],
       touchedAttributes: [],
@@ -123,9 +123,7 @@ export const Undetermined: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Could not be evaluated')).toBeInTheDocument();
     // The shared sentence, not a local rewrite of it.
-    await expect(
-      canvas.getByText(/regular expression, which this panel does not run/i),
-    ).toBeInTheDocument();
+    await expect(canvas.getByText(/syntax this panel does not implement/i)).toBeInTheDocument();
     // And it never claims a direction it did not establish.
     await expect(canvas.queryByText(/Stops matching|Starts matching/)).toBeNull();
   },

@@ -28,7 +28,7 @@ const meta = {
           'states what the edit does to the membership rather than qualifying it.\n\n' +
           '**`Not predicted` is neutral, never `danger`.** It is a peer of the other two kinds, not their ' +
           'absence: it is emitted only where something *was* implicated and the engine declined to call it, ' +
-          'and it always names why. `ClauseChecklist` settled the precedent — a clause this panel declines to ' +
+          'and it always names why. `ClauseLedger` settled the precedent — a clause this panel declines to ' +
           'evaluate is *not evaluated*, never *failed* — and colouring a withheld prediction red would restate ' +
           'in colour exactly what the sentence carefully avoids saying. A removal is `warning` rather than ' +
           '`danger` for the neighbouring reason: it is a consequence to flag, not a failure that occurred.\n\n' +

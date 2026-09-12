@@ -18,6 +18,17 @@
  * all twenty buries the only actionable fact. Only the memberships they actually
  * hold are shown; the rest are counted and tucked behind a disclosure.
  *
+ * ## Each entry is a ledger group-reference chip
+ *
+ * The name/copy/satisfied-glyph unit of each entry is
+ * {@link module:sidepanel/components/shared/GroupReferenceChip} — the same chip
+ * {@link module:sidepanel/components/shared/ClauseLedgerClause} renders beneath a
+ * leaf clause, so a group named here and a group named on the full clause
+ * checklist read identically. This component keeps what is genuinely its own:
+ * the polarity heading, the preview limit and expand control, and the
+ * "blocking" / "already in" words and background tint that state — never by
+ * colour alone — which entry is the actionable one.
+ *
  * ## Security
  *
  * Group names and ids are untrusted, end-user-controllable tenant data. Rendered
@@ -25,7 +36,7 @@
  * this module logs nothing.
  */
 import React, { useState } from 'react';
-import { Button, CopyableId } from '../../shared';
+import { Button, GroupReferenceChip } from '../../shared';
 import type {
   ClauseGroupReference,
   ClauseGroupRequirement,
@@ -33,17 +44,6 @@ import type {
 
 /** Positive-clause candidates shown before the list collapses. */
 const CANDIDATE_PREVIEW_LIMIT = 5;
-
-/**
- * How each match kind reads when the group has no resolvable name — the pattern
- * variants never name one group, so they always read this way.
- */
-const groupMatchLabel: Record<ClauseGroupReference['match'], (value: string) => string> = {
-  id: (value) => value,
-  name: (value) => value,
-  nameStartsWith: (value) => `any group whose name starts with “${value}”`,
-  nameContains: (value) => `any group whose name contains “${value}”`,
-};
 
 /** Props for {@link ClauseGroupList}. */
 export interface ClauseGroupListProps {
@@ -159,23 +159,16 @@ function exclusionHeading(who: string, total: number, blockingCount: number): st
   return `${who} must not be in ${scope}. They are in ${blockingCount}:`;
 }
 
-/** One group of the list: its name, its id, and whatever action applies to it. */
+/**
+ * One group of the list: its {@link GroupReferenceChip}, the words that state
+ * whether it blocks or is already held, and whatever action applies to it.
+ */
 const GroupEntry: React.FC<{
   reference: ClauseGroupReference;
   requirement: ClauseGroupRequirement;
   resolveGroupName?: (groupId: string) => string | undefined;
   renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
 }> = ({ reference, requirement, resolveGroupName, renderGroupAction }) => {
-  // The group they matched, when there is one, is the most specific truth — a
-  // `nameStartsWith` reference resolves to a real group only this way.
-  const resolvedName =
-    reference.matchedGroupName ??
-    (reference.match === 'id' ? resolveGroupName?.(reference.value) : undefined);
-  const label = resolvedName ?? groupMatchLabel[reference.match](reference.value);
-  // Show the id underneath only when it is NOT already the visible label, so an
-  // unresolved id appears once rather than twice.
-  const showId = reference.match === 'id' && resolvedName !== undefined;
-
   const actionable = requirement === 'non-member' ? reference.satisfied : !reference.satisfied;
   const blocking = requirement === 'non-member' && reference.satisfied;
 
@@ -185,21 +178,14 @@ const GroupEntry: React.FC<{
         blocking ? 'border border-danger-light bg-danger-light' : 'bg-neutral-50'
       }`}
     >
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-xs text-neutral-900" title={label}>
-            {label}
-          </span>
-          {/* Stated in words, never by colour alone. */}
-          {blocking && (
-            <span className="shrink-0 text-xs font-medium text-danger-text">blocking</span>
-          )}
-          {requirement === 'member' && reference.satisfied && (
-            <span className="shrink-0 text-xs font-medium text-success-text">already in</span>
-          )}
-        </span>
-        {showId && (
-          <CopyableId value={reference.value} label={`Copy group id ${reference.value}`} />
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        <GroupReferenceChip reference={reference} hasContext resolveGroupName={resolveGroupName} />
+        {/* Stated in words, never by colour alone. */}
+        {blocking && (
+          <span className="shrink-0 text-xs font-medium text-danger-text">blocking</span>
+        )}
+        {requirement === 'member' && reference.satisfied && (
+          <span className="shrink-0 text-xs font-medium text-success-text">already in</span>
         )}
       </span>
       {actionable && <span className="shrink-0">{renderGroupAction?.(reference)}</span>}

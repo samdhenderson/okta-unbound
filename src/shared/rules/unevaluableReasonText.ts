@@ -3,8 +3,8 @@
  * @description Plain-language sentences for the reasons a rule expression could
  * not be evaluated here.
  *
- * Extracted from `ClauseChecklist` so the blast-radius report says the *same*
- * thing about the *same* reason code. Two copies of this table would drift, and
+ * Shared so `ClauseLedger`, the blast-radius report and every other consumer say
+ * the *same* thing about the *same* reason code. Two copies of this table would drift, and
  * the drift would land in the one place it does most harm: a surface predicting
  * someone's access telling them something different from the surface explaining
  * their membership.
@@ -27,8 +27,10 @@ export const UNEVALUABLE_REASON_TEXT: Record<RuleUnevaluableReason, string> = {
   'parse-error': 'The condition could not be parsed here.',
   'unsupported-operator': 'Uses an operator this panel cannot evaluate.',
   'group-membership-fn': "Needs the user's full group list, which this panel does not have.",
-  'group-name-regex':
-    'Matches group names with a regular expression, which this panel does not run.',
+  'regex-unsupported-syntax':
+    'Matches group names with a regular expression using syntax this panel does not implement, so it was not run.',
+  'regex-too-complex':
+    'The group-name regular expression is past the size this panel will run, so it was not run.',
   'unknown-fn': 'Calls a function this panel cannot evaluate.',
   'fn-arity': 'Calls a function with an unexpected number of arguments.',
   'unsupported-node': 'Uses a form of expression this panel cannot evaluate.',
@@ -52,8 +54,8 @@ export const UNEVALUABLE_REASON_TEXT: Record<RuleUnevaluableReason, string> = {
  *
  * @example
  * ```ts
- * unevaluableReasonText('group-name-regex');
- * // "Matches group names with a regular expression, which this panel does not run."
+ * unevaluableReasonText('regex-unsupported-syntax');
+ * // "Matches group names with a regular expression using syntax this panel does not implement, so it was not run."
  * ```
  */
 export function unevaluableReasonText(reason: RuleUnevaluableReason | undefined): string {

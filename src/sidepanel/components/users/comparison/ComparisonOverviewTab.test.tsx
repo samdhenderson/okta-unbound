@@ -51,7 +51,13 @@ const causes: AccessCause[] = [
     ruleId: '0prFAKE1',
     ruleName: 'Platform engineers',
     failingClauses: [
-      { expressionText: 'user.department == "Platform"', resolvedValue: 'Support', status: 'fail' },
+      {
+        node: 'leaf',
+        expressionText: 'user.department == "Platform"',
+        resolvedValue: 'Support',
+        status: 'fail',
+        reads: [{ path: 'user.department', value: 'Support' }],
+      },
     ],
   },
   {

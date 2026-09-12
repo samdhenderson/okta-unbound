@@ -378,6 +378,21 @@ describe('analyzeMemberships — condition evaluation', () => {
     expect(m.attribution).toBe('inferred');
   });
 
+  it('attributes a matching String.stringSwitch rule exactly, not by the unevaluable fallback', () => {
+    // Pinned by docs/adr/0003-stringswitch-matched-cases.md: a matched case (or a
+    // documented fall-through to the required default) is a real answer, not a
+    // guess, so this rule's membership resolves at rung 2 (RULE_BASED, exact) —
+    // never a heuristic "inferred" attribution.
+    const stringSwitchRule = ruleWith(
+      'String.stringSwitch(user.department, "Other", "Engineering", "yes") == "yes"',
+      { id: 'string-switch' },
+    );
+    const [m] = analyzeMemberships([group()], [stringSwitchRule], engUser);
+    expect(m.membershipType).toBe('RULE_BASED');
+    expect(m.rules.map((r) => r.id)).toEqual(['string-switch']);
+    expect(m.attribution).toBe('exact');
+  });
+
   it('ignores a non-matching rule the user is excluded from', () => {
     // Exclusion is applied first, so the remaining evaluable rule decides.
     const excluded = ruleWith('user.department == "Engineering"', {
@@ -452,6 +467,31 @@ describe("analyzeMemberships — with the user's complete group list", () => {
     });
     expect(m.membershipType).toBe('DIRECT');
     expect(m.attribution).toBe('exact');
+  });
+
+  it('attributes a matching isMemberOfGroupNameRegex rule exactly, not by the unevaluable fallback', () => {
+    // Pinned by docs/adr/0002-linear-time-tenant-regex.md, and the consequence
+    // that record names deliberately: a tenant pattern is evaluated now, so a
+    // rule built on one resolves at rung 2 (RULE_BASED, exact) instead of
+    // falling through to a heuristic `inferred` attribution.
+    const r = membershipRule('isMemberOfGroupNameRegex("Contr.*")');
+    const [m] = analyzeMemberships(memberOf, [r], user, {
+      groups: groupContextOfGroups(memberOf),
+    });
+    expect(m.membershipType).toBe('RULE_BASED');
+    expect(m.rules.map((rr) => rr.id)).toEqual(['rMember']);
+    expect(m.attribution).toBe('exact');
+  });
+
+  it('leaves a rule whose pattern the safe engine declines unproven', () => {
+    // The other half of the same bargain: a lookahead is outside the engine's
+    // subset, so the rule is not evaluated — and an unevaluated rule is never
+    // read as a no.
+    const r = membershipRule('isMemberOfGroupNameRegex("(?=Contr).*")');
+    const [m] = analyzeMemberships(memberOf, [r], user, {
+      groups: groupContextOfGroups(memberOf),
+    });
+    expect(m.attribution).toBe('inferred');
   });
 
   it('matches isMemberOfGroupName by name, case-sensitively', () => {

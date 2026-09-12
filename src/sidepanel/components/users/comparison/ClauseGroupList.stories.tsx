@@ -29,10 +29,10 @@ const meta = {
           'A **negated** clause (`!isMemberOfAnyGroup(…)`) failed because one *did* match. A real rule may ' +
           'exclude twenty groups of which the user is in one, so only the memberships they actually hold are ' +
           'shown; the rest are counted, never listed.\n\n' +
-          'Group ids are labelled through `resolveGroupName` with the id kept underneath as evidence, via the ' +
-          'shared `CopyableId` — an id is unreadable but it is the thing you paste into Okta, so it stays a ' +
-          'one-click copy rather than a raw string to select by hand. An id with no known name appears once, ' +
-          'as itself, with no separate copy row.\n\n' +
+          'Each entry is the shared `GroupReferenceChip` — the same chip `ClauseLedgerClause` renders beneath a ' +
+          'leaf clause on the full checklist, so a group named here reads identically there. An id is unreadable ' +
+          'but it is the thing you paste into Okta, so it stays a one-click copy on the chip rather than a raw ' +
+          'string to select by hand; an id with no known name is the chip label itself, appearing once.\n\n' +
           'Every state is stated in words (`already in`, `blocking`); colour never carries a meaning alone.',
       },
     },
@@ -58,9 +58,9 @@ export const OnePrerequisite: Story = {
 };
 
 /**
- * The resolved-name-plus-id row: the label reads `us.employees.union`, and the raw
- * id renders underneath through `CopyableId` — a `<code>` string beside a
- * ghost copy button, rather than the old plain span nobody could copy from.
+ * The resolved-name row: the chip's label reads `us.employees.union`, and the raw
+ * id stays one click away through the chip's own copy control — never a second
+ * line of text repeating what the name already says.
  */
 export const ResolvedWithCopyableId: Story = {
   args: {
@@ -141,8 +141,8 @@ export const PatternMatch: Story = {
 
 /**
  * The unresolvable case: `resolveGroupName` returns nothing, so the raw id is the
- * label itself — shown once, unchanged by this fix, with no `CopyableId` row
- * beneath it (that row only appears once a *different* name is above the id).
+ * chip's label itself — shown once, with its own copy control and no second
+ * name above it to repeat.
  */
 export const UnresolvableId: Story = {
   args: {

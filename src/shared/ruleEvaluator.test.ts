@@ -9,6 +9,7 @@ import {
   RULE_CONNECTIVE_OPERATORS,
   type RuleNodeEvaluation,
 } from './ruleEvaluator';
+import { MAX_INPUT_LENGTH, MAX_PATTERN_LENGTH } from './rules/safeRegex';
 import type { OktaUser } from './types';
 
 /**
@@ -241,7 +242,9 @@ describe('tryEvaluateRuleExpression', () => {
 
     it('is unevaluable for an unsupported reference', () => {
       expect(tryEvaluateRuleExpression('session.amr == "pwd"', user)).toBe('unevaluable');
-      expect(tryEvaluateRuleExpression('user["department"] == "Engineering"', user)).toBe(
+      // A non-literal computed key stays unsupported; a string-literal one now
+      // resolves — see "computed member access" below.
+      expect(tryEvaluateRuleExpression('user[user.department] == "Engineering"', user)).toBe(
         'unevaluable',
       );
     });
@@ -318,6 +321,11 @@ describe('supported subset', () => {
       employeeNumber: 42,
       active: true,
       roles: ['admin', 'dev'],
+      // A negative numeric attribute, for the unary-minus relational tests.
+      floor: -1,
+      // A custom attribute whose name is not a valid bare identifier, so only
+      // computed access can reach it.
+      'cost center': 'CC-9',
       // An object-valued attribute, so the refusal to read `[object Object]` has
       // something real to refuse, and an attribute whose name begins with a word
       // operator, for the boundary check.
@@ -380,11 +388,146 @@ describe('supported subset', () => {
     );
   });
 
+  // `String.stringSwitch` — see docs/adr/0003-stringswitch-matched-cases.md. Okta's
+  // own documented examples pin *every* branch: a key matches by substring
+  // containment (not equality), pairs are tried in the order supplied so the
+  // first contained key wins even when a later key also matches, and the
+  // required `defaultString` argument (not an optional third slot) is the
+  // answer when no pair matches — so there is no branch left to guess at.
+  describe('String.stringSwitch', () => {
+    it('returns the value of the first pair whose key is contained in the input', () => {
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.department, "Other", "Engineering", "Eng") == "Eng"',
+          user,
+        ),
+      ).toBe('match');
+    });
+
+    it('matches by substring containment, not equality', () => {
+      // "Engineering" contains "Eng" but is not equal to it.
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.department, "Other", "Eng", "short") == "short"',
+          user,
+        ),
+      ).toBe('match');
+    });
+
+    it('picks the first pair listed even when a later pair also matches', () => {
+      // Mirrors Okta's own worked example: order of the pairs decides, not the
+      // position of the match inside the string.
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.department, "Other", "Eng", "first", "Engineering", "second") == "first"',
+          user,
+        ),
+      ).toBe('match');
+    });
+
+    it('falls through to the required default when no pair matches', () => {
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.department, "Other", "Sales", "S") == "Other"',
+          user,
+        ),
+      ).toBe('match');
+    });
+
+    it('returns the default with zero key-value pairs supplied', () => {
+      expect(
+        tryEvaluateRuleExpression('String.stringSwitch(user.department, "Other") == "Other"', user),
+      ).toBe('match');
+    });
+
+    it('rejects a non-string input as operand-type, never a guess', () => {
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.employeeNumber, "Other", "4", "x")',
+          user,
+        ),
+      ).toBe('unevaluable');
+    });
+
+    it('rejects too few arguments (no default) as fn-arity', () => {
+      expect(tryEvaluateRuleExpression('String.stringSwitch(user.department)', user)).toBe(
+        'unevaluable',
+      );
+    });
+
+    it('rejects an unpaired trailing key as fn-arity', () => {
+      expect(
+        tryEvaluateRuleExpression('String.stringSwitch(user.department, "Other", "Eng")', user),
+      ).toBe('unevaluable');
+    });
+
+    it('composes with the connectives and a conditional, same as any other call', () => {
+      expect(
+        tryEvaluateRuleExpression(
+          'String.stringSwitch(user.department, "Other", "Eng", "yes") == "yes" && user.firstName == "Ada"',
+          user,
+        ),
+      ).toBe('match');
+      expect(
+        tryEvaluateRuleExpression(
+          'user.employeeNumber > 0 ? String.stringSwitch(user.department, "Other", "Eng", "yes") : "n/a"',
+          user,
+        ),
+      ).toBe('unevaluable'); // resolves to "yes", a string — not a boolean condition on its own.
+    });
+  });
+
   it('negates with the NOT word form as well as with !', () => {
     expect(tryEvaluateRuleExpression('NOT user.active', user)).toBe('no-match');
     expect(tryEvaluateRuleExpression('not user.active', user)).toBe('no-match');
     // The identifier boundary check keeps an attribute starting with `not` whole.
     expect(tryEvaluateRuleExpression('user.notes == null', user)).toBe('match');
+  });
+
+  describe('unary minus on a numeric literal', () => {
+    it('negates a positive literal against a negative attribute', () => {
+      expect(tryEvaluateRuleExpression('user.floor >= -1', user)).toBe('match');
+      expect(tryEvaluateRuleExpression('user.floor > -1', user)).toBe('no-match');
+    });
+
+    it('folds a fractional literal', () => {
+      expect(tryEvaluateRuleExpression('user.employeeNumber >= -0.5', user)).toBe('match');
+    });
+
+    it('stays unevaluable when the operand is not a numeric literal', () => {
+      // `-user.x`, `-(expr)` and `-"a"` are not group-rule conditions Okta's own
+      // syntax produces — only `-<number literal>` folds.
+      expect(tryEvaluateRuleExpression('user.employeeNumber >= -user.floor', user)).toBe(
+        'unevaluable',
+      );
+      // `(1 + 1)` is a BinaryExpression, not a Literal — jsep drops parentheses
+      // that wrap a single literal, so `-(1)` alone would (correctly) fold the
+      // same as `-1` and isn't a useful negative case here.
+      expect(tryEvaluateRuleExpression('user.employeeNumber >= -(1 + 1)', user)).toBe(
+        'unevaluable',
+      );
+      expect(tryEvaluateRuleExpression('user.department == -"a"', user)).toBe('unevaluable');
+    });
+  });
+
+  describe('computed member access with a string-literal key', () => {
+    it('resolves the same as the dotted form would, were the name a valid identifier', () => {
+      expect(tryEvaluateRuleExpression('user["cost center"] == "CC-9"', user)).toBe('match');
+      expect(tryEvaluateRuleExpression('user["cost center"] == "CC-1"', user)).toBe('no-match');
+    });
+
+    it('reports attribute-absent for a computed key the profile does not carry', () => {
+      expect(tryEvaluateRuleExpression('user["cost centre"] == "CC-9"', user)).toBe('unevaluable');
+    });
+
+    it('stays unevaluable for a non-literal or nested computed key', () => {
+      expect(tryEvaluateRuleExpression('user[user.department] == "Engineering"', user)).toBe(
+        'unevaluable',
+      );
+      expect(tryEvaluateRuleExpression('user["cost center"]["nested"] == "x"', user)).toBe(
+        'unevaluable',
+      );
+    });
   });
 
   // The Kleene core, observed through `evaluateRuleNode` — the same walk the
@@ -422,8 +565,10 @@ describe('supported subset', () => {
   });
 
   describe('rejections reachable only through the ungated walk', () => {
-    it('rejects computed and non-user member access', () => {
-      expect(walkUngated('user["department"] == "Engineering"', user).resolved).toBe(false);
+    it('rejects a non-literal computed key and non-user member access', () => {
+      // A string-literal computed key now resolves the same as its dotted form
+      // — see "computed member access" below.
+      expect(walkUngated('user[user.department] == "Engineering"', user).resolved).toBe(false);
       expect(walkUngated('app.id == "0oaFAKE"', user).resolved).toBe(false);
       expect(walkUngated('user.a.b == 1', user).resolved).toBe(false);
     });
@@ -630,7 +775,10 @@ describe('tryEvaluateRuleExpressionDetailed', () => {
     { expression: 'user.roles == "admin,dev"', reasonCode: 'operand-type' },
     { expression: 'String.startsWith(user.firstName)', reasonCode: 'fn-arity' },
     { expression: 'app.clientId == "x"', reasonCode: 'unsupported-node' },
-    { expression: 'user["department"] == "Engineering"', reasonCode: 'unsupported-node' },
+    // A non-literal computed key stays unsupported — only a string-literal key
+    // (`user["department"]`) is modelled, and that case now resolves rather
+    // than being rejected: see "computed member access" below.
+    { expression: 'user[foo] == "Engineering"', reasonCode: 'unsupported-node' },
     { expression: 'user.department > "A"', reasonCode: 'operand-type' },
     { expression: 'String.startsWith(user.employeeNumber, "4")', reasonCode: 'operand-type' },
     { expression: 'user.department', reasonCode: 'not-a-boolean' },
@@ -730,5 +878,254 @@ describe('AST seam', () => {
     expect([...RULE_CONNECTIVE_OPERATORS].sort()).toEqual(
       ['&&', 'AND', 'OR', '||', 'and', 'or'].sort(),
     );
+  });
+});
+
+// ===========================================================================
+// Conditional expressions (`test ? consequent : alternate`). Okta EL accepts
+// them and jsep has always parsed them; the evaluator used to decline the node
+// outright, so a rule written in the ternary form came back `unevaluable`
+// however ordinary its parts were.
+// ===========================================================================
+describe('conditional expressions', () => {
+  const user: OktaUser = {
+    id: '00uFAKE',
+    status: 'ACTIVE',
+    profile: {
+      login: 'ada@example.com',
+      email: 'ada@example.com',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      department: 'Engineering',
+      userType: 'EMPLOYEE',
+      region: 'EU',
+      division: 'EMEA',
+      contractor: false,
+      roles: ['admin', 'dev'],
+      // `missingAttr` is deliberately absent: reading it is how a test operand
+      // is made UNRESOLVED rather than false.
+    },
+  } as unknown as OktaUser;
+
+  /** The same user, with the attributes an individual case needs changed. */
+  const userWith = (profile: Record<string, unknown>): OktaUser =>
+    ({ ...user, profile: { ...user.profile, ...profile } }) as unknown as OktaUser;
+
+  const groupsWithStaff = [{ id: '00gFAKE1', name: 'Staff' }];
+  const groupsWithoutStaff = [{ id: '00gFAKE2', name: 'Interns' }];
+
+  describe('a resolved test selects its branch', () => {
+    const expression =
+      'user.userType == "EMPLOYEE" ? isMemberOfGroupName("Staff") : user.contractor == true';
+
+    it('takes the consequent when the test is true', () => {
+      expect(tryEvaluateRuleExpression(expression, user, groupsWithStaff)).toBe('match');
+    });
+
+    it('reports no-match when the chosen consequent resolves to false', () => {
+      expect(tryEvaluateRuleExpression(expression, user, groupsWithoutStaff)).toBe('no-match');
+    });
+
+    it('takes the alternate when the test is false', () => {
+      const contractor = userWith({ userType: 'CONTRACTOR', contractor: true });
+      expect(tryEvaluateRuleExpression(expression, contractor, groupsWithoutStaff)).toBe('match');
+    });
+  });
+
+  describe('a conditional that produces a value, inside a comparison', () => {
+    const expression = '(user.region == "EU" ? "EMEA" : "AMER") == user.division';
+
+    it('matches when the selected branch equals the compared attribute', () => {
+      expect(tryEvaluateRuleExpression(expression, user)).toBe('match');
+    });
+
+    it('reports no-match when it does not', () => {
+      expect(tryEvaluateRuleExpression(expression, userWith({ division: 'AMER' }))).toBe(
+        'no-match',
+      );
+    });
+
+    it('follows the alternate branch for a false test', () => {
+      const amer = userWith({ region: 'US', division: 'AMER' });
+      expect(tryEvaluateRuleExpression(expression, amer)).toBe('match');
+    });
+  });
+
+  describe('an unresolved test', () => {
+    it('still resolves when both branches are the same value', () => {
+      expect(tryEvaluateRuleExpression('(user.missingAttr ? "X" : "X") == "X"', user)).toBe(
+        'match',
+      );
+    });
+
+    it('stays unevaluable when the branches differ', () => {
+      expect(tryEvaluateRuleExpression('(user.missingAttr ? "X" : "Y") == "X"', user)).toBe(
+        'unevaluable',
+      );
+    });
+
+    it('stays unevaluable for array branches, which are never the same value', () => {
+      expect(walkUngated('user.missingAttr ? user.roles : user.roles', user).resolved).toBe(false);
+    });
+
+    it('stays unevaluable when a branch is itself unresolved', () => {
+      expect(
+        walkUngated('user.missingAttr ? user.department : user.alsoMissing', user).resolved,
+      ).toBe(false);
+    });
+  });
+
+  describe('the chosen branch carries the answer', () => {
+    // `>` is allow-listed, so the grammar gate passes, but it gives up unless
+    // both operands are numbers — that branch resolves to nothing.
+    const expression = 'user.userType == "EMPLOYEE" ? user.department > "A" : false';
+
+    it('is unevaluable when the chosen branch does not resolve', () => {
+      expect(tryEvaluateRuleExpression(expression, user)).toBe('unevaluable');
+    });
+
+    it('is unaffected by an unresolved branch it did not choose', () => {
+      expect(tryEvaluateRuleExpression(expression, userWith({ userType: 'CONTRACTOR' }))).toBe(
+        'no-match',
+      );
+    });
+  });
+
+  describe('nested conditionals', () => {
+    const expression =
+      '(user.userType == "EMPLOYEE" ? (user.region == "EU" ? "EMEA" : "AMER") : "EXTERNAL") == user.division';
+
+    it('resolves through the inner conditional', () => {
+      expect(tryEvaluateRuleExpression(expression, user)).toBe('match');
+      expect(tryEvaluateRuleExpression(expression, userWith({ region: 'US' }))).toBe('no-match');
+    });
+
+    it('resolves through the outer alternate', () => {
+      const external = userWith({ userType: 'CONTRACTOR', division: 'EXTERNAL' });
+      expect(tryEvaluateRuleExpression(expression, external)).toBe('match');
+    });
+  });
+
+  it('is accepted by the grammar gate only when every part is supported', () => {
+    expect(gateAccepts('user.userType == "EMPLOYEE" ? "a" : "b"')).toBe(true);
+    // The alternate is a bare identifier — not a shape this module models.
+    expect(gateAccepts('user.userType == "EMPLOYEE" ? "a" : department')).toBe(false);
+    // The test is an array literal.
+    expect(gateAccepts('["a"] ? "a" : "b"')).toBe(false);
+  });
+});
+
+// ===========================================================================
+// isMemberOfGroupNameRegex — answered by the linear-time engine, not refused.
+//
+// This function was a standing refusal, under a reason code of its own, for the
+// module's whole life, because a `RegExp` built from a tenant pattern is a backtracking
+// lever pointed at the panel's only thread. ADR-0002 kept that ban and removed
+// the refusal: `shared/rules/safeRegex` runs the pattern in linear time, and
+// says so explicitly when it will not run one.
+// ===========================================================================
+
+describe('isMemberOfGroupNameRegex', () => {
+  const user: OktaUser = {
+    id: '00uFAKEuser00001',
+    status: 'ACTIVE',
+    profile: {
+      login: 'ada@example.com',
+      email: 'ada@example.com',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      department: 'Engineering',
+    },
+  };
+
+  /** The user's complete membership set, as the group-context option requires. */
+  const groups = [
+    { id: '00gFAKEgroup0001', name: 'SecOps-Alpha' },
+    { id: '00gFAKEgroup0002', name: 'Engineering' },
+    { id: '00gFAKEgroup0003', name: 'VPN — Standard' },
+  ];
+
+  it('answers match when a group name satisfies the pattern', () => {
+    expect(
+      tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("^SecOps-.*")', user, groups),
+    ).toEqual({ outcome: 'match' });
+  });
+
+  it('answers no-match when none does', () => {
+    expect(
+      tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("^Finance-.*")', user, groups),
+    ).toEqual({ outcome: 'no-match' });
+  });
+
+  it('requires the whole name to match, as Okta does server-side', () => {
+    // Java's `matches()`, not `find()`: "X-SecOps-Alpha" is not a member of
+    // `SecOps-.*` even though it contains a substring that is.
+    const shifted = [{ id: '00gFAKEgroup0009', name: 'X-SecOps-Alpha' }];
+    expect(tryEvaluateRuleExpression('isMemberOfGroupNameRegex("SecOps-.*")', user, shifted)).toBe(
+      'no-match',
+    );
+    expect(
+      tryEvaluateRuleExpression('isMemberOfGroupNameRegex(".*SecOps-.*")', user, shifted),
+    ).toBe('match');
+  });
+
+  it('negates cleanly', () => {
+    expect(tryEvaluateRuleExpression('!isMemberOfGroupNameRegex("^SecOps-.*")', user, groups)).toBe(
+      'no-match',
+    );
+    expect(
+      tryEvaluateRuleExpression('!isMemberOfGroupNameRegex("^Finance-.*")', user, groups),
+    ).toBe('match');
+  });
+
+  it('declines syntax the safe engine does not implement', () => {
+    expect(
+      tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("(?=x)SecOps")', user, groups),
+    ).toEqual({ outcome: 'unevaluable', reasonCode: 'regex-unsupported-syntax' });
+  });
+
+  it('declines a malformed pattern rather than guessing at it', () => {
+    expect(
+      tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("[")', user, groups),
+    ).toEqual({ outcome: 'unevaluable', reasonCode: 'regex-unsupported-syntax' });
+  });
+
+  it('declines a pattern past the engine’s size cap', () => {
+    const overlong = `"${'a'.repeat(MAX_PATTERN_LENGTH + 1)}"`;
+    expect(
+      tryEvaluateRuleExpressionDetailed(`isMemberOfGroupNameRegex(${overlong})`, user, groups),
+    ).toEqual({ outcome: 'unevaluable', reasonCode: 'regex-too-complex' });
+  });
+
+  it('stays group-membership-fn without a group list, like its siblings', () => {
+    expect(
+      tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("^SecOps-.*")', user),
+    ).toEqual({ outcome: 'unevaluable', reasonCode: 'group-membership-fn' });
+  });
+
+  describe('a group name the engine cannot read', () => {
+    /** Past `MAX_INPUT_LENGTH`, so matching it declines rather than answering. */
+    const overCap = { id: '00gFAKEgroup0004', name: 'Z'.repeat(MAX_INPUT_LENGTH + 1) };
+
+    it('still answers match when another name matched', () => {
+      // Eager Kleene: a found match is a found match, whatever the rest of the
+      // list did.
+      expect(
+        tryEvaluateRuleExpression('isMemberOfGroupNameRegex("^SecOps-.*")', user, [
+          ...groups,
+          overCap,
+        ]),
+      ).toBe('match');
+    });
+
+    it('never answers no-match when a name went unchecked', () => {
+      // A definite "none of them" is only claimable when every name evaluated.
+      expect(
+        tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("^Finance-.*")', user, [
+          ...groups,
+          overCap,
+        ]),
+      ).toEqual({ outcome: 'unevaluable', reasonCode: 'regex-too-complex' });
+    });
   });
 });

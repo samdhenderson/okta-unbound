@@ -62,7 +62,24 @@ const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' }
 `Textarea`, `PageHeader`, `EntityIdentity`, `EntityLink`, `Badge`, `Breadcrumbs`, `Tabs`, `Tooltip`,
 `CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`, `Eyebrow`,
 `StableWidth`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`, `SearchDropdown`,
-`SelectionChips`, `RuleExpressionText`.
+`SelectionChips`, `RuleExpressionText`, `ClauseLedger`, `ClauseLedgerBranch`, `ClauseLedgerClause`,
+`GroupReferenceChip`, `RawExpressionWell`.
+
+- [`ClauseLedger`](#clauseledger-family) — the tree-shaped rule-condition explanation (below)
+
+### `ClauseLedger` family
+
+Renders {@link module:shared/rules/explainExpression.explainRuleExpression}'s
+**tree** — `&&`/`||` structure intact. It is the explainer's only projection; the
+flat row-per-clause list it sat beside during the migration is gone.
+It replaced `groups/detail/ClauseChecklist`, which no longer exists;
+`users/MembershipRuleEvidence` is the production adopter. `ClauseLedger` composes
+`ClauseLedgerBranch` (a connective group, indented under a rail, with the
+Kleene-shortcut sentence when the structured fields say one applies) and
+`ClauseLedgerClause` (one leaf, including the plain-language label for a
+group-membership clause and its `GroupReferenceChip` row). `RawExpressionWell` is
+the toggled-to raw-EL view. Logic lives in `useClauseLedger` (memoised explanation,
+view-toggle state) per `docs/state-management.md`.
 
 These carry a written contract; read it before using one:
 
@@ -127,6 +144,9 @@ strip exists to stop ([action-bars.md](./action-bars.md)).
 
 The button/input migration is complete; these raw controls stay raw **by decision**, each carrying
 an inline `§3 exception` (or `CHARACTERIZED:`) comment at the call site:
+
+- **`ClauseLedger`'s raw-expression toggle** — an `aria-pressed` view toggle styled like
+  `FilterToggle`, hand-rolled because `FilterToggle` hardcodes its funnel icon and count badge.
 
 - **Composites** where a shared primitive is not pixel-neutral: the Add-to-Group type-ahead
   (`AddToGroupModal`) and `UserComparisonModal`'s search field in `ComparisonSearchPhase` —

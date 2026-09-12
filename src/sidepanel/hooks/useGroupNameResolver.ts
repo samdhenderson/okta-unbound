@@ -9,7 +9,7 @@
  * Four surfaces print rule condition text, and each had built its own id→name
  * lookup out of whatever it happened to be holding:
  *
- * - `ClauseChecklist` built one from **the user's own memberships**, so the one
+ * - `ClauseLedger` built one from **the user's own memberships**, so the one
  *   group the reader most needs named — a prerequisite they are *missing* — was
  *   the one group it could never name.
  * - `GroupRulesSection` read `FormattedRule.allGroupNamesMap`, which the group

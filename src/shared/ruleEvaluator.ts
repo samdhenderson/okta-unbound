@@ -17,9 +17,12 @@
  * never answer `no-match` when it merely failed to understand the expression.
  *
  * Group-membership functions (`isMemberOfGroup`, `isMemberOfGroupName`,
- * `isMemberOfAnyGroup*`, `…NameStartsWith`, `…NameContains`, `…NameRegex`) and
- * app-context (`app.*`) expressions cannot be resolved client-side — see
- * {@link GROUP_MEMBERSHIP_FUNCTIONS} for the seam that would resolve the former.
+ * `isMemberOfAnyGroup*`, `…NameStartsWith`, `…NameContains`, `…NameRegex`) are
+ * answered only against a caller-supplied group list — see
+ * {@link GROUP_MEMBERSHIP_FUNCTIONS} for that seam, including how the regex
+ * variant runs its tenant-authored pattern through the linear-time engine in
+ * `shared/rules/safeRegex` rather than a `RegExp` (ADR-0002). App-context
+ * (`app.*`) expressions cannot be resolved client-side at all.
  *
  * Parsing is memoised in a bounded, FIFO-evicting cache ({@link PARSE_CACHE_LIMIT}
  * entries) because attribution evaluates the same few rule conditions once per
@@ -49,6 +52,7 @@
 
 import jsep from 'jsep';
 import { createLogger } from './utils/logger';
+import { compileSafeRegex, matchCompiled, type SafeRegexDeclineReason } from './rules/safeRegex';
 import type { OktaUser } from './types';
 
 const log = createLogger('RuleEvaluator');
@@ -87,11 +91,22 @@ for (const operator of WORD_UNARY_OPERATORS) {
 }
 
 /**
- * Every unary operator this evaluator understands — logical negation, in its
- * symbolic and word forms. Anything else (`-`, `+`, `~`) is not a group-rule
- * condition and stays unevaluable.
+ * Every unary *negation* operator this evaluator understands — symbolic and
+ * word forms. Unary minus (`-1`) is handled separately, and only when its
+ * argument is a numeric literal (`evaluateNode`/`isSupportedNode`'s own
+ * `operator === '-'` branch): it negates a constant rather than negating a
+ * boolean, so it does not belong in this set. Anything else (`+`, `~`) is not
+ * a group-rule condition and stays unevaluable.
+ *
+ * Exported because `shared/rules/explainExpression` has to recognise the same
+ * negations when it describes a clause in words: a second, hand-restated list
+ * there would be free to drift, and a negation missed is a description that
+ * says the opposite of what the rule asks.
  */
-const NEGATION_OPERATORS: ReadonlySet<string> = new Set(['!', ...WORD_UNARY_OPERATORS]);
+export const RULE_NEGATION_OPERATORS: ReadonlySet<string> = new Set(['!', ...WORD_UNARY_OPERATORS]);
+
+/** Module-internal alias of {@link RULE_NEGATION_OPERATORS}. */
+const NEGATION_OPERATORS = RULE_NEGATION_OPERATORS;
 
 /**
  * Hard cap on the expression length we will parse at all. Rule expressions are
@@ -143,15 +158,23 @@ export type RuleExprValue = ExprValue;
  * - `empty` — the expression was empty or whitespace-only.
  * - `too-long` — longer than {@link MAX_EXPRESSION_LENGTH}; rejected before parsing.
  * - `parse-error` — jsep could not parse it.
- * - `unsupported-operator` — a binary operator outside {@link SUPPORTED_BINARY_OPERATORS}.
+ * - `unsupported-operator` — a binary operator outside {@link SUPPORTED_BINARY_OPERATORS},
+ *   or a unary minus whose argument is not a numeric literal (`-user.x`, `-(expr)`, `-"a"`).
  * - `group-membership-fn` — a {@link GROUP_MEMBERSHIP_FUNCTIONS} call made without
  *   a {@link RuleGroupContext}; answering it needs the user's full group list.
- * - `group-name-regex` — `isMemberOfGroupNameRegex`, which this module declines to
- *   run **even with** a group list. See {@link GROUP_MEMBERSHIP_FUNCTIONS}.
+ * - `regex-unsupported-syntax` — `isMemberOfGroupNameRegex` was given a pattern the
+ *   safe engine does not implement (lookaround, a backreference, `{n,m}`) or cannot
+ *   parse at all. Declined, never approximated.
+ * - `regex-too-complex` — the pattern or a group name is past one of the engine's
+ *   hard caps (length, state count, step budget), so the check did not run.
  * - `unknown-fn` — a call outside {@link SUPPORTED_FUNCTIONS}.
- * - `fn-arity` — an allow-listed function called with the wrong argument count.
- * - `unsupported-node` — a node shape we do not model (computed or non-`user.*`
- *   member access, a bare identifier, `this`, a regex literal, a `Compound`, …).
+ * - `fn-arity` — an allow-listed function called with the wrong argument count,
+ *   or (for a variadic function like `String.stringSwitch`) trailing arguments
+ *   that do not come in complete key/value pairs.
+ * - `unsupported-node` — a node shape we do not model (non-`user.*` member
+ *   access, a non-string-literal or nested computed key (`user[x]`,
+ *   `user["a"]["b"]`), a bare identifier, `this`, a regex literal, a
+ *   `Compound`, an array literal, …).
  * - `operand-type` — allow-listed grammar, but an operand's runtime type is
  *   outside what the operator or function accepts (`user.department > "A"`,
  *   `String.startsWith(user.employeeNumber, "4")`, an object-valued attribute).
@@ -170,7 +193,8 @@ export type RuleUnevaluableReason =
   | 'parse-error'
   | 'unsupported-operator'
   | 'group-membership-fn'
-  | 'group-name-regex'
+  | 'regex-unsupported-syntax'
+  | 'regex-too-complex'
   | 'unknown-fn'
   | 'fn-arity'
   | 'unsupported-node'
@@ -329,12 +353,37 @@ const SUPPORTED_BINARY_OPERATORS: ReadonlySet<string> = new Set([
   ...OR_OPERATORS,
 ]);
 
-/** An allow-listed Okta EL function: its exact arity plus a TypeScript implementation. */
+/**
+ * A variadic function's argument shape: at least `minArgs` arguments, and every
+ * argument from `pairsFrom` on must come in pairs (`(key, value)` slots) — a
+ * lone trailing key with no value is a malformed call, not a zero-argument one.
+ *
+ * `String.stringSwitch(input, defaultString, key1, value1, key2, value2, …)` is
+ * the one function this shape exists for: `minArgs: 2` (the input and the
+ * required default), `pairsFrom: 2` (everything after those two must pair up).
+ */
+interface VariadicPairsArity {
+  readonly minArgs: number;
+  readonly pairsFrom: number;
+}
+
+/** An allow-listed Okta EL function: its arity plus a TypeScript implementation. */
 interface SupportedFunction {
-  /** Exact number of arguments. Calls with any other count are unevaluable. */
-  arity: number;
+  /**
+   * Exact number of arguments, or a {@link VariadicPairsArity} shape for a
+   * function whose trailing arguments come in key/value pairs. Calls outside
+   * either shape are unevaluable (`fn-arity`).
+   */
+  arity: number | VariadicPairsArity;
   /** Pure implementation. Returns {@link UNRESOLVED} for argument types it cannot handle. */
   evaluate: (args: readonly ExprValue[]) => EvalResult;
+}
+
+/** Whether `argCount` satisfies a {@link SupportedFunction}'s `arity`. */
+function arityMatches(fn: SupportedFunction, argCount: number): boolean {
+  if (typeof fn.arity === 'number') return argCount === fn.arity;
+  const { minArgs, pairsFrom } = fn.arity;
+  return argCount >= minArgs && (argCount - pairsFrom) % 2 === 0;
 }
 
 /** Narrow an operand to a string, or give up. Okta EL string functions are string-typed. */
@@ -458,6 +507,36 @@ function substringBefore(source: string, separator: string): ExprValue | Unresol
 }
 
 /**
+ * `String.stringSwitch(input, defaultString, key1, value1, key2, value2, …)`.
+ *
+ * Okta's own documented examples pin every branch, and none of them is
+ * equality: `String.stringSwitch("Substrings count", "default", "ring", "value1")`
+ * returns `"value1"` because `"Substrings"` **contains** `"ring"` — matching is
+ * substring containment, the same discipline `String.stringContains` already
+ * uses. Pairs are tried **in the order supplied**, and the first key contained
+ * in the input wins even when a later key also matches — Okta's own worked
+ * example (`stringSwitch("First match wins", "default", "absent", "value1",
+ * "wins", "value2", "match", "value3")` → `"value2"`) picks the pair listed
+ * second over a substring match ("match") that occurs later in the key list
+ * but is also present in the input. No pair matching falls through to
+ * `defaultString` — a required positional argument, not an optional slot — so
+ * there is no branch left this function has to guess at. See
+ * docs/adr/0003-stringswitch-matched-cases.md.
+ */
+function evaluateStringSwitch(args: readonly ExprValue[]): EvalResult {
+  const input = asString(args[0]);
+  const fallback = asString(args[1]);
+  if (isUnresolved(input) || isUnresolved(fallback)) return UNRESOLVED;
+  for (let i = 2; i + 1 < args.length; i += 2) {
+    const key = asString(args[i]);
+    const value = asString(args[i + 1]);
+    if (isUnresolved(key) || isUnresolved(value)) return UNRESOLVED;
+    if (input.includes(key)) return value;
+  }
+  return fallback;
+}
+
+/**
  * The Okta Expression Language functions this evaluator implements, keyed by
  * their fully-qualified name.
  *
@@ -474,15 +553,14 @@ function substringBefore(source: string, separator: string): ExprValue | Unresol
  *   something this panel can read, so every answer would be right or wrong by up
  *   to a day depending on a fact we do not have. That is the definition of
  *   ambiguous.
- * - **`String.stringSwitch`** — its no-match behaviour is not pinned by Okta's
- *   published description, and guessing between "empty string" and "null"
- *   changes the verdict of the comparison it feeds.
  * - **`String.replaceFirst`** — Java, which Okta's expression language is built
  *   on, takes a **regular expression** as `replaceFirst`'s target. Implementing
- *   it as a literal replace would be wrong for any rule that relies on that;
- *   implementing it faithfully would compile a tenant-authored pattern, which is
- *   the same catastrophic-backtracking lever `isMemberOfGroupNameRegex` is
- *   refused over. Both roads are closed, so the function is not listed.
+ *   it as a literal replace would be wrong for any rule that relies on that.
+ *   Implementing it faithfully needs more than `isMemberOfGroupNameRegex` does:
+ *   that function only asks a yes/no question, which `shared/rules/safeRegex`
+ *   answers without backtracking (ADR-0002), whereas `replaceFirst` needs the
+ *   matched *span* — capture and submatch tracking the safe engine deliberately
+ *   does not implement. So the function stays unlisted until it does.
  *   `String.replace` is safe by contrast: its target is a literal.
  *
  * ## `Arrays.*` is available, contrary to this map's former comment
@@ -492,6 +570,15 @@ function substringBefore(source: string, separator: string): ExprValue | Unresol
  * none, so every rule over a multi-valued profile attribute was unevaluable.
  * `Arrays.add` and `Arrays.flatten` remain absent: they *return* collections
  * rather than answering anything, so no group-rule condition ends in one.
+ *
+ * ## `String.stringSwitch` is supported, contrary to this map's former comment
+ *
+ * It used to sit in the "deliberately absent" list above on the theory that its
+ * no-match behaviour was unpinned. Okta's own published examples say otherwise:
+ * matching is substring containment (not equality), pairs are tried in the
+ * order supplied, and the fall-through case is a **required** `defaultString`
+ * argument, not an optional one — every branch has a documented answer. See
+ * {@link evaluateStringSwitch} and docs/adr/0003-stringswitch-matched-cases.md.
  */
 export const SUPPORTED_FUNCTIONS: ReadonlyMap<string, SupportedFunction> = new Map<
   string,
@@ -520,6 +607,13 @@ export const SUPPORTED_FUNCTIONS: ReadonlyMap<string, SupportedFunction> = new M
   ],
   ['String.replace', { arity: 3, evaluate: (a) => evaluateReplace(a) }],
   ['String.substring', { arity: 3, evaluate: (a) => evaluateSubstring(a) }],
+  [
+    'String.stringSwitch',
+    {
+      arity: { minArgs: 2, pairsFrom: 2 },
+      evaluate: (a) => evaluateStringSwitch(a),
+    },
+  ],
   [
     'String.substringAfter',
     { arity: 2, evaluate: (a) => withTwoStrings(a, (s, sep) => substringAfter(s, sep)) },
@@ -551,14 +645,17 @@ export const SUPPORTED_FUNCTIONS: ReadonlyMap<string, SupportedFunction> = new M
  * why `RuleGroupContext` insists on the user's *complete* membership set rather
  * than the Okta groups a screen happens to have cached.
  *
- * ## `isMemberOfGroupNameRegex` is deliberately never run
+ * ## `isMemberOfGroupNameRegex` is answered too, without a `RegExp`
  *
- * It is the one member of this set that stays unevaluable even with a group list,
- * under its own reason code (`group-name-regex`). The pattern is tenant-authored
- * text, and building a `RegExp` from it hands an untrusted author a
- * catastrophic-backtracking lever over the side panel's only thread — a rule
- * whose evaluation hangs the UI. There is no way to bound backtracking in a
- * JavaScript `RegExp`, so the honest, safe answer is to say we did not check.
+ * It was the one member of this set that stayed unevaluable even with a group
+ * list: the pattern is tenant-authored text, and building a `RegExp` from it
+ * hands an untrusted author a catastrophic-backtracking lever over the side
+ * panel's only thread. ADR-0002 kept that ban and removed the refusal — the
+ * pattern is run by `shared/rules/safeRegex`, a hand-written linear-time engine
+ * (parser → Thompson NFA → breadth-wise simulation) with hard caps and full-match
+ * (Java `matches()`) semantics. Patterns outside its supported subset, and inputs
+ * past its caps, are **declined**, surfacing as `regex-unsupported-syntax` or
+ * `regex-too-complex` — never as a guessed answer.
  */
 export const GROUP_MEMBERSHIP_FUNCTIONS: ReadonlySet<string> = new Set([
   'isMemberOfGroup',
@@ -570,8 +667,18 @@ export const GROUP_MEMBERSHIP_FUNCTIONS: ReadonlySet<string> = new Set([
   'isMemberOfGroupNameRegex',
 ]);
 
-/** The one membership function that stays unevaluable even with a group list. */
-const GROUP_NAME_REGEX_FUNCTION = 'isMemberOfGroupNameRegex';
+/**
+ * One argument's answer against the user's whole group list: a definite
+ * membership verdict, or the reason none could be produced.
+ *
+ * A decline is **not** a `false`. Only the id/name comparisons can always answer;
+ * `isMemberOfGroupNameRegex` runs a tenant pattern through a bounded engine that
+ * is entitled to say it has no opinion, and collapsing that into "not a member"
+ * is exactly the confident-wrong answer this module exists to avoid.
+ */
+type GroupArgumentVerdict =
+  | { readonly kind: 'answer'; readonly matched: boolean }
+  | { readonly kind: 'declined'; readonly reason: RuleUnevaluableReason };
 
 /**
  * How one membership function reads its arguments against the group list.
@@ -581,10 +688,77 @@ const GROUP_NAME_REGEX_FUNCTION = 'isMemberOfGroupNameRegex';
  * arity is checked as a minimum rather than an exact count.
  */
 interface GroupMembershipFunction {
-  /** Whether the user is in a group matching one argument. */
-  readonly matches: (group: RuleGroupContextEntry, argument: string) => boolean;
+  /**
+   * Whether the user is in a group matching one argument.
+   *
+   * Takes the **whole list** rather than one group so a function with
+   * per-argument setup cost pays it once per evaluation: the regex variant
+   * compiles its pattern here, not once per group name.
+   */
+  readonly matchesAny: (groups: RuleGroupContext, argument: string) => GroupArgumentVerdict;
   /** Whether Okta allows more than one group argument. */
   readonly variadic: boolean;
+}
+
+/** A verdict that is definitely known, either way. */
+function groupAnswer(matched: boolean): GroupArgumentVerdict {
+  return { kind: 'answer', matched };
+}
+
+/**
+ * The six functions that compare an argument against a field of each group.
+ *
+ * Every one of them can always answer, because the comparison is a plain string
+ * operation over a list documented to be complete.
+ */
+function byField(
+  matches: (group: RuleGroupContextEntry, argument: string) => boolean,
+): GroupMembershipFunction['matchesAny'] {
+  return (groups, argument) => groupAnswer(groups.some((group) => matches(group, argument)));
+}
+
+/**
+ * Map a `safeRegex` decline onto this module's vocabulary.
+ *
+ * The split is fixed by ADR-0002: the two codes that mean "this pattern is not
+ * something the engine implements" become `regex-unsupported-syntax`, and the
+ * five that mean "the engine stopped rather than spend unbounded work" become
+ * `regex-too-complex`. Both are reason **codes**, safe to log; the pattern and
+ * the group names are not, and never leave this function.
+ */
+function regexDeclineReason(reason: SafeRegexDeclineReason): RuleUnevaluableReason {
+  return reason === 'unsupported-syntax' || reason === 'parse-error'
+    ? 'regex-unsupported-syntax'
+    : 'regex-too-complex';
+}
+
+/**
+ * `isMemberOfGroupNameRegex`, run through the linear-time engine (ADR-0002).
+ *
+ * The pattern is compiled **once** and then matched against each group name in
+ * full (Java `matches()` semantics, as Okta evaluates it server-side).
+ *
+ * A per-name decline — one group name past the engine's input cap, say — is not
+ * allowed to silently drop that group from the list. A definite `true` from any
+ * other name still answers `true` (a found match is a found match), but a
+ * definite `false` is only claimable when **every** name actually evaluated;
+ * otherwise the whole call declines.
+ */
+function matchesAnyByRegex(groups: RuleGroupContext, pattern: string): GroupArgumentVerdict {
+  const program = compileSafeRegex(pattern);
+  if (program.kind === 'declined') {
+    return { kind: 'declined', reason: regexDeclineReason(program.reason) };
+  }
+  let declined: RuleUnevaluableReason | undefined;
+  for (const group of groups) {
+    const result = matchCompiled(program, group.name);
+    if (result.kind === 'declined') {
+      declined ??= regexDeclineReason(result.reason);
+      continue;
+    }
+    if (result.matched) return groupAnswer(true);
+  }
+  return declined === undefined ? groupAnswer(false) : { kind: 'declined', reason: declined };
 }
 
 /**
@@ -593,12 +767,19 @@ interface GroupMembershipFunction {
  * report a membership the tenant does not have.
  */
 const GROUP_MEMBERSHIP_IMPLEMENTATIONS: ReadonlyMap<string, GroupMembershipFunction> = new Map([
-  ['isMemberOfGroup', { matches: (g, a) => g.id === a, variadic: false }],
-  ['isMemberOfAnyGroup', { matches: (g, a) => g.id === a, variadic: true }],
-  ['isMemberOfGroupName', { matches: (g, a) => g.name === a, variadic: false }],
-  ['isMemberOfAnyGroupName', { matches: (g, a) => g.name === a, variadic: true }],
-  ['isMemberOfGroupNameStartsWith', { matches: (g, a) => g.name.startsWith(a), variadic: false }],
-  ['isMemberOfGroupNameContains', { matches: (g, a) => g.name.includes(a), variadic: false }],
+  ['isMemberOfGroup', { matchesAny: byField((g, a) => g.id === a), variadic: false }],
+  ['isMemberOfAnyGroup', { matchesAny: byField((g, a) => g.id === a), variadic: true }],
+  ['isMemberOfGroupName', { matchesAny: byField((g, a) => g.name === a), variadic: false }],
+  ['isMemberOfAnyGroupName', { matchesAny: byField((g, a) => g.name === a), variadic: true }],
+  [
+    'isMemberOfGroupNameStartsWith',
+    { matchesAny: byField((g, a) => g.name.startsWith(a)), variadic: false },
+  ],
+  [
+    'isMemberOfGroupNameContains',
+    { matchesAny: byField((g, a) => g.name.includes(a)), variadic: false },
+  ],
+  ['isMemberOfGroupNameRegex', { matchesAny: matchesAnyByRegex, variadic: false }],
 ]);
 
 // ---------------------------------------------------------------------------
@@ -628,6 +809,10 @@ function isUnaryExpression(node: jsep.Expression): node is jsep.UnaryExpression 
 
 function isBinaryExpression(node: jsep.Expression): node is jsep.BinaryExpression {
   return node.type === 'BinaryExpression';
+}
+
+function isConditionalExpression(node: jsep.Expression): node is jsep.ConditionalExpression {
+  return node.type === 'ConditionalExpression';
 }
 
 /**
@@ -815,8 +1000,10 @@ function asOperand(raw: unknown, options: EvaluationWalkOptions): EvalResult {
 
 /**
  * Read `user.<attribute>`, from the profile or from the user's own top-level
- * fields. Only the single-level `user.*` form is modelled; `app.*`, `session.*`,
- * computed access and nested paths are unresolvable.
+ * fields. Only the single-level `user.*` form is modelled, dotted
+ * (`user.department`) or computed with a string-literal key
+ * (`user["cost center"]`); `app.*`, `session.*`, a non-literal or nested
+ * computed key, and any deeper path are unresolvable.
  *
  * **An absent attribute is not `null`.** A profile that does not carry the name
  * at all resolves to `attribute-absent` — the evaluator failing to understand
@@ -826,10 +1013,23 @@ function asOperand(raw: unknown, options: EvaluationWalkOptions): EvalResult {
  * licenses a comparison.
  */
 function resolveMember(node: jsep.MemberExpression, options: EvaluationWalkOptions): EvalResult {
-  if (node.computed) return giveUp('unsupported-node', options);
   const { object, property } = node;
   if (!isIdentifier(object) || object.name !== 'user') return giveUp('unsupported-node', options);
-  if (!isIdentifier(property)) return giveUp('unsupported-node', options);
+
+  // `user.<name>` is the dotted form; `user["<name>"]` is the computed form with
+  // a string-literal key — same attribute, same resolution below. A computed key
+  // that is not a string literal (`user[x]`), or nested computed access, is a
+  // shape this module does not model.
+  let attributeName: string;
+  if (node.computed) {
+    if (!isLiteral(property) || typeof property.value !== 'string') {
+      return giveUp('unsupported-node', options);
+    }
+    attributeName = property.value;
+  } else {
+    if (!isIdentifier(property)) return giveUp('unsupported-node', options);
+    attributeName = property.name;
+  }
 
   const profile = options.user.profile as Record<string, unknown>;
   // The profile wins over the top-level field of the same name. An org whose
@@ -838,11 +1038,11 @@ function resolveMember(node: jsep.MemberExpression, options: EvaluationWalkOptio
   // `hasOwnProperty.call`, not `in`: a profile attribute is only what this user
   // actually carries, and `in` would find inherited `toString` and answer about
   // a function.
-  if (Object.prototype.hasOwnProperty.call(profile, property.name)) {
-    return asOperand(profile[property.name], options);
+  if (Object.prototype.hasOwnProperty.call(profile, attributeName)) {
+    return asOperand(profile[attributeName], options);
   }
-  if (USER_TOP_LEVEL_FIELDS.has(property.name)) {
-    const raw = (options.user as unknown as Record<string, unknown>)[property.name];
+  if (USER_TOP_LEVEL_FIELDS.has(attributeName)) {
+    const raw = (options.user as unknown as Record<string, unknown>)[attributeName];
     // Present in the type but not on this response — `lastLogin` on a user who
     // has never signed in, say. Absent is absent, whichever half it is missing
     // from.
@@ -926,18 +1126,21 @@ function evaluateBinary(node: jsep.BinaryExpression, options: EvaluationWalkOpti
  * Answer one `isMemberOf*` call against the supplied group list.
  *
  * Returns {@link UNRESOLVED} only for reasons that are genuinely unknowable here
- * — no group list, the regex variant, a bad arity, or a non-string argument.
- * Otherwise the answer is definite in both directions: finding no matching group
- * is `false`, which is sound precisely because {@link RuleGroupContext} is
- * documented to be the user's complete membership set.
+ * — no group list, a bad arity, a non-string argument, or a tenant pattern the
+ * safe regex engine declined. Otherwise the answer is definite in both
+ * directions: finding no matching group is `false`, which is sound precisely
+ * because {@link RuleGroupContext} is documented to be the user's complete
+ * membership set.
+ *
+ * The arguments of a variadic `…Any…` call are an **eager OR**: one matching
+ * argument answers `true` even if another declined, and only an all-false pass
+ * in which nothing declined answers `false`.
  */
 function evaluateGroupMembershipCall(
   node: jsep.CallExpression,
   name: string,
   options: EvaluationWalkOptions,
 ): EvalResult {
-  if (name === GROUP_NAME_REGEX_FUNCTION) return giveUpLogged('group-name-regex', options);
-
   const { groups } = options;
   if (!groups) return giveUpLogged('group-membership-fn', options);
 
@@ -957,7 +1160,16 @@ function evaluateGroupMembershipCall(
     targets.push(value);
   }
 
-  return targets.some((target) => groups.some((group) => fn.matches(group, target)));
+  let declined: RuleUnevaluableReason | undefined;
+  for (const target of targets) {
+    const verdict = fn.matchesAny(groups, target);
+    if (verdict.kind === 'declined') {
+      declined ??= verdict.reason;
+      continue;
+    }
+    if (verdict.matched) return true;
+  }
+  return declined === undefined ? false : giveUpLogged(declined, options);
 }
 
 function evaluateCall(node: jsep.CallExpression, options: EvaluationWalkOptions): EvalResult {
@@ -969,7 +1181,7 @@ function evaluateCall(node: jsep.CallExpression, options: EvaluationWalkOptions)
     }
     return giveUpLogged('unknown-fn', options);
   }
-  if (node.arguments.length !== fn.arity) {
+  if (!arityMatches(fn, node.arguments.length)) {
     return giveUpLogged('fn-arity', options);
   }
 
@@ -986,6 +1198,51 @@ function evaluateCall(node: jsep.CallExpression, options: EvaluationWalkOptions)
   return isUnresolved(result) ? giveUp('operand-type', options) : result;
 }
 
+/**
+ * Whether two resolved values are the *same* value, under the same equality
+ * discipline {@link evaluateBinary} applies to `==`.
+ *
+ * Strict and scalar-only: an array operand is never comparable here, because
+ * `===` on two arrays is reference equality — a confident "these differ" about
+ * collections that may well be identical. Two array branches are therefore not
+ * the same value, which is what keeps {@link evaluateConditional} from claiming
+ * an answer it has not established.
+ */
+function isSameValue(left: ExprValue, right: ExprValue): boolean {
+  if (Array.isArray(left) || Array.isArray(right)) return false;
+  return left === right;
+}
+
+/**
+ * Three-valued conditional (`test ? consequent : alternate`).
+ *
+ * The test goes through the same {@link truthiness} discipline the connectives
+ * use — one truthiness for the whole module, and an array is never a truth
+ * value — so a resolved test simply selects its branch, and the selected
+ * branch's own {@link UNRESOLVED} propagates.
+ *
+ * **An unresolved test does not automatically poison the conditional.** Both
+ * branches are evaluated, and if they resolve to the same value the structure
+ * has already determined the answer whatever the test would have said. That is
+ * the eager posture {@link evaluateAnd}/{@link evaluateOr} already take —
+ * `unresolvable || true` is `true` — applied to the one other place where a
+ * sub-expression we cannot read does not actually change the result. Anything
+ * else stays unresolved: never a guess.
+ */
+function evaluateConditional(
+  node: jsep.ConditionalExpression,
+  options: EvaluationWalkOptions,
+): EvalResult {
+  const test = truthiness(evaluateNode(node.test, options));
+  if (!isUnresolved(test)) {
+    return evaluateNode(test ? node.consequent : node.alternate, options);
+  }
+  const consequent = evaluateNode(node.consequent, options);
+  const alternate = evaluateNode(node.alternate, options);
+  if (isUnresolved(consequent) || isUnresolved(alternate)) return UNRESOLVED;
+  return isSameValue(consequent, alternate) ? consequent : UNRESOLVED;
+}
+
 /** Walk one AST node against the allow-list. Never throws for unsupported input. */
 function evaluateNode(node: jsep.Expression, options: EvaluationWalkOptions): EvalResult {
   if (isLiteral(node)) {
@@ -999,13 +1256,25 @@ function evaluateNode(node: jsep.Expression, options: EvaluationWalkOptions): Ev
   if (isMemberExpression(node)) return resolveMember(node, options);
   if (isCallExpression(node)) return evaluateCall(node, options);
   if (isBinaryExpression(node)) return evaluateBinary(node, options);
+  if (isConditionalExpression(node)) return evaluateConditional(node, options);
   if (isUnaryExpression(node)) {
+    if (node.operator === '-') {
+      // Unary minus on a numeric literal only — `-1`, `-0.5`. `-user.x`,
+      // `-(expr)` and `-"a"` are not group-rule conditions Okta's own syntax
+      // produces, so they stay unevaluable under the same reason a foreign
+      // binary operator gets rather than the generic `unsupported-node`.
+      const { argument } = node;
+      if (isLiteral(argument) && typeof argument.value === 'number') {
+        return -argument.value;
+      }
+      return giveUp('unsupported-operator', options);
+    }
     if (!NEGATION_OPERATORS.has(node.operator)) return giveUp('unsupported-node', options);
     const argument = truthiness(evaluateNode(node.argument, options));
     return isUnresolved(argument) ? UNRESOLVED : !argument;
   }
-  // Identifier, Compound, ArrayExpression, ConditionalExpression, ThisExpression,
-  // SequenceExpression — none are meaningful group-rule conditions.
+  // Identifier, Compound, ArrayExpression, ThisExpression, SequenceExpression —
+  // none are meaningful group-rule conditions.
   return giveUpLogged('unsupported-node', options);
 }
 
@@ -1103,11 +1372,16 @@ function isSupportedNode(node: jsep.Expression, options: GrammarWalkOptions = {}
     return supported || reject('unsupported-node', options);
   }
   if (isMemberExpression(node)) {
+    const isUserObject = isIdentifier(node.object) && node.object.name === 'user';
+    // Dotted access (`user.department`) needs an identifier property; computed
+    // access (`user["cost center"]`) needs a string-literal one — `user[x]` and
+    // nested computed access (`user["a"]["b"]`) are not. Both routes resolve
+    // through the identical `resolveMember` lookup.
     const supported =
-      !node.computed &&
-      isIdentifier(node.object) &&
-      node.object.name === 'user' &&
-      isIdentifier(node.property);
+      isUserObject &&
+      (node.computed
+        ? isLiteral(node.property) && typeof node.property.value === 'string'
+        : isIdentifier(node.property));
     return supported || reject('unsupported-node', options);
   }
   if (isCallExpression(node)) {
@@ -1116,9 +1390,10 @@ function isSupportedNode(node: jsep.Expression, options: GrammarWalkOptions = {}
     if (!fn) {
       if (!name || !GROUP_MEMBERSHIP_FUNCTIONS.has(name)) return reject('unknown-fn', options);
       // Support for these tracks what the evaluation walk can actually do, so the
-      // two never disagree: the regex variant is refused outright, and the rest
-      // are supported exactly when a group list will be there to answer them.
-      if (name === GROUP_NAME_REGEX_FUNCTION) return reject('group-name-regex', options);
+      // two never disagree: all seven, the regex variant included (ADR-0002), are
+      // supported exactly when a group list will be there to answer them. Whether
+      // a given tenant pattern is inside the safe engine's subset is not a
+      // grammar question — that decline surfaces from the evaluation walk.
       if (!options.hasGroupContext) return reject('group-membership-fn', options);
       const membershipFn = GROUP_MEMBERSHIP_IMPLEMENTATIONS.get(name);
       if (!membershipFn) return reject('group-membership-fn', options);
@@ -1128,12 +1403,16 @@ function isSupportedNode(node: jsep.Expression, options: GrammarWalkOptions = {}
       if (wrongArity) return reject('fn-arity', options);
       return node.arguments.every((argument) => isSupportedNode(argument, options));
     }
-    if (node.arguments.length !== fn.arity) return reject('fn-arity', options);
+    if (!arityMatches(fn, node.arguments.length)) return reject('fn-arity', options);
     // Arrow, not a bare reference: `every` would otherwise pass the index as the
     // options object.
     return node.arguments.every((argument) => isSupportedNode(argument, options));
   }
   if (isUnaryExpression(node)) {
+    if (node.operator === '-') {
+      const supported = isLiteral(node.argument) && typeof node.argument.value === 'number';
+      return supported || reject('unsupported-operator', options);
+    }
     if (!NEGATION_OPERATORS.has(node.operator)) return reject('unsupported-node', options);
     return isSupportedNode(node.argument, options);
   }
@@ -1142,6 +1421,16 @@ function isSupportedNode(node: jsep.Expression, options: GrammarWalkOptions = {}
       return reject('unsupported-operator', options);
     }
     return isSupportedNode(node.left, options) && isSupportedNode(node.right, options);
+  }
+  if (isConditionalExpression(node)) {
+    // Okta EL's `test ? a : b`. Supported exactly when all three parts are — the
+    // mirror of `evaluateConditional`, which may have to read either branch (and
+    // reads both when the test is unresolved).
+    return (
+      isSupportedNode(node.test, options) &&
+      isSupportedNode(node.consequent, options) &&
+      isSupportedNode(node.alternate, options)
+    );
   }
   return reject('unsupported-node', options);
 }

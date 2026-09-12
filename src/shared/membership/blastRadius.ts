@@ -69,7 +69,12 @@ import {
   type RuleGroupContext,
   type RuleMatchResult,
 } from '../ruleEvaluator';
-import { explainRuleExpression, type ClauseGroupReference } from '../rules/explainExpression';
+import {
+  explainRuleExpression,
+  type ClauseGroupReference,
+  type ClauseTreeNode,
+} from '../rules/explainExpression';
+import { matchSafeRegex } from '../rules/safeRegex';
 import { groupContextOf } from './groupContext';
 import { conditionExpressionOf } from './ruleExpression';
 import {
@@ -406,10 +411,16 @@ interface AffectedGroup {
 /**
  * Whether one `isMemberOf*` argument names an affected group.
  *
- * The same four-case switch `explainExpression.findMatchingGroup` and
- * `ruleEvaluator`'s `GROUP_MEMBERSHIP_IMPLEMENTATIONS` use, both module-private.
- * Name comparisons are case-sensitive for the reason stated there: two groups
- * differing only in case are two different groups.
+ * The same switch `explainExpression.findMatchingGroup` and `ruleEvaluator`'s
+ * `GROUP_MEMBERSHIP_IMPLEMENTATIONS` use, both module-private. Name comparisons
+ * are case-sensitive for the reason stated there: two groups differing only in
+ * case are two different groups.
+ *
+ * `nameRegex` runs the tenant pattern through the linear-time engine (ADR-0002),
+ * full-match, never a `RegExp`. A decline there reads as "does not name this
+ * group", which under-reports a possible cascade rather than inventing one — the
+ * same safe direction as this scan's other blind spot, documented on
+ * {@link secondOrderScan}.
  */
 function referenceNames(reference: ClauseGroupReference, group: AffectedGroup): boolean {
   switch (reference.match) {
@@ -421,7 +432,28 @@ function referenceNames(reference: ClauseGroupReference, group: AffectedGroup): 
       return group.name.startsWith(reference.value);
     case 'nameContains':
       return group.name.includes(reference.value);
+    case 'nameRegex': {
+      const result = matchSafeRegex(reference.value, group.name);
+      return result.kind === 'match' && result.matched;
+    }
   }
+}
+
+/**
+ * Every `isMemberOf*` reference anywhere in one rule's explanation, in source
+ * order.
+ *
+ * Walks the whole clause tree rather than its top level. A membership call
+ * nested inside an `||` — `user.department == "Sales" || isMemberOfGroup("…")` —
+ * is a leaf of that group, and the flat projection this replaced could only see
+ * the group as a whole, which carries no references of its own. Those rules were
+ * silently missing from the cascade scan; they are named now. Nothing that was
+ * scanned before stops being scanned: a top-level membership clause is still a
+ * leaf of the tree.
+ */
+function groupReferencesUnder(node: ClauseTreeNode): readonly ClauseGroupReference[] {
+  if (node.node === 'leaf') return node.groupReferences ?? [];
+  return node.children.flatMap(groupReferencesUnder);
 }
 
 /** Transitions worth scanning: a rule already moving is reported on its own row. */
@@ -438,9 +470,10 @@ const SECOND_ORDER_TRANSITIONS: ReadonlySet<RuleTransition> = new Set<RuleTransi
  * compound its own error.
  *
  * Two known blind spots, both inherited and both in the safe direction (they
- * under-report a possibility rather than inventing one): `isMemberOfGroupNameRegex`
- * carries no structured group references at all, because the evaluator declines
- * to run tenant-authored patterns; and an `added` group whose id is absent
+ * under-report a possibility rather than inventing one): an
+ * `isMemberOfGroupNameRegex` clause whose pattern the safe engine declines
+ * carries no structured group references at all (a runnable one does, since
+ * ADR-0002); and an `added` group whose id is absent
  * from {@link BlastRadiusInput.groupNames} is matched by id only, since its
  * `groupName` is then the id itself.
  *
@@ -461,11 +494,10 @@ function secondOrderScan(
   const names = new Set<string>();
   for (const evaluation of evaluations) {
     if (!SECOND_ORDER_TRANSITIONS.has(evaluation.effect.transition)) continue;
-    const { clauses } = explainRuleExpression(evaluation.effect.expression, drafted, {
+    const { tree } = explainRuleExpression(evaluation.effect.expression, drafted, {
       groups: context,
     });
-    const references = clauses.flatMap((clause) => clause.groupReferences ?? []);
-    const touches = references.some((reference) =>
+    const touches = groupReferencesUnder(tree).some((reference) =>
       affected.some((group) => referenceNames(reference, group)),
     );
     if (touches) names.add(evaluation.effect.ruleName);
