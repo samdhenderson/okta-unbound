@@ -849,9 +849,7 @@ describe('loadAllGroups', () => {
     await waitFor(() => expect(renderedGroupNames()).toEqual(['Engineering', 'Slack Users']));
 
     // Mode flipped to cached: the cached-mode search placeholder + selection bar appear.
-    expect(
-      screen.getByPlaceholderText('Search by name, description, ID — or /regex/'),
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search groups...')).toBeInTheDocument();
     expect(screen.getByText('2 Cached')).toBeInTheDocument();
     // RETARGETED (ADR-0069): the rung's own Refresh button is gone — one refresh
     // lives in the chrome band and the rung tells it what "again" means. Same
@@ -1035,9 +1033,7 @@ describe('loadAllGroups', () => {
     expect(renderedGroupNames()).toEqual(['Engineering']);
     // The cached-mode input is a different control and starts empty; the live query
     // and its results are both reset.
-    expect(screen.getByPlaceholderText('Search by name, description, ID — or /regex/')).toHaveValue(
-      '',
-    );
+    expect(screen.getByPlaceholderText('Search groups...')).toHaveValue('');
   });
 });
 
@@ -1126,7 +1122,7 @@ describe('filter pipeline (cached mode)', () => {
       cachedGroup({ id: 'b', name: 'ZebraTeam', description: 'nope' }),
       cachedGroup({ id: 'c', name: 'Gamma', description: 'A ZEBRA lives here' }),
     ]);
-    const input = screen.getByPlaceholderText('Search by name, description, ID — or /regex/');
+    const input = screen.getByPlaceholderText('Search groups...');
 
     await uev.type(input, 'zebra');
     expect(renderedGroupNames().sort()).toEqual(['Gamma', 'ZebraTeam']);
@@ -1272,7 +1268,7 @@ describe('filter pipeline (cached mode)', () => {
   it('a text query alone does not raise the Filters badge, but Clear all still wipes it', async () => {
     const uev = userEvent.setup();
     await renderCached([cachedGroup({ id: 'a', name: 'Alpha', type: 'APP_GROUP' })]);
-    const input = screen.getByPlaceholderText('Search by name, description, ID — or /regex/');
+    const input = screen.getByPlaceholderText('Search groups...');
 
     await uev.type(input, 'alph');
     expect(screen.getByRole('button', { name: /^Filters/ })).toHaveAccessibleName('Filters');
@@ -2003,10 +1999,7 @@ describe('empty states', () => {
 
     // A text query alone yields the empty state but NO Clear Filters action
     // (activeFilterCount ignores searchQuery).
-    await uev.type(
-      screen.getByPlaceholderText('Search by name, description, ID — or /regex/'),
-      'zzz',
-    );
+    await uev.type(screen.getByPlaceholderText('Search groups...'), 'zzz');
     expect(screen.getByText('No groups match your filters')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clear Filters' })).not.toBeInTheDocument();
 

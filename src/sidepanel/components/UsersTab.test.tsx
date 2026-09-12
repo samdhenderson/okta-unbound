@@ -202,7 +202,20 @@ async function flush() {
   });
 }
 
-const userSearchInput = () => screen.getByPlaceholderText('Search by email, name, or login...');
+/**
+ * The Users tab's own search box. The comparison surface's search box carries
+ * the same placeholder and stays mounted alongside it, so the query is scoped
+ * to the subtree outside the comparison.
+ */
+const userSearchInput = () => {
+  const outside = screen
+    .getAllByPlaceholderText('Search users...')
+    .filter((el) => !el.closest('[data-testid="user-comparison-view"]'));
+  if (outside.length !== 1) {
+    throw new Error(`expected exactly one Users tab search box, found ${outside.length}`);
+  }
+  return outside[0] as HTMLElement;
+};
 const groupSearchInput = () => screen.getByPlaceholderText('Type to search by group name...');
 
 /**

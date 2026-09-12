@@ -31,7 +31,7 @@ whether a camera has to run again.
 | **The narration** — what is said over it                | `reel/NARRATION.md`, `captures/vo/*.wav`       | A re-record, which only Sam can do.           |
 | **The advertisement** — the store page cut              | `reel/src/ad/`, `reel/AD.md`                   | A render. No footage exists or is wanted.     |
 
-The fourth is a separate film sharing the first one's parts. It is nineteen
+The fourth is a separate film sharing the first one's parts. It is twenty eight
 seconds, entirely synthetic, and lives behind its own Remotion entry
 (`reel/src/ad-entry.ts`) precisely so a broken capture cannot take it down with the
 reel. **`reel/AD.md` is its one page**; read that instead of these rows when the

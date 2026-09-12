@@ -88,7 +88,7 @@ const AppsToolbar: React.FC<AppsToolbarProps> = ({
       value={searchQuery}
       onChange={onSearchQueryChange}
       ariaLabel="Search applications"
-      placeholder="Search by name, app key, ID — or /regex/"
+      placeholder="Search..."
       icon={<Icon type="search" size="md" />}
     />
 

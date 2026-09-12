@@ -1,15 +1,33 @@
 /**
  * @module reel/ad/stabs/End
- * @description Stab 9: the name, and the one thing to do about it.
+ * @description Stab 12: what Okta leaves out, what this adds, and where the button is.
  *
- * An end card has exactly two jobs and neither of them is summarising the ad.
- * The viewer has to leave knowing what the thing is called and where the button
- * is. Everything else on this frame is there to make those two things feel
- * inevitable rather than to add information.
+ * An end card has two jobs and neither of them is summarising the ad. The
+ * viewer has to leave knowing what the thing is called and where the button is.
+ * Everything else on this frame exists to make those two feel inevitable rather
+ * than to add information.
  *
- * The wordmark stamps, the rule draws under it, and the install button beats
- * once and holds. The beat is the last motion in the film on purpose: the eye
- * ends up on the button and there is nothing after it to pull the eye away.
+ * ## The claim, and why it is phrased against Okta rather than about us
+ *
+ * `Okta covers the basics. Unbind and discover more.` is a positioning line,
+ * not a criticism: an admin watching this has Okta and is not replacing it, so
+ * an ad that argues with the console it sits beside is arguing with the
+ * viewer's own decision. Conceding the basics is what earns the second
+ * sentence. The name does the work in that sentence - `Unbind` is the product,
+ * set in the accent, and it is the one word on this frame that is both the
+ * claim and the brand.
+ *
+ * ## Who. What. Why. Then take action.
+ *
+ * The four beats are the ad's own structure read back, and they land one at a
+ * time so the viewer hears the rhythm rather than reads a list. They pick up
+ * the three accented interrogatives the `hook` opened on, in the same colour,
+ * which is the only piece of styling that spans the whole cut: the questions
+ * that had six tabs and no answer at the start have an answer and a verb by the
+ * end.
+ *
+ * The install button beats last, on purpose. The eye ends on the button and
+ * there is nothing after it to pull the eye away.
  */
 import React from 'react';
 import { AbsoluteFill } from 'remotion';
@@ -22,59 +40,118 @@ import { Icon } from '../ui';
 import type { StabProps } from '../types';
 
 export const END_CUES = {
-  /** The name. */
-  mark: { verb: 'stamp' },
+  /** The concession. */
+  basics: { verb: 'snap' },
+  /** The claim, and the name inside it. */
+  unbind: { verb: 'stamp', gap: 6 },
   /** The rule under it. */
-  rule: { verb: 'strike', gap: 4 },
-  /** What it is, in one line. */
-  line: { verb: 'snap', gap: 8 },
-  /** And the button. */
+  rule: { verb: 'strike', gap: 3 },
+  /** The three questions, answered this time. */
+  who: { verb: 'stamp', gap: 9 },
+  what: { verb: 'stamp', gap: 5 },
+  why: { verb: 'stamp', gap: 5 },
+  /** And the verb the other three were for. */
+  act: { verb: 'snap', gap: 6 },
+  /** The button. */
   cta: { verb: 'snap', gap: 8 },
-  beat: { verb: 'pulse', gap: 6, hold: 1.1 },
+  beat: { verb: 'pulse', gap: 6, hold: 1.15 },
 } as const satisfies Record<string, Cue>;
 
 const SHEET = tempo(END_CUES);
 export const END_FRAMES = SHEET.frames;
+
+/** One of the three interrogatives, in the accent the `hook` set them in. */
+const Beat: React.FC<{ from: number; children: React.ReactNode }> = ({ from, children }) => (
+  <Stamp from={from} flash={STAGE.accent}>
+    <span
+      style={{
+        fontSize: TYPE.claim,
+        fontWeight: 700,
+        letterSpacing: '-.015em',
+        color: STAGE.accent,
+      }}
+    >
+      {children}
+    </span>
+  </Stamp>
+);
 
 export const End: React.FC<StabProps> = () => (
   <Stage>
     <AbsoluteFill
       style={{ alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}
     >
-      <Stamp from={SHEET.at.mark} flash={STAGE.accent}>
+      <Snap from={SHEET.at.basics} edge="up" distance={18}>
         <div
           style={{
-            fontSize: TYPE.chapter + 26,
-            fontWeight: 700,
-            letterSpacing: '-.03em',
-            color: STAGE.ink,
-          }}
-        >
-          Okta Unbound
-        </div>
-      </Stamp>
-
-      <div style={{ marginTop: 26, width: 320 }}>
-        <Strike from={SHEET.at.rule} color={STAGE.accent} weight={5} />
-      </div>
-
-      <Snap from={SHEET.at.line} edge="up" distance={22}>
-        <div
-          style={{
-            marginTop: 34,
-            fontSize: TYPE.claim - 4,
-            fontWeight: 500,
+            fontSize: TYPE.body,
+            fontWeight: 600,
+            letterSpacing: '.18em',
+            textTransform: 'uppercase',
             color: STAGE.inkDim,
-            textAlign: 'center',
-            maxWidth: 1240,
-            lineHeight: 1.3,
           }}
         >
-          Okta tells you what someone has. This tells you why, and lets you fix it.
+          Okta covers the basics
         </div>
       </Snap>
 
-      <Snap from={SHEET.at.cta} edge="down" distance={26} style={{ marginTop: 62 }}>
+      <Stamp from={SHEET.at.unbind} flash={STAGE.accent}>
+        <div
+          style={{
+            marginTop: 20,
+            fontSize: TYPE.chapter - 6,
+            fontWeight: 700,
+            letterSpacing: '-.03em',
+            color: STAGE.ink,
+            lineHeight: 1.05,
+          }}
+        >
+          <span style={{ color: STAGE.accent }}>Unbind</span> and discover more.
+        </div>
+      </Stamp>
+
+      <div style={{ marginTop: 24, width: 320 }}>
+        <Strike from={SHEET.at.rule} color={STAGE.accent} weight={5} />
+      </div>
+
+      {/*
+        One row, not a stacked list: these are four beats of a sentence and a
+        list would invite the eye to compare them instead of hearing them in
+        order. The separators are set in the rule colour so the words are the
+        only thing with weight.
+      */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: 14,
+          marginTop: 44,
+          fontSize: TYPE.claim,
+          fontWeight: 700,
+          color: STAGE.rule,
+        }}
+      >
+        <Beat from={SHEET.at.who}>Who.</Beat>
+        <Beat from={SHEET.at.what}>What.</Beat>
+        <Beat from={SHEET.at.why}>Why.</Beat>
+        <Snap from={SHEET.at.act} edge="left" distance={22}>
+          <span style={{ color: STAGE.ink }}>Then take action.</span>
+        </Snap>
+      </div>
+
+      <div
+        style={{
+          marginTop: 54,
+          fontSize: TYPE.claim - 6,
+          fontWeight: 700,
+          letterSpacing: '-.02em',
+          color: STAGE.ink,
+        }}
+      >
+        Okta Unbound
+      </div>
+
+      <Snap from={SHEET.at.cta} edge="down" distance={26} style={{ marginTop: 24 }}>
         <Pulse from={SHEET.at.beat} radius={16} color={STAGE.accent} swell={0.05}>
           <div
             style={{
@@ -97,14 +174,14 @@ export const End: React.FC<StabProps> = () => (
 
       <div
         style={{
-          marginTop: 40,
+          marginTop: 30,
           fontSize: TYPE.body,
           letterSpacing: '.18em',
           textTransform: 'uppercase',
           color: STAGE.inkDim,
         }}
       >
-        Free · No account · No backend
+        Free! Install in the webstore.
       </div>
     </AbsoluteFill>
   </Stage>

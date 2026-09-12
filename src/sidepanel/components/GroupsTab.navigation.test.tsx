@@ -281,16 +281,14 @@ describe('GroupsTab sub-navigation', () => {
     const uev = userEvent.setup();
     await renderCached([cachedGroup(), cachedGroup({ id: 'g2', name: 'Design' })]);
 
-    const search = screen.getByPlaceholderText('Search by name, description, ID — or /regex/');
+    const search = screen.getByPlaceholderText('Search groups...');
     await uev.type(search, 'Engin');
     expect(screen.queryByLabelText('Select Design')).not.toBeInTheDocument();
 
     await drillInto(uev, 'Engineering');
     await uev.click(screen.getByRole('button', { name: 'Back to groups' }));
 
-    expect(screen.getByPlaceholderText('Search by name, description, ID — or /regex/')).toHaveValue(
-      'Engin',
-    );
+    expect(screen.getByPlaceholderText('Search groups...')).toHaveValue('Engin');
     expect(screen.queryByLabelText('Select Design')).not.toBeInTheDocument();
   });
 

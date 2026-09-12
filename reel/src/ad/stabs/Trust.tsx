@@ -7,10 +7,17 @@
  * defend the install to somebody, so the ad hands them the argument.
  *
  * Every line here is a fact the code keeps and `docs/security.md` states: there
- * is no backend and no telemetry, the XSRF token is read from the page per
- * request and never stored or messaged, and API calls run in the content script
- * on the session the browser already has. No line claims an audit, a
+ * is no telemetry and no account to create, the XSRF token is read from the page
+ * per request and never stored or messaged, and API calls run in the content
+ * script on the session the browser already has. No line claims an audit, a
  * certification, or a review that has not happened.
+ *
+ * The first line used to read `No backend. No telemetry.` and it was wrong.
+ * Okta's backend **is** the backend: every call this extension makes goes to the
+ * org's own API. There is no server of ours in the path, which is the true and
+ * narrower claim, and it is not the one that sentence made. A security line an
+ * admin can pick a hole in costs more than it buys, because the whole point of
+ * this shot is being the argument they take to their security team.
  */
 import React from 'react';
 import { AbsoluteFill } from 'remotion';
@@ -33,7 +40,7 @@ export const TRUST_FRAMES = SHEET.frames + 26;
 const LINE_STEP = 13;
 
 const LINES = [
-  'No backend. No telemetry.',
+  'No telemetry. No account to create.',
   'Your own Okta session is the only credential.',
   'Nothing leaves your browser.',
 ] as const;

@@ -43,7 +43,7 @@ const UserSearchBar: React.FC<UserSearchBarProps> = ({
   onClear,
   isSearching,
   showClearButton,
-  placeholder = 'Search by email, name, or login...',
+  placeholder = 'Search users...',
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
 

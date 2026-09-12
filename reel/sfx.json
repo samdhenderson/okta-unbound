@@ -1,11 +1,14 @@
 {
   "note": "Sound effects for the advertisement, as ffmpeg synthesis recipes. Read by scripts/make-sfx.mjs, which renders each one to captures/sfx/<id>.wav and writes src/sfx.generated.ts. This file is the single declaration of what sounds exist: the generator reads it, and src/ad/sfx.ts names ids the generator wrote, so a sound cannot be cued in the cut without existing here. Every noise source carries an explicit seed. Without one ffmpeg seeds anoisesrc from the clock, so whoosh, swell and impact came out a different instance of noise on every regeneration: same character, different waveform, and a set of recipes that could not reproduce the file they had just produced. Measured, not assumed: two consecutive runs gave whoosh.wav two different checksums. Every recipe is synthesis from an oscillator or a noise source. Nothing here is sampled, licensed, or downloaded, which is the point: a store page ad that ships with a library sample carries a licence question forever, and one that ships with an ffmpeg command line carries none.",
   "sounds": {
-    "drop": {
-      "why": "The cold open. A falling sine, quadratic in phase so the pitch actually descends rather than stepping, under a low pass so it is felt more than heard.",
-      "seconds": 1.1,
-      "input": "aevalsrc='0.9*sin(2*PI*(150*t - 58*t*t))':d=1.1:s=48000",
-      "filter": "lowpass=f=220,afade=t=in:st=0:d=0.03,afade=t=out:st=0.55:d=0.55,volume=0.75"
+    "bloom": {
+      "why": "The weight under an opening line, and under a warning. A soft low-mid chord with a fast attack and a long tail, deliberately sitting above the sub band. It replaces `drop`, which swept its pitch downward from 150Hz and read as a cartoon fall: distinctive once and irritating by the third viewing. The first replacement fixed the slide and overcorrected into 58Hz territory, which is chest thump on a good speaker and nothing at all on a laptop - a store page ad is watched on both, so the energy is put where both can hear it. Highpassed at 180 so there is no sub content to boom, lowpassed at 1800 so it stays felt rather than heard.",
+      "seconds": 0.8,
+      "inputs": [
+        "aevalsrc='sin(2*PI*196*t)+0.45*sin(2*PI*294*t)':d=0.8:s=48000",
+        "anoisesrc=d=0.8:c=pink:a=0.4:r=48000:seed=4409"
+      ],
+      "complex": "[0:a]highpass=f=180,lowpass=f=1800,afade=t=in:st=0:d=0.05:curve=qsin,afade=t=out:st=0.12:d=0.68:curve=exp[t];[1:a]highpass=f=450,lowpass=f=2800,afade=t=in:st=0:d=0.03,afade=t=out:st=0.03:d=0.24:curve=exp[n];[t][n]amix=inputs=2:weights=1 0.3,volume=0.34[a]"
     },
     "whoosh": {
       "why": "The panel arriving. Pink noise through a narrow band with hard fades: a burst of air, not a hiss.",

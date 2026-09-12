@@ -118,7 +118,7 @@ const AddGroupMemberModal: React.FC<AddGroupMemberModalProps> = ({
       <div className="space-y-4">
         <SearchDropdown<OktaUser>
           label="Search for a user"
-          placeholder="Type to search by name, email, or login..."
+          placeholder="Search users..."
           query={addQuery}
           onQueryChange={onAddQueryChange}
           isSearching={isSearchingToAdd}

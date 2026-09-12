@@ -8,7 +8,7 @@
 
 /** Sound id -> the WAV that was rendered for it, and its measured duration. */
 export const SFX = {
-  drop: { file: 'drop.wav', seconds: 1.1 },
+  bloom: { file: 'bloom.wav', seconds: 0.8 },
   whoosh: { file: 'whoosh.wav', seconds: 0.45 },
   click: { file: 'click.wav', seconds: 0.07 },
   tick: { file: 'tick.wav', seconds: 0.05 },

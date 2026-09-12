@@ -2,7 +2,7 @@
 
 The extension ships two films. **The reel** is the long demo: real footage of the
 real panel, captioned and argued over in a compositor. **The advertisement** is a
-nineteen-second store-page cut sharing the reel's motion grammar and tokens and
+twenty-eight-second store-page cut sharing the reel's motion grammar and tokens and
 none of its footage. This page owns the rules both rest on; how to work the rig is
 the `okta-reel` skill.
 
@@ -188,7 +188,7 @@ digit in `NARRATION.md` citing no figure.
 
 ## The advertisement
 
-`reel/src/ad/` is a second, nineteen-second cut for the Chrome Web Store, behind
+`reel/src/ad/` is a second, twenty-eight-second cut for the Chrome Web Store, behind
 its own Remotion entry (`reel/src/ad-entry.ts`), its own script
 (`reel/src/ad/script.ts`) and its own documented cut (`reel/AD.md`). **It is not a
 truncated film.** It shares the reel's verb grammar and generated theme and shares

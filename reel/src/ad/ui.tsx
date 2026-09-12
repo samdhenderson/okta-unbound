@@ -105,8 +105,14 @@ export type IconName =
   | 'pin'
   | 'refresh'
   | 'plus'
+  | 'minus'
   | 'check'
-  | 'warning';
+  | 'warning'
+  | 'grip'
+  | 'eye'
+  | 'eye-off'
+  | 'chart'
+  | 'settings';
 
 const PATHS: Record<IconName, React.ReactNode> = {
   home: <path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z" />,
@@ -159,7 +165,44 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,
+  minus: <path d="M5 12h14" />,
   check: <path d="m5 12.5 4.5 4.5L19 7" />,
+  // Six dots in two columns: the drag handle, which is the one glyph in this
+  // set that has to be recognised instantly at 16px on a phone.
+  grip: (
+    <>
+      <circle cx="9.5" cy="6.5" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="14.5" cy="6.5" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="9.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="14.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="9.5" cy="17.5" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="14.5" cy="17.5" r="1.3" fill="currentColor" stroke="none" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </>
+  ),
+  'eye-off': (
+    <>
+      <path d="M4 12s3.5-6.5 8-6.5c1.3 0 2.5.3 3.5.8M20 12s-3.5 6.5-8 6.5c-1.3 0-2.5-.3-3.5-.8" />
+      <path d="M4 4l16 16" />
+    </>
+  ),
+  chart: (
+    <>
+      <path d="M4.5 19.5h15" />
+      <path d="M7.5 19.5V11M12 19.5V5.5M16.5 19.5v-5" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v2.5M12 18.5V21M4.2 7.5l2.2 1.3M17.6 15.2l2.2 1.3M4.2 16.5l2.2-1.3M17.6 8.8l2.2-1.3" />
+    </>
+  ),
   warning: (
     <>
       <path d="M12 4.5 21 19H3z" />
@@ -183,7 +226,11 @@ export const Icon: React.FC<{
     strokeWidth={strokeWidth}
     strokeLinecap="round"
     strokeLinejoin="round"
-    style={{ display: 'block', flexShrink: 0 }}
+    // `color` as well as `stroke`, because a glyph made of dots rather than
+    // strokes (`grip`) fills with `currentColor` - and without this it inherits
+    // whatever text colour it happens to sit in instead of the colour the
+    // caller asked for. It rendered dark against the dark stage exactly once.
+    style={{ display: 'block', flexShrink: 0, color }}
   >
     {PATHS[name]}
   </svg>
@@ -608,4 +655,168 @@ export const Body: React.FC<{ style?: React.CSSProperties; children: React.React
   >
     {children}
   </div>
+);
+
+/**
+ * A filter pill: the product's own segmented selector.
+ *
+ * Two live in the profile pane ("All attributes", "Used by rules") and two in
+ * the blast radius report ("Groups 2", "Rules 4"). Same object, so it is one
+ * component rather than two that drift.
+ */
+export const FilterPill: React.FC<{
+  selected?: boolean;
+  count?: number;
+  children: React.ReactNode;
+}> = ({ selected, count, children }) => (
+  <span
+    style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 7,
+      padding: '7px 13px',
+      borderRadius: 999,
+      background: selected ? UI.brandWash : UI.chrome,
+      border: `1px solid ${selected ? UI.brand : UI.strongLine}`,
+      color: selected ? UI.brandText : UI.body,
+      fontSize: UI_TYPE.rowBody,
+      fontWeight: 600,
+    }}
+  >
+    {children}
+    {count !== undefined && (
+      <span
+        style={{
+          fontVariantNumeric: 'tabular-nums',
+          color: selected ? UI.brandText : UI.faint,
+          fontWeight: 700,
+        }}
+      >
+        {count}
+      </span>
+    )}
+  </span>
+);
+
+/** Which alert this is. `danger` is the product's vocabulary; `error` is not. */
+export type AlertTone = 'warn' | 'danger' | 'info';
+
+const ALERT_TONES: Record<AlertTone, { bg: string; edge: string; fg: string; icon: IconName }> = {
+  warn: { bg: UI.warnWash, edge: '#e8dda8', fg: UI.warn, icon: 'warning' },
+  danger: { bg: UI.badWash, edge: '#f3c8bf', fg: UI.bad, icon: 'warning' },
+  info: { bg: UI.brandWash, edge: UI.brandEdge, fg: UI.brandText, icon: 'shield' },
+};
+
+/**
+ * The banded alert the product puts above a consequential action.
+ *
+ * The left rule is the whole read at ad scale: the band's fill is pale enough
+ * to survive a store page's bitrate but not loud enough to be seen in a
+ * quarter-second, and a 3px bar in the tone's own colour is.
+ */
+export const AlertMessage: React.FC<{ tone?: AlertTone; children: React.ReactNode }> = ({
+  tone = 'warn',
+  children,
+}) => {
+  const { bg, edge, fg, icon } = ALERT_TONES[tone];
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 12,
+        padding: '13px 15px',
+        borderRadius: 9,
+        background: bg,
+        border: `1px solid ${edge}`,
+        borderLeft: `3px solid ${fg}`,
+      }}
+    >
+      <Icon name={icon} size={19} color={fg} />
+      <div style={{ fontSize: UI_TYPE.rowBody, color: UI.title, lineHeight: 1.45 }}>{children}</div>
+    </div>
+  );
+};
+
+/**
+ * A modal over the panel: the scrim, and the card it dims for.
+ *
+ * Absolutely positioned inside the panel's own body rather than over the whole
+ * frame, because that is where the product puts it - a side panel modal never
+ * escapes the panel. Which means the stab behind it stays visible at the edges,
+ * and the viewer can see it is the same screen they were just looking at.
+ */
+export const Sheet: React.FC<{
+  title: string;
+  sub?: React.ReactNode;
+  footer?: React.ReactNode;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}> = ({ title, sub, footer, style, children }) => (
+  <div
+    style={{
+      position: 'absolute',
+      inset: 0,
+      background: 'rgba(20,22,40,.42)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 18,
+    }}
+  >
+    <div
+      style={{
+        width: '100%',
+        background: UI.chrome,
+        borderRadius: 12,
+        boxShadow: '0 24px 60px -18px rgba(20,22,40,.5)',
+        overflow: 'hidden',
+        ...style,
+      }}
+    >
+      <div style={{ padding: '18px 20px 14px', borderBottom: `1px solid ${UI.line}` }}>
+        <div style={{ fontSize: UI_TYPE.h1, fontWeight: 700, color: UI.title }}>{title}</div>
+        {sub && (
+          <div style={{ fontSize: UI_TYPE.rowBody, color: UI.muted, marginTop: 5 }}>{sub}</div>
+        )}
+      </div>
+      <div
+        style={{
+          padding: '16px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
+          background: UI.canvas,
+        }}
+      >
+        {children}
+      </div>
+      {footer && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 10,
+            padding: '14px 20px',
+            borderTop: `1px solid ${UI.line}`,
+          }}
+        >
+          {footer}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+/**
+ * The hairline the display editor splices between two rows to say where a
+ * dragged attribute will land.
+ *
+ * A full-width 2px bar in the brand colour, exactly as the product renders it.
+ * It is a separate export rather than a literal inside the stab because
+ * {@link DropGap} is what opens the space for it, and a caller pairing a verb
+ * with a hand-drawn bar would be free to pick a different weight each time.
+ */
+export const DropIndicator: React.FC = () => (
+  <div style={{ height: 2, borderRadius: 1, background: UI.brand }} />
 );

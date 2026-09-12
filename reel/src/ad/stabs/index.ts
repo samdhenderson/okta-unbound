@@ -16,6 +16,10 @@
  * and anything that can throw there takes down the whole bundle rather than one
  * composition; and the preview compositions in `AdRoot.tsx` are **derived from
  * this object**, so a stab cannot exist without being viewable.
+ *
+ * The order the ad plays them in is not here. It is `ad/script.ts`, which names
+ * ids out of this object, so a stab can be built and looked at before anybody
+ * has decided where in the cut it goes.
  */
 import type { FC } from 'react';
 import type { Cue, Sheet } from '../../tempo';
@@ -23,8 +27,11 @@ import { tempo } from '../../tempo';
 import type { StabProps } from '../types';
 import { Hook, HOOK_CUES, HOOK_FRAMES } from './Hook';
 import { Arrive, ARRIVE_CUES, ARRIVE_FRAMES } from './Arrive';
+import { Arrange, ARRANGE_CUES, ARRANGE_FRAMES } from './Arrange';
 import { Why, WHY_CUES, WHY_FRAMES } from './Why';
 import { Compare, COMPARE_CUES, COMPARE_FRAMES } from './Compare';
+import { Weigh, WEIGH_CUES, WEIGH_FRAMES } from './Weigh';
+import { Blast, BLAST_CUES, BLAST_FRAMES } from './Blast';
 import { Predict, PREDICT_CUES, PREDICT_FRAMES } from './Predict';
 import { Fix, FIX_CUES, FIX_FRAMES } from './Fix';
 import { Prove, PROVE_CUES, PROVE_FRAMES } from './Prove';
@@ -53,12 +60,18 @@ export const STABS = {
   hook: { component: Hook, frames: HOOK_FRAMES, cues: HOOK_CUES },
   /** The panel arrives beside the tab you already had open. */
   arrive: { component: Arrive, frames: ARRIVE_FRAMES, cues: ARRIVE_CUES },
+  /** Twenty five fields, and you decide which ones matter. */
+  arrange: { component: Arrange, frames: ARRANGE_FRAMES, cues: ARRANGE_CUES },
   /** Every row says how it got there. */
   why: { component: Why, frames: WHY_FRAMES, cues: WHY_CUES },
   /** The difference is one character. */
   compare: { component: Compare, frames: COMPARE_FRAMES, cues: COMPARE_CUES },
+  /** One field, and everything standing on it. */
+  weigh: { component: Weigh, frames: WEIGH_FRAMES, cues: WEIGH_CUES },
   /** Find out what breaks before you break it. */
   predict: { component: Predict, frames: PREDICT_FRAMES, cues: PREDICT_CUES },
+  /** Press save, and see who moves before you do. */
+  blast: { component: Blast, frames: BLAST_FRAMES, cues: BLAST_CUES },
   /** Fix it where you found it, and watch the rule reread it. */
   fix: { component: Fix, frames: FIX_FRAMES, cues: FIX_CUES },
   /** The evidence walks out as a file. */

@@ -19,7 +19,6 @@
  * for why that fails silently instead of throwing.
  */
 import React from 'react';
-import { interpolate } from 'remotion';
 import { STAGE } from '../theme';
 import { useVerbPart } from './useVerb';
 
@@ -61,10 +60,15 @@ export const Pulse: React.FC<PulseProps> = ({
   // The ring keeps expanding after the object has settled, and fades as it
   // goes - it is the wave leaving, not an outline of the object.
   const ringScale = 1 + 0.16 * out + 0.1 * back;
-  const ringAlpha = interpolate(out - back * 0.8, [0, 0.4, 1], [0, 0.5, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
+  // Up with the swell, out with the settle, and **zero at rest**. The previous
+  // shape was `interpolate(out - back * 0.8, [0, 0.4, 1], [0, 0.5, 0])`, whose
+  // input settles at 0.2 once both windows have run - which lands on the rising
+  // half of that ramp and leaves the ring lit at a quarter opacity for the rest
+  // of the shot. Invisible around a badge, which is every other call site; two
+  // blue rules across the frame around a full width row, which is how it was
+  // finally noticed. A product of the two windows cannot do that: it is 0
+  // whenever either end is at rest, by construction.
+  const ringAlpha = 0.5 * out * (1 - back);
 
   return (
     <div style={{ position: 'relative', display: 'inline-block', ...style }}>

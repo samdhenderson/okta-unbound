@@ -37,3 +37,4 @@ export * from './Stamp';
 export * from './Wipe';
 export * from './Strike';
 export * from './Pulse';
+export * from './Drag';

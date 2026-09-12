@@ -157,10 +157,23 @@ beforeEach(() => {
 // helpers
 // ---------------------------------------------------------------------------
 
-/** The Users tab's own search box (ASCII ellipsis) — distinct from the comparison's. */
-const tabSearchInput = () => screen.getByPlaceholderText('Search by email, name, or login...');
-/** The comparison surface's search box (typographic ellipsis). */
-const compareSearchInput = () => screen.getByPlaceholderText('Search by email, name, or login…');
+/**
+ * The Users tab's own search box. The tab search and the comparison search now
+ * carry the same placeholder, and both stay mounted at once (the popped one is
+ * hidden with a Tailwind class jsdom never loads), so the two can only be told
+ * apart by which subtree they sit in — this is the one *outside* the comparison.
+ */
+const tabSearchInput = () => {
+  const outside = screen
+    .getAllByPlaceholderText('Search users...')
+    .filter((el) => !el.closest('[data-testid="user-comparison-view"]'));
+  if (outside.length !== 1) {
+    throw new Error(`expected exactly one Users tab search box, found ${outside.length}`);
+  }
+  return outside[0] as HTMLElement;
+};
+/** The comparison surface's search box — the one inside the pushed view. */
+const compareSearchInput = () => compareView().getByPlaceholderText('Search users...');
 
 /**
  * Queries scoped to the pushed comparison. Scoping is mandatory, not tidiness: the
@@ -183,7 +196,7 @@ const compareView = () => within(screen.getByTestId('user-comparison-view'));
  * that did *not* arrive as a deep link, so it can then observe one arriving.
  */
 async function selectAda(uev: ReturnType<typeof userEvent.setup>) {
-  await uev.type(screen.getByPlaceholderText('Search by email, name, or login...'), 'ada');
+  await uev.type(tabSearchInput(), 'ada');
   await uev.click(await screen.findByText('Ada Lovelace', {}, { timeout: 3000 }));
   await screen.findByRole('heading', { name: 'Ada Lovelace' });
 }

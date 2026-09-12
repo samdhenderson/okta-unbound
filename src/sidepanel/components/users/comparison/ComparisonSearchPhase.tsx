@@ -60,7 +60,7 @@ const ComparisonSearchPhase: React.FC<ComparisonSearchPhaseProps> = ({
         type="text"
         value={searchQuery}
         onChange={setSearchQuery}
-        placeholder="Search by email, name, or login…"
+        placeholder="Search users..."
         icon={<Icon type="search" size="sm" />}
       />
 

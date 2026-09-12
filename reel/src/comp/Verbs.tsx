@@ -43,6 +43,8 @@ import {
   Wipe,
   Strike,
   Pulse,
+  Drag,
+  DropGap,
   VERBS,
 } from '../verbs';
 import type { VerbName } from '../verbs';
@@ -347,7 +349,7 @@ export const Verbs: React.FC = () => {
   const drawPeriod = DRAW_TEXT_OFFSET + DRAW_TEXT_FRAMES + 90;
   const drawFrom = loopFrom(frame, 6 * ROW_STAGGER, drawPeriod);
 
-  // --- The five ad verbs. Every one of them is short enough that a 90f hold
+  // --- The six ad verbs. Every one of them is short enough that a 90f hold
   // would be most of its cycle, so they run on a 60f hold instead: the point of
   // this half of the matrix is that these land inside a shot the film would
   // still be starting, and a long hold hides exactly that.
@@ -357,6 +359,7 @@ export const Verbs: React.FC = () => {
   const wipeFrom = loopFrom(frame, 9 * ROW_STAGGER, VERBS.wipe.frames + AD_HOLD);
   const strikeFrom = loopFrom(frame, 10 * ROW_STAGGER, VERBS.strike.frames + AD_HOLD);
   const pulseFrom = loopFrom(frame, 11 * ROW_STAGGER, VERBS.pulse.frames + AD_HOLD);
+  const dragFrom = loopFrom(frame, 12 * ROW_STAGGER, VERBS.drag.frames + AD_HOLD);
 
   return (
     <AbsoluteFill style={{ background: STAGE.back, fontFamily: INTER }}>
@@ -787,6 +790,50 @@ export const Verbs: React.FC = () => {
                 <Pulse from={pulseFrom} color={STAGE.affirm} radius={8}>
                   <Tally value={94} size={34} />
                 </Pulse>
+              </Cell>,
+            ]}
+          />
+
+          {/*
+            drag's cells travel, so each one reserves the height its object
+            moves through. Without that the row's own box is the object's
+            resting height and the carried object crosses into the row above,
+            which reads as a bug rather than as a drag.
+          */}
+          <Row
+            verb="drag"
+            cells={[
+              <Cell key="c1" label={`${VERBS.drag.frames}F`}>
+                <div style={{ height: 96, paddingTop: 4 }}>
+                  <Drag from={dragFrom} to={{ y: 44 }}>
+                    <MiniRuleCard />
+                  </Drag>
+                </div>
+              </Cell>,
+              <Cell key="c2" label={`${VERBS.drag.frames}F`}>
+                <div style={{ width: 150, height: 96 }}>
+                  <MiniMemberRow label="amara@example.com" />
+                  <DropGap from={dragFrom} height={30}>
+                    <div
+                      style={{
+                        height: 2,
+                        borderRadius: 1,
+                        background: COLOR.primary,
+                        margin: '14px 0',
+                      }}
+                    />
+                  </DropGap>
+                  <Drag from={dragFrom} to={{ y: -30 }}>
+                    <MiniMemberRow label="priya@example.com" />
+                  </Drag>
+                </div>
+              </Cell>,
+              <Cell key="c3" label={`${VERBS.drag.frames}F`}>
+                <div style={{ height: 96, paddingTop: 4 }}>
+                  <Drag from={dragFrom} to={{ x: 34, y: 34 }} tilt={-1.2}>
+                    <Tally value={94} size={34} />
+                  </Drag>
+                </div>
               </Cell>,
             ]}
           />

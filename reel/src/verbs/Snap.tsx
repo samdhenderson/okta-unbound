@@ -4,8 +4,8 @@
  *
  * `dock` is the film's arrival: 22 frames, a translate of 160px, a hairline
  * growing underneath. It is built to be *read*, which is right for a six minute
- * explanatory reel and wrong for a store page ad that has to land nine ideas in
- * twenty seconds. `snap` is the same event with the reading time removed: 8
+ * explanatory reel and wrong for a store page ad that has to land a dozen ideas
+ * in half a minute. `snap` is the same event with the reading time removed: 8
  * frames on `affirm`, so the object overshoots its resting scale and settles
  * back inside the same eighth of a second it appeared in.
  *

@@ -1,6 +1,6 @@
 /**
  * @module reel/ad/script
- * @description The advertisement's cut: nine shots, in order, with their sound.
+ * @description The advertisement's cut: twelve shots, in order, with their sound.
  *
  * The film's `script.ts` is a director's document - scenes, acts, beat plans,
  * marks, a ramp over real footage. This is a much smaller thing on purpose: an
@@ -9,14 +9,23 @@
  *
  * ## Why the order is this order
  *
- * The first three shots are a claim, and the next three are the proof. `hook`
- * is the viewer's own week, `arrive` says where the product lives (the single
- * most misunderstood thing about it), and `why` shows the one screen no
- * competitor has. Then `compare`, `predict` and `fix` are the same story told
- * three ways: found it, tested it, fixed it. `prove` exists because half of this
- * work ends in an auditor's inbox, `trust` because the viewer will have to
- * defend the install to somebody, and `end` because an ad that does not say what
- * to do next has wasted the other seventeen seconds.
+ * The opening is a claim and the middle is the proof. `hook` is the viewer's own
+ * week, `arrive` says where the product lives (the single most misunderstood
+ * thing about it), `arrange` says the profile is theirs to order rather than the
+ * schema's, and `why` shows the one screen no competitor has.
+ *
+ * Then one continuous story about a single profile field, told in five shots
+ * that each answer the question the one before it raises. `compare` finds a
+ * mistyped value. `weigh` says three rules read that field, which is the reason
+ * to be careful with it. `predict` shows the same preflight for a rule being
+ * switched off. `blast` shows it for the save itself, before the write. `fix`
+ * performs the save and the group count moves. Found it, weighed it, tested it
+ * both ways, fixed it.
+ *
+ * `prove` exists because half of this work ends in an auditor's inbox, `trust`
+ * because the viewer will have to defend the install to somebody, and `end`
+ * because an ad that does not say what to do next has wasted the other
+ * twenty seven seconds.
  *
  * ## Retuning it
  *
@@ -53,16 +62,17 @@ export interface Shot {
 /**
  * The cut.
  *
- * Roughly eighteen seconds, which is the length a store page listing will
- * actually be watched to the end of. Every shot is between one and three
+ * Roughly twenty eight seconds, which is inside the half minute a store page
+ * listing is actually watched to the end of. Every shot is between one and three
  * seconds; nothing here is allowed to become a scene.
  */
 export const AD: readonly Shot[] = [
   {
     stab: 'hook',
     sound: [
-      { cue: 'ask', sound: 'impact' },
-      { cue: 'ask', sound: 'drop', gain: 0.9 },
+      { cue: 'who', sound: 'bloom', gain: 0.9 },
+      { cue: 'what', sound: 'impact', gain: 0.7 },
+      { cue: 'why', sound: 'impact', gain: 0.7 },
       { cue: 'tabs', sound: 'tick', gain: 0.7 },
       { cue: 'dim', sound: 'swell', gain: 0.5 },
     ],
@@ -73,6 +83,18 @@ export const AD: readonly Shot[] = [
       { cue: 'dock', sound: 'whoosh' },
       { cue: 'focus', sound: 'click', gain: 0.7 },
       { cue: 'pinned', sound: 'tick', gain: 0.6 },
+    ],
+  },
+  {
+    stab: 'arrange',
+    sound: [
+      { cue: 'sections', sound: 'whoosh', gain: 0.5 },
+      { cue: 'categorize', sound: 'tick', gain: 0.7 },
+      { cue: 'grip', sound: 'tick', gain: 0.8 },
+      { cue: 'carry', sound: 'whoosh', gain: 0.6 },
+      { cue: 'drop', sound: 'latch', gain: 0.9 },
+      { cue: 'dim', sound: 'click', gain: 0.7 },
+      { cue: 'mark', sound: 'tick', gain: 0.7 },
     ],
   },
   {
@@ -93,12 +115,32 @@ export const AD: readonly Shot[] = [
     ],
   },
   {
+    stab: 'weigh',
+    sound: [
+      { cue: 'card', sound: 'click', gain: 0.6 },
+      { cue: 'expand', sound: 'swell', gain: 0.7 },
+      { cue: 'rules', sound: 'tick', gain: 0.7 },
+      { cue: 'tally', sound: 'impact' },
+      { cue: 'beat', sound: 'latch', gain: 0.7 },
+    ],
+  },
+  {
     stab: 'predict',
     sound: [
       { cue: 'arm', sound: 'click' },
       { cue: 'preview', sound: 'swell' },
       { cue: 'count', sound: 'impact', gain: 0.9 },
-      { cue: 'consequence', sound: 'drop', gain: 0.6 },
+      { cue: 'consequence', sound: 'bloom', gain: 0.6 },
+    ],
+  },
+  {
+    stab: 'blast',
+    sound: [
+      { cue: 'warn', sound: 'bloom', gain: 0.6 },
+      { cue: 'arm', sound: 'click' },
+      { cue: 'analyze', sound: 'swell' },
+      { cue: 'tally', sound: 'impact', gain: 0.9 },
+      { cue: 'rows', sound: 'tick', gain: 0.7 },
     ],
   },
   {
@@ -126,7 +168,11 @@ export const AD: readonly Shot[] = [
   {
     stab: 'end',
     sound: [
-      { cue: 'mark', sound: 'impact' },
+      { cue: 'unbind', sound: 'impact' },
+      { cue: 'who', sound: 'tick', gain: 0.8 },
+      { cue: 'what', sound: 'tick', gain: 0.8 },
+      { cue: 'why', sound: 'tick', gain: 0.8 },
+      { cue: 'act', sound: 'impact', gain: 0.7 },
       { cue: 'cta', sound: 'latch', gain: 0.9 },
     ],
   },

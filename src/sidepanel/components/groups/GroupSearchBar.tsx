@@ -54,7 +54,7 @@ const GroupSearchBar: React.FC<GroupSearchBarProps> = ({
     ) : (
       <Input
         type="text"
-        placeholder="Search by name, description, ID — or /regex/"
+        placeholder="Search groups..."
         value={searchQuery}
         onChange={onSearchQueryChange}
         size="lg"

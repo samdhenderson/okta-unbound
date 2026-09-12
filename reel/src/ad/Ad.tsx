@@ -2,8 +2,8 @@
  * @module reel/ad/Ad
  * @description The advertisement, assembled.
  *
- * Nine stabs in a `<Series>`, each in its own sequence, each with its sound cued
- * off the same tempo sheet the stab drew itself from.
+ * Twelve stabs in a `<Series>`, each in its own sequence, each with its sound
+ * cued off the same tempo sheet the stab drew itself from.
  *
  * ## Why a stab is not wrapped a second time
  *

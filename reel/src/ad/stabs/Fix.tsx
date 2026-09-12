@@ -29,7 +29,7 @@ export const FIX_CUES = {
   edit: { verb: 'wipe', gap: 10 },
   /** Saved. */
   save: { verb: 'pulse', gap: 6 },
-  /** The rule rereads it, and her groups move. */
+  /** The rule rereads it, and their groups move. */
   land: { verb: 'count', gap: 8, hold: 0.8 },
 } as const satisfies Record<string, Cue>;
 

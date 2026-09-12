@@ -307,9 +307,7 @@ describe('App tab lifetime', () => {
 
     // Never visited: the Groups tab has rendered nothing at all, so the lazy
     // chunk was never fetched.
-    expect(
-      screen.queryByPlaceholderText(/Search by name, description, ID/),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Search groups...')).not.toBeInTheDocument();
 
     await openTab(uev, 'Groups');
     expect(await groupRow('Engineering')).toBeInTheDocument();
@@ -339,10 +337,7 @@ describe('App tab lifetime', () => {
 
     // Accumulate the state the bug report says is lost: a search filter, a
     // selected row, and a pushed detail view.
-    await uev.type(
-      screen.getByPlaceholderText('Search by name, description, ID — or /regex/'),
-      'Engin',
-    );
+    await uev.type(screen.getByPlaceholderText('Search groups...'), 'Engin');
     await uev.click(screen.getByLabelText('Select Engineering'));
     await drillInto(uev, 'Engineering');
     expect(screen.getByTestId('group-detail-view')).toBeInTheDocument();
@@ -368,9 +363,7 @@ describe('App tab lifetime', () => {
 
     // …and the list behind it is intact: same query, same selection.
     await uev.click(screen.getByRole('button', { name: 'Back to groups' }));
-    expect(screen.getByPlaceholderText('Search by name, description, ID — or /regex/')).toHaveValue(
-      'Engin',
-    );
+    expect(screen.getByPlaceholderText('Search groups...')).toHaveValue('Engin');
     expect(screen.getByLabelText('Select Engineering')).toBeChecked();
   });
 

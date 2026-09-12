@@ -556,7 +556,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
     >
       {/* The padding lives here rather than on the band, so the tier below can run
           the full width of the strip and draw its own separator edge to edge. */}
-      <div ref={rowRef} className="flex flex-wrap items-center gap-2 p-2">
+      <div ref={rowRef} className="flex flex-wrap items-center gap-2 p-3">
         {inBarActions.map((action) => (
           <Action key={action.id} action={action} compact={compact} />
         ))}
@@ -606,7 +606,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
         /* Same horizontal padding as the row above it and no rule between them:
            the two are one surface, and a hairline here would read as the tier
            opening. The tier's own `border-t` still separates *it* from this. */
-        <div className="px-2 pb-2">{subRow}</div>
+        <div className="px-3 pb-2">{subRow}</div>
       )}
 
       {register !== undefined && (
@@ -639,7 +639,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
           role="group"
           aria-label={register.ariaLabel}
           data-testid="action-bar-register"
-          className="flex flex-wrap items-center gap-2 px-2 pb-2"
+          className="flex flex-wrap items-center gap-2 px-3.5 pb-2"
         >
           <span
             ref={registerAnchorRef}
@@ -667,7 +667,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
         */
         <div id={tierId} className="disclose" data-open={open} inert={!open || undefined}>
           <div>
-            <div className="space-y-3 border-t border-neutral-200 px-4 py-3">
+            <div className="space-y-3 border-t border-neutral-200 px-2.5 py-3">
               {overflowed.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
                   {overflowed.map((action) => (

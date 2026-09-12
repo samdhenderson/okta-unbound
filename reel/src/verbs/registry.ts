@@ -159,8 +159,8 @@ export const VERBS = {
   /**
    * snap: arrive hard, in a third of dock's time. 140ms `quick`, on `affirm`.
    *
-   * The five verbs from here down were added for the store page advertisement
-   * (`src/ad/`), which has to land nine ideas in twenty seconds and cannot
+   * The six verbs from here down were added for the store page advertisement
+   * (`src/ad/`), which has to land a dozen ideas in half a minute and cannot
    * afford an arrival built to be read. They are registered here rather than
    * in an ad-local table for the same reason the first six are: a verb with a
    * budget nothing else can see is a number somebody will pick again by eye.
@@ -210,6 +210,26 @@ export const VERBS = {
       expand: { at: 0, over: 6 },
       /** Back slower, which is what makes it read as a beat. */
       settle: { at: 6, over: 7 },
+    },
+  },
+  /**
+   * drag: picked up, carried, put down. The same 320ms `travel` as split.
+   *
+   * The two windows are the whole verb. A translate with no lift at the head
+   * and no settle at the tail reads as an element being repositioned by a
+   * layout engine; the same translate with them reads as an object being
+   * held. `Drag.tsx` builds one "off the surface" number out of both, because
+   * the object has to stay lifted across the middle of the travel and a single
+   * `[0, 1]` progress cannot say that.
+   */
+  drag: {
+    frames: framesFor('travel'),
+    ease: 'standard',
+    parts: {
+      /** Off the surface: scale, tilt and shadow up, over the first 5f of the 19. */
+      lift: { at: 0, over: 5 },
+      /** And back onto it, over the last 5f. */
+      settle: { at: framesFor('travel') - 5, over: 5 },
     },
   },
 } as const satisfies Record<string, Verb>;
