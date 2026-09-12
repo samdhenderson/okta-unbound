@@ -423,6 +423,8 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
               onAnalyze={attributeEdit.pendingSave.analyze}
               isAnalyzing={attributeEdit.pendingSave.isAnalyzing}
               resolveGroupName={attributeEdit.pendingSave.resolveGroupName}
+              drafted={attributeEdit.pendingSave.drafted}
+              groupContext={attributeEdit.pendingSave.groupContext}
               error={attributeEdit.pendingSave.error}
             />
           )}

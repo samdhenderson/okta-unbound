@@ -106,13 +106,30 @@ export interface BlastRadiusInput {
 /**
  * What the draft does to one rule's verdict about this user.
  *
- * `undetermined` is not a fifth shade of "no change" — it means at least one of
- * the two evaluations did not produce an answer, so the pair cannot be compared.
- * It absorbs an `unevaluable` on **either** side precisely so that no caller can
- * read a transition off a half-known pair.
+ * `undetermined` is not a shade of "no change" — it means at least one of the two
+ * evaluations did not produce an answer, so the pair cannot be compared. It absorbs
+ * an `unevaluable` on **either** side precisely so that no caller can read a
+ * transition off a half-known pair.
+ *
+ * `unchanged-unevaluable` is the one case where an unreadable rule is nonetheless
+ * settled: neither side could be evaluated **and** the expression provably reads
+ * none of the attributes the draft touches, so whatever the verdict is, this edit
+ * does not move it. That is a claim about the *edit*, never about the rule — it
+ * does not say the user fails the condition, and nothing may round it to
+ * `unchanged-no-match`. The report question is "what does this edit change", and a
+ * rule the edit cannot reach is not an answer to it.
+ *
+ * The proof has to be exact, which is why it comes from the parsed AST
+ * (`rules/explainExpression`'s `userAttributeNamesRead`) and never from
+ * {@link RuleEffect.touchedAttributes}, a display aid that is allowed to miss.
  */
 export type RuleTransition =
-  'starts-matching' | 'stops-matching' | 'unchanged-match' | 'unchanged-no-match' | 'undetermined';
+  | 'starts-matching'
+  | 'stops-matching'
+  | 'unchanged-match'
+  | 'unchanged-no-match'
+  | 'unchanged-unevaluable'
+  | 'undetermined';
 
 /** One rule, evaluated against the user before and after the draft. */
 export interface RuleEffect {
@@ -129,9 +146,13 @@ export interface RuleEffect {
   readonly expression: string;
   /** How the verdict moved. See {@link RuleTransition}. */
   readonly transition: RuleTransition;
-  /** Why the **pre-draft** evaluation gave up. Present only under `undetermined`. */
+  /**
+   * Why the **pre-draft** evaluation gave up. Present whenever it did — under
+   * `undetermined`, and also under `unchanged-unevaluable`, where the rule was
+   * still not read and the row still says so.
+   */
   readonly beforeReason?: RuleUnevaluableReason;
-  /** Why the **post-draft** evaluation gave up. Present only under `undetermined`. */
+  /** Why the **post-draft** evaluation gave up. Present on the same terms as {@link beforeReason}. */
   readonly afterReason?: RuleUnevaluableReason;
   /** Groups this rule assigns matched users into. */
   readonly targetGroupIds: readonly string[];
@@ -313,7 +334,11 @@ export interface BlastRadiusCounts {
   readonly starts: number;
   /** Rules with `transition: 'stops-matching'`. */
   readonly stops: number;
-  /** Rules with `transition: 'undetermined'`. */
+  /**
+   * Rules with `transition: 'undetermined'` — unreadable **and** within the edit's
+   * reach. Deliberately excludes `unchanged-unevaluable`: a rule the edit cannot
+   * move is not something the admin was asking about.
+   */
   readonly undetermined: number;
 }
 
@@ -342,12 +367,12 @@ export interface BlastRadiusReport {
   /**
    * **Every** rule in the inventory, ordered `starts-matching` →
    * `stops-matching` → `undetermined` → `unchanged-match` →
-   * `unchanged-no-match`, then by name, then by id.
+   * `unchanged-no-match` → `unchanged-unevaluable`, then by name, then by id.
    *
    * The unchanged rules are carried rather than dropped so a caller can show
-   * "and 40 rules are unaffected" — and so `unchanged-no-match` is assertable,
-   * which is the shape of the ADR-0020 residual that an absent attribute
-   * compares as a definitive no-match.
+   * "and 40 rules are unaffected". `unchanged-unevaluable` ranks last of them: it
+   * is the weakest claim in the list, because it says only that this edit does not
+   * reach the rule and nothing at all about the verdict.
    */
   readonly rules: readonly RuleEffect[];
   /** Tallies over {@link groups} and {@link rules}. */

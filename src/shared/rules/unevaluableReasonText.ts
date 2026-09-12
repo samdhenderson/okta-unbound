@@ -35,8 +35,8 @@ export const UNEVALUABLE_REASON_TEXT: Record<RuleUnevaluableReason, string> = {
   'fn-arity': 'Calls a function with an unexpected number of arguments.',
   'unsupported-node': 'Uses a form of expression this panel cannot evaluate.',
   'operand-type': "A value's type does not fit the comparison, so no verdict was reached.",
-  'attribute-absent':
-    'Reads an attribute this user does not have, so there was nothing to compare.',
+  'field-not-fetched':
+    'Reads an Okta account field this panel did not load for this user, so the check was not run.',
   'not-a-boolean': 'Does not resolve to true or false on its own.',
   'walk-failed': 'The condition was too deeply nested to analyze.',
 };

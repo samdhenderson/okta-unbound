@@ -160,19 +160,6 @@ export interface ClauseGroupReference {
 }
 
 /**
- * The value of a profile attribute a clause read, when the profile does not
- * carry that attribute at all.
- *
- * A unique symbol rather than `undefined` or `null`, mirroring `ruleEvaluator`'s
- * own `UNRESOLVED` sentinel: **absent is not zero, and absent is not null.** An
- * attribute present and explicitly `null` records `null`; one the user's profile
- * has never had records this. The two render differently, and collapsing them is
- * the bug class that made `user.status == "ACTIVE"` answer "no match" for a whole
- * org (D-114).
- */
-export const ATTRIBUTE_ABSENT: unique symbol = Symbol('attribute-absent');
-
-/**
  * One profile attribute a clause read, with what it held for this user.
  *
  * Collected off the AST, so the path is exactly what the rule dereferenced —
@@ -188,10 +175,12 @@ export interface AttributeRead {
    */
   readonly path: string;
   /**
-   * What the attribute held, or {@link ATTRIBUTE_ABSENT} when this user's
-   * profile does not carry it. **PII:** render escaped, never log, escape for CSV.
+   * What the attribute held. `null` when this user's profile does not carry it:
+   * absence is how Okta reports "no value", so the two are one fact and this type
+   * no longer splits them (ADR-0004). The evidence line renders it `not set`.
+   * **PII:** render escaped, never log, escape for CSV.
    */
-  readonly value: RuleExprValue | typeof ATTRIBUTE_ABSENT;
+  readonly value: RuleExprValue;
 }
 
 /**
@@ -1247,13 +1236,80 @@ function attributePathOf(node: jsep.Expression): string | undefined {
 }
 
 /**
+ * The **attribute name** a `user.*` read names, or `undefined` for any other node.
+ *
+ * The name, not {@link attributePathOf}'s display path: `department` rather than
+ * `user.department`, so it can be compared against a draft's keys. Both forms of
+ * the read collapse to the same name, which is the point — `user["department"]`
+ * and `user.department` are one attribute.
+ */
+function attributeNameOf(node: jsep.Expression): string | undefined {
+  const member = asMemberExpression(node);
+  if (!member) return undefined;
+  if (asIdentifier(member.object)?.name !== 'user') return undefined;
+
+  if (member.computed) {
+    const key = asLiteral(member.property)?.value;
+    return typeof key === 'string' ? key : undefined;
+  }
+  return asIdentifier(member.property)?.name;
+}
+
+/**
+ * Every `user.*` attribute name an expression reads, derived from its AST.
+ *
+ * **Exact, and load-bearing** — which is why it exists rather than reusing
+ * `ruleUtils.extractUserAttributes` or `RuleEffect.touchedAttributes`. Both of
+ * those are regex scans over the condition text, documented as display aids: a
+ * quoted `"user.department"` naming a group is indistinguishable from a read, and
+ * a miss merely costs a label. A caller deciding whether an edit *can* move a
+ * rule's verdict cannot spend a miss that cheaply, so this walks the parsed tree.
+ *
+ * A computed key that is not a string literal (`user[x]`) names no attribute this
+ * module can enumerate, so it reports `undefined` rather than an incomplete set —
+ * "we cannot list the reads" must not read as "there are none".
+ *
+ * @param expression - The rule condition. **Untrusted** tenant text.
+ * @returns The names read, or `undefined` when the expression could not be parsed
+ *   or contains a read whose name is not statically knowable.
+ */
+export function userAttributeNamesRead(expression: string): ReadonlySet<string> | undefined {
+  const parsed = parseRuleExpression(expression);
+  if (!parsed.ok) return undefined;
+
+  const names = new Set<string>();
+  let enumerable = true;
+
+  const visit = (node: jsep.Expression): void => {
+    const member = asMemberExpression(node);
+    if (member && asIdentifier(member.object)?.name === 'user') {
+      const name = attributeNameOf(node);
+      if (name === undefined) {
+        // `user[someExpression]` — a read whose target depends on a value. Its own
+        // operands still get walked below, but the set can no longer claim to be
+        // complete.
+        enumerable = false;
+      } else {
+        names.add(name);
+        return;
+      }
+    }
+    for (const child of childExpressions(node)) visit(child);
+  };
+
+  visit(parsed.ast);
+  return enumerable ? names : undefined;
+}
+
+/**
  * Every `user.*` attribute read under one node, in source order, deduplicated by
  * path.
  *
- * An attribute the profile does not carry records {@link ATTRIBUTE_ABSENT}; one
- * present and explicitly `null` records `null`. A read that failed to resolve for
- * any other reason is **omitted** — there is no value to state, and recording it
- * as absent would assert something false about the profile.
+ * An attribute the profile does not carry records `null`, which is what Okta means
+ * by absence (ADR-0004) — the same value one present and explicitly `null` records,
+ * because Okta's wire format cannot tell the two apart. A read that failed to
+ * resolve for any other reason is **omitted**: there is no value to state, and
+ * recording one would assert something false about the profile.
  */
 function collectAttributeReads(
   node: jsep.Expression,
@@ -1269,12 +1325,12 @@ function collectAttributeReads(
       // their own, so the walk stops here.
       if (seen.has(path)) return;
       const evaluation = evaluateNodeValue(current, ctx);
+      // An attribute the profile does not carry resolves to `null` rather than
+      // declining, so it arrives here like any other value; only a genuinely
+      // unreadable read records nothing.
       if (evaluation.resolved) {
         seen.add(path);
         reads.push({ path, value: evaluation.value });
-      } else if (evaluation.reasonCode === 'attribute-absent') {
-        seen.add(path);
-        reads.push({ path, value: ATTRIBUTE_ABSENT });
       }
       return;
     }

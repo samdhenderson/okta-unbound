@@ -178,10 +178,13 @@ export type RuleExprValue = ExprValue;
  * - `operand-type` — allow-listed grammar, but an operand's runtime type is
  *   outside what the operator or function accepts (`user.department > "A"`,
  *   `String.startsWith(user.employeeNumber, "4")`, an object-valued attribute).
- * - `attribute-absent` — `user.<attribute>` names something this user's profile
- *   does not carry at all. Distinct from an attribute present and explicitly
- *   `null`: only the second licenses a comparison. Collapsing them is what made
- *   `user.status == "ACTIVE"` answer `no-match` for an entire org (D-114).
+ * - `field-not-fetched` — `user.<attribute>` names a **top-level** Okta user field
+ *   ({@link USER_TOP_LEVEL_FIELDS}) that this response did not carry. That absence
+ *   is a fact about our request, never about the org, so it declines. An attribute
+ *   absent from the *profile* is a different fact entirely — it is `null`, the only
+ *   way Okta reports "no value" — and resolves rather than declining (ADR-0004).
+ *   Keeping the two apart is what stops `user.status == "ACTIVE"` answering
+ *   `no-match` for an entire org (D-114).
  * - `not-a-boolean` — fully resolved, but not to a boolean, so it is not a
  *   condition (`user.department`, `"Engineering"`).
  * - `walk-failed` — the walk threw (a pathologically nested expression can
@@ -199,7 +202,7 @@ export type RuleUnevaluableReason =
   | 'fn-arity'
   | 'unsupported-node'
   | 'operand-type'
-  | 'attribute-absent'
+  | 'field-not-fetched'
   | 'not-a-boolean'
   | 'walk-failed';
 
@@ -412,6 +415,32 @@ function withTwoStrings(
   return fn(first, second);
 }
 
+/**
+ * Apply a string **predicate** to two operands, answering `false` when the subject
+ * is `null`.
+ *
+ * The subject — argument 0, in practice a `user.*` read — is the one operand a
+ * `null` may reach, because Okta reports "this user holds no value" by omitting the
+ * attribute (ADR-0004). A user who holds no value cannot satisfy a containment or
+ * prefix test, so the honest answer is `false` rather than a decline.
+ *
+ * **The needle still has to be a real string.** A `null` second argument asks
+ * something with no defensible answer — "does this contain nothing?" — so it
+ * declines, and so does a subject that is present but the wrong type. This helper is
+ * for predicates only; a value-returning function handed `null` would have to invent
+ * the value it returns, which is the guess {@link SUPPORTED_FUNCTIONS} refuses.
+ */
+function withStringPredicate(
+  args: readonly ExprValue[],
+  fn: (subject: string, needle: string) => boolean,
+): EvalResult {
+  const needle = asString(args[1]);
+  if (isUnresolved(needle)) return UNRESOLVED;
+  if (args[0] === null) return false;
+  const subject = asString(args[0]);
+  return isUnresolved(subject) ? UNRESOLVED : fn(subject, needle);
+}
+
 /** Apply `fn` to a single string operand, giving up unless it really is a string. */
 function withOneString(args: readonly ExprValue[], fn: (a: string) => EvalResult): EvalResult {
   const first = asString(args[0]);
@@ -589,15 +618,15 @@ export const SUPPORTED_FUNCTIONS: ReadonlyMap<string, SupportedFunction> = new M
   ['String.len', { arity: 1, evaluate: (a) => withOneString(a, (s) => s.length) }],
   [
     'String.stringContains',
-    { arity: 2, evaluate: (a) => withTwoStrings(a, (s, search) => s.includes(search)) },
+    { arity: 2, evaluate: (a) => withStringPredicate(a, (s, search) => s.includes(search)) },
   ],
   [
     'String.startsWith',
-    { arity: 2, evaluate: (a) => withTwoStrings(a, (s, prefix) => s.startsWith(prefix)) },
+    { arity: 2, evaluate: (a) => withStringPredicate(a, (s, prefix) => s.startsWith(prefix)) },
   ],
   [
     'String.endsWith',
-    { arity: 2, evaluate: (a) => withTwoStrings(a, (s, suffix) => s.endsWith(suffix)) },
+    { arity: 2, evaluate: (a) => withStringPredicate(a, (s, suffix) => s.endsWith(suffix)) },
   ],
   ['String.append', { arity: 2, evaluate: (a) => withTwoStrings(a, (s, suffix) => s + suffix) }],
   ['String.join', { arity: 3, evaluate: (a) => evaluateJoin(a) }],
@@ -964,6 +993,27 @@ const USER_TOP_LEVEL_FIELDS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Top-level `OktaUser` fields a rule may name that this evaluator **cannot** read.
+ *
+ * These exist on Okta's user object but not on the value reaching us: the zod
+ * boundary strips `credentials` deliberately (it carries credential material) and
+ * does not carry the rest. They are listed rather than left to fall through because
+ * of what the fall-through now means — an unlisted name resolves to `null`, the
+ * value Okta reports for "this user holds no value" (ADR-0004). That reading is
+ * right for a profile attribute nobody filled in and **wrong** here: the org may
+ * well hold a value, we simply do not address the field. Answering `null` would be
+ * the D-114 mistake in a new place, so these decline instead.
+ */
+const USER_FIELDS_NOT_FETCHED: ReadonlySet<string> = new Set([
+  'credentials',
+  'profile',
+  'type',
+  'transitioningToStatus',
+  '_links',
+  '_embedded',
+]);
+
+/**
  * Narrow one raw attribute value to an operand, or decline.
  *
  * Three outcomes, and the distinction between the first two is the whole point:
@@ -972,7 +1022,9 @@ const USER_TOP_LEVEL_FIELDS: ReadonlySet<string> = new Set([
  * comparing *that* is a confident answer about a value nobody has read.
  */
 function asOperand(raw: unknown, options: EvaluationWalkOptions): EvalResult {
-  if (raw === null) return null;
+  // `undefined` alongside `null`: a draft that clears an attribute leaves the key
+  // present holding `undefined`, and "the user will hold no value" is `null`.
+  if (raw === null || raw === undefined) return null;
   if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') return raw;
   if (Array.isArray(raw)) {
     const scalars: ExprScalar[] = [];
@@ -1005,12 +1057,15 @@ function asOperand(raw: unknown, options: EvaluationWalkOptions): EvalResult {
  * (`user["cost center"]`); `app.*`, `session.*`, a non-literal or nested
  * computed key, and any deeper path are unresolvable.
  *
- * **An absent attribute is not `null`.** A profile that does not carry the name
- * at all resolves to `attribute-absent` — the evaluator failing to understand
- * the expression, which the module header says must never be reported as
- * `no-match`. An attribute the profile *does* carry, explicitly set to `null`,
- * still resolves to `null`: that is a value the org actually holds, and it
- * licenses a comparison.
+ * **An absent profile attribute *is* `null`** (ADR-0004). Okta reports a null
+ * attribute by omitting it from the profile object — absence is not a gap in what
+ * we read, it is the value itself — and Okta EL is SpEL, where `null == 'x'` is
+ * `false` and `null != 'x'` is `true`. So absence resolves rather than declining,
+ * exactly as an attribute the profile carries explicitly set to `null` always has.
+ *
+ * The one absence that still declines is a **top-level** field the response did
+ * not carry: that is a fact about our request, not about the org, and it keeps its
+ * own reason code so the two can never be conflated.
  */
 function resolveMember(node: jsep.MemberExpression, options: EvaluationWalkOptions): EvalResult {
   const { object, property } = node;
@@ -1043,13 +1098,21 @@ function resolveMember(node: jsep.MemberExpression, options: EvaluationWalkOptio
   }
   if (USER_TOP_LEVEL_FIELDS.has(attributeName)) {
     const raw = (options.user as unknown as Record<string, unknown>)[attributeName];
-    // Present in the type but not on this response — `lastLogin` on a user who
-    // has never signed in, say. Absent is absent, whichever half it is missing
-    // from.
-    if (raw === undefined) return giveUp('attribute-absent', options);
+    // Present in the type but not on this response — `lastLogin` on a user who has
+    // never signed in, say. We cannot tell "the org holds no value" from "we did
+    // not ask for it" here, so this half declines where the profile half resolves.
+    if (raw === undefined) return giveUp('field-not-fetched', options);
     return asOperand(raw, options);
   }
-  return giveUp('attribute-absent', options);
+  // A field we know exists on Okta's user object but do not carry: declining is the
+  // only honest answer, because the org may hold a value we cannot see.
+  if (USER_FIELDS_NOT_FETCHED.has(attributeName)) {
+    return giveUp('field-not-fetched', options);
+  }
+  // Not on the profile, not a readable top-level field, and not one we know we are
+  // missing: the org holds no value for this name, which is what Okta means by
+  // null. See ADR-0004.
+  return null;
 }
 
 /** Three-valued conjunction: `false` wins over unresolved, unresolved wins over `true`. */

@@ -2,6 +2,26 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, within } from 'storybook/test';
 import BlastRadiusRuleRow from './BlastRadiusRuleRow';
 import type { RuleEffect } from '../../../shared/membership/blastRadiusTypes';
+import type { OktaUser } from '../../../shared/types';
+
+/**
+ * The post-draft user the ledger stories explain against — the state the edit
+ * would create, which is the state the badge above the ledger describes.
+ */
+const DRAFTED = {
+  id: '00uFAKEstory00000001',
+  status: 'ACTIVE',
+  profile: {
+    login: 'ada@example.com',
+    email: 'ada@example.com',
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    department: 'Sales',
+    title: 'Account Executive',
+    // Deliberately absent: `costCenter`, so the unreadable-clause story below has
+    // a real absence to read rather than a contrived one.
+  },
+} as unknown as OktaUser;
 
 /** Obviously fake ids — no real org data ever ships in a story. */
 const effect = (
@@ -220,6 +240,30 @@ export const UnchangedNoMatch: Story = {
   },
 };
 
+/**
+ * Unreadable, but out of this edit's reach — the row says so about the **edit**,
+ * not about the rule.
+ *
+ * The badge reads "Unaffected by this edit" rather than "Still does not match",
+ * because nobody read the condition and claiming a verdict would be a guess; and
+ * rather than "Could not be evaluated", because that is the badge for a rule the
+ * edit could have moved. The reason sentence is still carried: we did not read it,
+ * and the row does not pretend otherwise.
+ */
+export const UnchangedUnevaluable: Story = {
+  args: {
+    effect: effect({
+      ruleId: '0prFAKErule00009',
+      ruleName: 'Contractor pattern',
+      transition: 'unchanged-unevaluable',
+      expression: 'isMemberOfGroupNameRegex("(?=contractor).*")',
+      beforeReason: 'regex-unsupported-syntax',
+      afterReason: 'regex-unsupported-syntax',
+      touchedAttributes: [],
+    }),
+  },
+};
+
 /** Several targets and several read attributes, both wrapping rather than clipping. */
 export const ManyTargets: Story = {
   args: {
@@ -368,5 +412,53 @@ export const NoCascade: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.queryByRole('button', { name: /Rules that use/ })).toBeNull();
+  },
+};
+
+/**
+ * The condition broken down clause by clause, against the **drafted** user.
+ *
+ * The flat condition text said what the rule checks; it could not say which part
+ * of it produced the verdict. With a drafted user the row renders a
+ * `ClauseLedger` instead — the same component the membership evidence panel uses
+ * — so "Starts matching" is checkable rather than merely asserted. The summary
+ * sentence is dropped here, because the ledger states the same facts per clause
+ * and two statements of one fact invite a hunt for the difference.
+ */
+export const WithClauseLedger: Story = {
+  args: {
+    effect: effect({
+      ruleId: '0prFAKErule00010',
+      ruleName: 'Sales enablement',
+      transition: 'starts-matching',
+      expression: 'user.department == "Sales" && user.title == "Account Executive"',
+      touchedAttributes: ['department'],
+    }),
+    drafted: DRAFTED,
+    groupContext: [],
+  },
+};
+
+/**
+ * A ledger over a condition one clause of which could not be read.
+ *
+ * This is the case the flat text served worst: "Could not be evaluated" over an
+ * opaque one-liner told an admin nothing about *where* the reading stopped. Here
+ * the passing clause and the declined one are separately labelled, and the
+ * declined one carries its own reason.
+ */
+export const ClauseLedgerWithUnreadableClause: Story = {
+  args: {
+    effect: effect({
+      ruleId: '0prFAKErule00011',
+      ruleName: 'Regional enablement',
+      transition: 'undetermined',
+      expression: 'user.department == "Sales" && isMemberOfGroupNameRegex("(?=EMEA).*")',
+      beforeReason: 'regex-unsupported-syntax',
+      afterReason: 'regex-unsupported-syntax',
+      touchedAttributes: ['department'],
+    }),
+    drafted: DRAFTED,
+    groupContext: [],
   },
 };

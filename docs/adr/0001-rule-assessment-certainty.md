@@ -114,6 +114,13 @@ the first two and this record forbids the third.
 
 ### 4. Absent, null, and false are three different facts
 
+> **Superseded by [0004](0004-absent-attribute-is-null.md).** The principle below
+> stands; its premise about Okta's wire format does not. Okta reports a null attribute
+> by omitting it from the profile object, so an absent profile attribute **is** `null`
+> and resolves rather than declining. The half that was load-bearing — a top-level user
+> field resolving from the user root, never off the profile — is kept and sharpened
+> there under a new reason code. Read 0004 before acting on this section.
+
 - An attribute **present and explicitly `null`** resolves to `null`.
 - An attribute **absent from the profile** is `unevaluable`, reason
   `attribute-absent`. Absent is not null, and null is not `no-match`.
