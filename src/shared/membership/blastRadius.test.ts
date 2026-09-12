@@ -323,16 +323,16 @@ describe('an unevaluable sibling rule is never read as a no (ADR-0020)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. An absent attribute is undetermined, and undetermined is not an addition
+// 5. A rule that settles either way still contributes no group effect
 // ---------------------------------------------------------------------------
 
-describe('a rule the evaluator cannot settle contributes no group effect', () => {
-  it('reads an absent attribute as undetermined and emits no group effect', () => {
+describe('a rule whose verdict the draft does not move contributes no group effect', () => {
+  it('settles an absent attribute both sides, so the rule is unchanged', () => {
     // `user.costCenter` is not on the fixture at all, and the draft does not set
-    // it. The evaluator used to compare the absent value as a definitive
-    // no-match — the residual ADR-0020 documented — and now reports that it could
-    // not tell (D-114). Either way the rule neither starts nor stops, which is
-    // what this case is about: an unsettled rule must not become an addition.
+    // it. Absence is how Okta reports "no value", so this now settles as a real
+    // `no-match` on both sides (ADR-0004) instead of reporting that we could not
+    // tell. What this case is actually about is unchanged by that: a rule the
+    // draft does not move must not become an addition.
     const costCentreRule = ruleOf({
       id: '0prFAKEcc',
       name: 'Cost centre feeder',
@@ -345,12 +345,33 @@ describe('a rule the evaluator cannot settle contributes no group effect', () =>
 
     expect(report.rules).toHaveLength(1);
     expect(report.rules[0]).toMatchObject({
-      transition: 'undetermined',
-      beforeReason: 'attribute-absent',
-      afterReason: 'attribute-absent',
+      transition: 'unchanged-no-match',
       // The draft touches `department`; this rule reads none of the drafted names.
       touchedAttributes: [],
     });
+    expect(report.rules[0].beforeReason).toBeUndefined();
+    expect(report.rules[0].afterReason).toBeUndefined();
+    expect(report.groups).toEqual([]);
+    expect(report.counts).toMatchObject({ added: 0, removed: 0, notPredicted: 0 });
+  });
+
+  it('still emits no group effect for a rule it genuinely cannot settle', () => {
+    // The other half of the original case, kept on its own lever now that an
+    // absent attribute is no longer one: a tenant regex the safe engine declines
+    // is unreadable on both sides, and an unsettled rule must not become an
+    // addition either.
+    const regexRule = ruleOf({
+      id: '0prFAKEre',
+      name: 'Pattern feeder',
+      groupIds: [FINANCE.id],
+      conditionExpression: 'isMemberOfGroupNameRegex("(?=Fin).*")',
+      userAttributes: [],
+    });
+
+    const report = analyze({ rules: [regexRule] });
+
+    expect(report.rules).toHaveLength(1);
+    expect(report.rules[0]).toMatchObject({ transition: 'undetermined' });
     expect(report.groups).toEqual([]);
     expect(report.counts).toMatchObject({ added: 0, removed: 0, notPredicted: 0 });
   });

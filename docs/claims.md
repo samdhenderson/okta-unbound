@@ -81,22 +81,42 @@ rung 2** — the cost is a symptom, never a budget to spend. The reasoning behin
 each rung, and the API budget it commits to, is
 [ADR-0001](adr/0001-rule-assessment-certainty.md).
 
-### Absent, null, and false are three facts, not one
+### Blank, absent, and "we cannot read it" are three facts, not one
 
-The evaluator keeps them apart, and so must anything reading it:
+The line that matters is **what the org holds** versus **what we can see**, and the
+evaluator keeps those apart:
 
-| The attribute is…             | The answer is                     |
-| ----------------------------- | --------------------------------- |
-| Present, holding a value      | That value                        |
-| Present and explicitly `null` | `null`                            |
-| Absent from the profile       | `unevaluable`, `attribute-absent` |
-| Present but not a scalar      | `unevaluable`, `operand-type`     |
+| The attribute is…                              | The answer is                      |
+| ---------------------------------------------- | ---------------------------------- |
+| Present, holding a value                       | That value                         |
+| Present holding `""`                           | `""` — a value, and not "no value" |
+| Present and explicitly `null`                  | `null`                             |
+| **Absent from the profile**                    | **`null`** — see below             |
+| A top-level field missing from the response    | `unevaluable`, `field-not-fetched` |
+| A top-level field we deliberately do not carry | `unevaluable`, `field-not-fetched` |
+| Present but not a scalar                       | `unevaluable`, `operand-type`      |
 
-Reading an absent attribute as `null` is how `user.status == "ACTIVE"` came to
-return `no-match` for every user in an org where it matches nearly everyone. A
-top-level Okta user field (`status`, `created`, `lastLogin`, …) resolves from the
-user root through an explicit allow-list, because it is real Okta EL and is not
-on the profile.
+**An absent profile attribute is `null`, because that is how Okta says "no value".**
+Okta's wire format has no other way to express it — a null attribute is simply not
+present in the profile object — and Okta EL is SpEL, so `null == "x"` is `false` and
+`null != "x"` is `true`. Absence is therefore a fact about the org, and it resolves.
+Treating it as a gap in our knowledge is what put ~200 unreadable rules in front of an
+admin who had asked what one profile edit would change ([ADR-0004](adr/0004-absent-attribute-is-null.md)).
+
+The absence that is genuinely **ours** still withholds. A top-level Okta user field
+(`status`, `created`, `lastLogin`, …) resolves from the user root through an explicit
+allow-list, because it is real Okta EL and is not on the profile — reading `user.status`
+off the profile is how `user.status == "ACTIVE"` came to return `no-match` for every
+user in an org where it matches nearly everyone. A field on that allow-list but missing
+from the response, or one we strip at the boundary (`credentials`) and therefore never
+see, declines under `field-not-fetched`: the org may well hold a value we cannot read,
+and `null` would assert otherwise.
+
+This split is only sound while "absent" reliably means "the org holds no value". It
+rests on the zod boundary preserving org-custom attributes (`oktaProfileSchema` is
+`.passthrough()`) and on no path handing the evaluator a projected profile. **If a
+trimmed profile ever reaches the evaluator, that is the bug** — the guarantee above is
+what would be wrong, not the table.
 
 ### Never guess a function's semantics
 

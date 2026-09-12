@@ -26,6 +26,7 @@ const user: OktaUser = {
     department: 'Engineering',
     title: 'Intern',
     projectCode: null,
+    blank: '',
   },
 };
 
@@ -99,7 +100,11 @@ describe('ClauseLedger', () => {
     expect(screen.queryByText('—')).not.toBeInTheDocument();
   });
 
-  it('renders an explicit null attribute as the word "null", distinct from absent', () => {
+  it('renders an explicit null attribute as "not set" too — it is the same fact', () => {
+    // Okta reports "no value" by omitting the attribute, so an absent key and a
+    // present-and-null one are indistinguishable on the wire (ADR-0004). One fact
+    // gets one rendering, and "not set" is the half of the pair that tells an
+    // admin something.
     render(
       <ClauseLedger
         expression='user.projectCode == "Platform"'
@@ -108,7 +113,15 @@ describe('ClauseLedger', () => {
       />,
     );
 
-    expect(screen.getByText('null')).toBeInTheDocument();
+    expect(screen.getByText('not set')).toBeInTheDocument();
+  });
+
+  it('keeps a blank attribute distinct from one holding no value', () => {
+    // A blank string is a value the org actually holds, so it prints as `""` and
+    // never collapses into "not set".
+    render(<ClauseLedger expression='user.blank == "CC-9"' user={user} groupContext={groups} />);
+
+    expect(screen.getByText('""')).toBeInTheDocument();
     expect(screen.queryByText('not set')).not.toBeInTheDocument();
   });
 

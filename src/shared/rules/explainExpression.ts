@@ -160,19 +160,6 @@ export interface ClauseGroupReference {
 }
 
 /**
- * The value of a profile attribute a clause read, when the profile does not
- * carry that attribute at all.
- *
- * A unique symbol rather than `undefined` or `null`, mirroring `ruleEvaluator`'s
- * own `UNRESOLVED` sentinel: **absent is not zero, and absent is not null.** An
- * attribute present and explicitly `null` records `null`; one the user's profile
- * has never had records this. The two render differently, and collapsing them is
- * the bug class that made `user.status == "ACTIVE"` answer "no match" for a whole
- * org (D-114).
- */
-export const ATTRIBUTE_ABSENT: unique symbol = Symbol('attribute-absent');
-
-/**
  * One profile attribute a clause read, with what it held for this user.
  *
  * Collected off the AST, so the path is exactly what the rule dereferenced —
@@ -188,10 +175,12 @@ export interface AttributeRead {
    */
   readonly path: string;
   /**
-   * What the attribute held, or {@link ATTRIBUTE_ABSENT} when this user's
-   * profile does not carry it. **PII:** render escaped, never log, escape for CSV.
+   * What the attribute held. `null` when this user's profile does not carry it:
+   * absence is how Okta reports "no value", so the two are one fact and this type
+   * no longer splits them (ADR-0004). The evidence line renders it `not set`.
+   * **PII:** render escaped, never log, escape for CSV.
    */
-  readonly value: RuleExprValue | typeof ATTRIBUTE_ABSENT;
+  readonly value: RuleExprValue;
 }
 
 /**
@@ -1250,10 +1239,11 @@ function attributePathOf(node: jsep.Expression): string | undefined {
  * Every `user.*` attribute read under one node, in source order, deduplicated by
  * path.
  *
- * An attribute the profile does not carry records {@link ATTRIBUTE_ABSENT}; one
- * present and explicitly `null` records `null`. A read that failed to resolve for
- * any other reason is **omitted** — there is no value to state, and recording it
- * as absent would assert something false about the profile.
+ * An attribute the profile does not carry records `null`, which is what Okta means
+ * by absence (ADR-0004) — the same value one present and explicitly `null` records,
+ * because Okta's wire format cannot tell the two apart. A read that failed to
+ * resolve for any other reason is **omitted**: there is no value to state, and
+ * recording one would assert something false about the profile.
  */
 function collectAttributeReads(
   node: jsep.Expression,
@@ -1269,12 +1259,12 @@ function collectAttributeReads(
       // their own, so the walk stops here.
       if (seen.has(path)) return;
       const evaluation = evaluateNodeValue(current, ctx);
+      // An attribute the profile does not carry resolves to `null` rather than
+      // declining, so it arrives here like any other value; only a genuinely
+      // unreadable read records nothing.
       if (evaluation.resolved) {
         seen.add(path);
         reads.push({ path, value: evaluation.value });
-      } else if (evaluation.reasonCode === 'attribute-absent') {
-        seen.add(path);
-        reads.push({ path, value: ATTRIBUTE_ABSENT });
       }
       return;
     }

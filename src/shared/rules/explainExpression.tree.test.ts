@@ -13,7 +13,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   explainRuleExpression,
-  ATTRIBUTE_ABSENT,
   MAX_TREE_DEPTH,
   type ClauseStatus,
   type ClauseTreeNode,
@@ -36,6 +35,7 @@ const user: OktaUser = {
     city: 'San Francisco',
     headcount: 42,
     nullable: null,
+    blank: '',
     roles: ['admin', 'dev'],
     'cost center': 'CC-9',
   },
@@ -171,7 +171,7 @@ describe('connective verdicts', () => {
     // cannot change the answer, and `decidedByChildIndices` is what lets a caller
     // say so without re-deriving it.
     const { tree, summary } = explainRuleExpression(
-      'user.department == "Engineering" || user.missingAttribute == "x"',
+      'user.department == "Engineering" || user.roles == "x"',
       user,
     );
 
@@ -184,10 +184,7 @@ describe('connective verdicts', () => {
   });
 
   it('fails an AND on one failing conjunct, naming it', () => {
-    const { tree } = explainRuleExpression(
-      'user.department == "Sales" && user.missingAttribute == "x"',
-      user,
-    );
+    const { tree } = explainRuleExpression('user.department == "Sales" && user.roles == "x"', user);
 
     const root = connective(tree);
     expect(root.verdict).toBe('fail');
@@ -231,7 +228,7 @@ describe('connective verdicts', () => {
 
   it('leaves an AND undecided when a conjunct could not be read and none failed', () => {
     const { tree, summary } = explainRuleExpression(
-      'user.department == "Engineering" && user.missingAttribute == "x"',
+      'user.department == "Engineering" && user.roles == "x"',
       user,
     );
 
@@ -347,18 +344,31 @@ describe('attribute reads', () => {
     ]);
   });
 
-  it('distinguishes an absent attribute from one that is present and null', () => {
+  it('records an absent attribute as null, the value Okta means by absence', () => {
     const { tree } = explainRuleExpression(
       'user.missingAttribute == "x" && user.nullable == "x"',
       user,
     );
 
+    // One fact, one value: Okta reports "no value" by omitting the attribute, so an
+    // absent key and a present-and-null one are indistinguishable on the wire and
+    // this type no longer splits them (ADR-0004).
     const [absent, nullable] = connective(tree).children.map((child) => leaf(child).reads);
-    expect(absent).toEqual([{ path: 'user.missingAttribute', value: ATTRIBUTE_ABSENT }]);
+    expect(absent).toEqual([{ path: 'user.missingAttribute', value: null }]);
     expect(nullable).toEqual([{ path: 'user.nullable', value: null }]);
-    // Absent is not null, and neither is zero or the empty string.
-    expect(ATTRIBUTE_ABSENT).not.toBe(null);
-    expect(typeof ATTRIBUTE_ABSENT).toBe('symbol');
+  });
+
+  it('keeps the empty string distinct from no value at all', () => {
+    const { tree } = explainRuleExpression(
+      'user.blank == "x" && user.missingAttribute == "x"',
+      user,
+    );
+
+    // A blank attribute is a value the org actually holds; absent is not. Zero and
+    // the empty string are never how "no value" renders.
+    const [blank, absent] = connective(tree).children.map((child) => leaf(child).reads);
+    expect(blank).toEqual([{ path: 'user.blank', value: '' }]);
+    expect(absent).toEqual([{ path: 'user.missingAttribute', value: null }]);
   });
 
   it('records a multi-valued attribute as the array it is', () => {

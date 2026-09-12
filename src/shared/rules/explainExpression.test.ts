@@ -430,20 +430,25 @@ describe('nesting, parentheses and negation', () => {
     expect(summary.result).toEqual({ outcome: 'match' });
   });
 
-  it('distinguishes an attribute present-and-null from one that is absent', () => {
-    // Present and explicitly null is a value the org holds, so it compares.
+  it('reads present-and-null and absent as the same value, because Okta cannot tell them apart', () => {
+    // Okta reports "no value" by omitting the attribute, so both states are the
+    // same fact and both compare (ADR-0004). The reading this test used to pin —
+    // absent as unreadable — is now guarded where it actually mattered: a
+    // top-level field resolves off the user root (D-114), covered in
+    // `ruleEvaluator.test.ts`.
     const present = leafOf(explainRuleExpression('user.nullable == null', user).tree);
     expect(present.resolvedValue).toBeNull();
     expect(present.status).toBe('pass');
 
-    // Absent is the evaluator not understanding the expression, and it must not
-    // be dressed up as a satisfied `== null` (D-114).
     const absent = leafOf(explainRuleExpression('user.costCenter == null', user).tree);
-    expect(absent.status).toBe('not-evaluated');
-    expect(absent.reasonCode).toBe('attribute-absent');
+    expect(absent.status).toBe('pass');
+    expect(absent.reasonCode).toBeUndefined();
 
+    // A clause that genuinely could not be read still carries no value at all —
+    // distinct from one that resolved to `null`.
     const nothing = leafOf(explainRuleExpression('isMemberOfGroupName("Engineering")', user).tree);
     expect(nothing.resolvedValue).toBeUndefined();
+    expect(nothing.status).toBe('not-evaluated');
   });
 });
 
@@ -514,10 +519,11 @@ describe('unary minus and computed member access', () => {
     });
   });
 
-  it('reports attribute-absent for a computed key the profile does not carry', () => {
+  it('resolves a computed key the profile does not carry to null, and fails the clause', () => {
     const { tree } = explainRuleExpression('user["cost centre"] == "CC-9"', user);
-    expect(leafAt(tree, 0).status).toBe('not-evaluated');
-    expect(leafAt(tree, 0).reasonCode).toBe('attribute-absent');
+    expect(leafAt(tree, 0).status).toBe('fail');
+    expect(leafAt(tree, 0).reasonCode).toBeUndefined();
+    expect(leafAt(tree, 0).reads).toEqual([{ path: 'user["cost centre"]', value: null }]);
   });
 });
 
@@ -649,7 +655,6 @@ describe('an unresolvable clause is never a failure', () => {
     'String.replaceFirst(user.email, "a", "b") == "ada"',
     'Arrays.flatten(user.roles)',
     'Arrays.contains(user.department, "Eng")',
-    'user.costCenter == "1234"',
     'user.roles == "admin,dev"',
     'String.startsWith(user.headcount, "4")',
     'user.department > "A"',
