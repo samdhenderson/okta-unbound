@@ -232,9 +232,12 @@ Enforced at the single fetch choke point,
   `1.4.0`, MIT, no transitive dependencies — which builds an **AST only**: it evaluates
   nothing and generates no code. Semantics are first-party:
   [`shared/ruleEvaluator.ts`](../src/shared/ruleEvaluator.ts) walks that AST against an
-  explicit **allow-list** of operators, fixed-arity Okta EL functions
-  (`SUPPORTED_FUNCTIONS`), and single-level `user.<attribute>` reads; anything else —
-  unknown function, unmodelled node, computed access, wrong argument count — is reported
+  explicit **allow-list** of operators, fixed- and variadic-arity Okta EL functions
+  (`SUPPORTED_FUNCTIONS`), unary minus on numeric literals, `?:` conditionals (eager
+  three-valued/Kleene, so both branches are always walked), and `user.<attribute>` reads —
+  dotted, or computed with a **string-literal** key (`user["cost center"]`; a
+  non-literal computed key is not modelled and stays unevaluable). Anything outside
+  that grammar — unknown function, unmodelled node, wrong argument count — is reported
   _unevaluable_, never approximated. The grammar gate is an **AST walk**, not a substring
   scan, so nothing can pass it and then fail inside the evaluator. To verify it directly,
   call `checkRuleNodeSupport()` on a node from `parseRuleExpression()` — that is the same
@@ -250,14 +253,32 @@ Enforced at the single fetch choke point,
   **parse untrusted expressions with a real parser and walk the AST against an allow-list —
   never evaluate them.** Evaluating libraries (`jse-eval`, `expression-eval`) are rejected
   for this reason: they execute arbitrary JS semantics.
+- **Tenant regexes never reach `RegExp`.** `isMemberOfGroupNameRegex`'s pattern is
+  tenant-authored, so it is evaluated by
+  [`shared/rules/safeRegex.ts`](../src/shared/rules/safeRegex.ts) (ADR-0002): a
+  hand-written pattern parser → Thompson NFA → breadth-wise simultaneous-state
+  simulation, which has no backtracking in its implementation and therefore no
+  input that can trigger catastrophic backtracking. `new RegExp` is never called on
+  tenant text — the refusal that ADR-0001 §3 originally stated for this function is
+  superseded by building a matcher the refusal's own reasoning doesn't apply to, not
+  by weakening the reasoning. Hard caps (pattern length, input length, NFA state
+  count, total step budget) are enforced before and during simulation, and every
+  guard failure is a structured decline (`unsupported-syntax`, `parse-error`,
+  `pattern-too-long`, `input-too-long`, `too-many-states`, `step-budget-exceeded`,
+  `internal-error`) collapsed into `unevaluable` with reason `regex-unsupported-syntax`
+  or `regex-too-complex` — never a guess. Changes to `safeRegex.ts`, and its
+  adversarial test corpus (nested quantifiers, alternation blowups at the caps),
+  need `security-logging-reviewer` review.
 - **"Cannot evaluate" is never reported as "does not match."**
   `tryEvaluateRuleExpression()` returns `match | no-match | unevaluable`, using
   three-valued logic so an unresolved operand poisons only the sub-expressions that
   depend on it. This is a correctness property with security weight: these answers drive
   membership attribution, so conflating "could not parse" with "did not match" would
   present a confidently wrong access answer. Group-membership functions
-  (`isMemberOfGroup*`) and `app.*` context are always `unevaluable` — they need data this
-  module is not given — and callers render that as indeterminate rather than resolving it
+  (`isMemberOfGroup*`, including `isMemberOfGroupNameRegex`) resolve only when a
+  caller supplies the user's complete group list (`RuleGroupContext`); without one
+  they are `unevaluable`, never guessed. `app.*` context is always `unevaluable` — no
+  caller supplies it — and callers render both as indeterminate rather than resolving
   either way.
 - **A failed load is never reported as an attribution.** The same property one level up:
   classifying a user's groups against a rule list that could not be fetched makes every

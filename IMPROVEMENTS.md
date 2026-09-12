@@ -41,6 +41,14 @@ block says they mean — same vocabulary, one definition, defined there.
   (never reserved in advance); `src/shared/ruleEvaluator.ts:298-320` (read-only,
   for reference)
 - **Verified:** 2026-08-24 — `SUPPORTED_FUNCTIONS` still holds seven entries.
+  2026-09-11 — largely overtaken: the evaluator now covers 19 functions +
+  regex + conditionals via ADR-0002/0003 — `SUPPORTED_FUNCTIONS` plus the
+  `isMemberOfGroup*` family (including `isMemberOfGroupNameRegex`, evaluated
+  by the linear-time safe-regex engine), unary minus, string-literal computed
+  access, and `?:` conditionals. Remaining out-of-scope surface is
+  `Time.*`/`Convert.*`/`Instant`/`DateTime`/`String.replaceFirst`/`Arrays.add`/
+  `Arrays.flatten` — this item's scope likely narrows to that residue;
+  re-scope before claiming.
 - **Problem:** The evaluator implements seven `String.*` functions and nothing
   else — no `toString`, no `DateTime`, no `Instant`. A group rule whose
   condition uses any of those is reported as unevaluable, so the admin asking
