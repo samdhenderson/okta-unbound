@@ -1169,7 +1169,42 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
 - **Status:** open
 - **Related:** `docs/ux-guidelines.md`, `docs/components.md`
 
-### I-046 · A rule tester surface: evaluate every rule against one user
+### I-046 · Two section shells, one of which cannot carry a header
+
+- **Status:** open
+- **Category:** ui
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/shared/CollapsibleSection.tsx`,
+  `src/sidepanel/components/shared/DetailSection.tsx`
+- **Verified:** 2026-09-11 — found while making the Insights tab's sections
+  fold; the two shells were compared prop by prop.
+- **Problem:** `DetailSection` and `CollapsibleSection` are both "a bordered
+  white card holding one section", and since the Insights work `DetailSection`
+  does everything `CollapsibleSection` does. `CollapsibleSection` cannot carry a
+  `description` or an `actions` slot, because its entire header is one
+  `<button>` and anything interactive placed in it would be a nested control —
+  which is exactly why the disclosure was added to `DetailSection` rather than
+  the header to `CollapsibleSection`. It also hand-rolls its chevron as an
+  inline `<svg>` instead of taking one from the `Icon` registry. Two shells now
+  means a reader has to know which of two near-identical cards a surface picked,
+  and a future header prop has to be added twice or land in the wrong one.
+- **Done when:** `CollapsibleSection`'s remaining call sites — `ActionBar`,
+  `GroupMetadataSection`, `MemberFilterDrawer`, `CompositionReports`,
+  `PresetControls`, `ColumnPicker` — render through `DetailSection collapsible`,
+  the component and its story are deleted, and the barrel export goes with them.
+  Each call site is checked for the header/typography difference: `DetailSection`
+  titles are an uppercase eyebrow, `CollapsibleSection`'s are sentence-case
+  semibold, so this is a visual change at every site and not a rename.
+- **Risk:** Medium. Six surfaces, a visible type change at each, and
+  `GroupsTab.navigation.test.tsx` asserts on content inside a collapsed
+  `GroupMetadataSection` — it passes only because both shells keep their body
+  mounted and `inert` rather than unmounting it. Preserve that or the test goes
+  red, and it is the test, not the behaviour, that is right.
+
+---
+
+### I-049 · A rule tester surface: evaluate every rule against one user
 
 - **Category:** feature-completeness
 - **Priority:** P2
@@ -1192,7 +1227,7 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
 
 ---
 
-### I-047 · MembershipRuleEvidence's "Reads" strip restates the ledger's evidence lines
+### I-050 · MembershipRuleEvidence's "Reads" strip restates the ledger's evidence lines
 
 - **Category:** ux
 - **Priority:** P3
@@ -1212,7 +1247,7 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
 
 ---
 
-### I-048 · accessCause.ts exceeds the module-size guideline
+### I-051 · accessCause.ts exceeds the module-size guideline
 
 - **Category:** ux
 - **Priority:** P3

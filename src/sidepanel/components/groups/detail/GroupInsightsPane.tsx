@@ -3,8 +3,26 @@
  * @description Group Detail's fifth tab — what this group's data actually looks
  * like, and where it has drifted.
  *
- * Three sections, all presentational: the caller owns every load and hands its
- * state through, so this pane can be storied in every state without a network.
+ * Three folded sections, all presentational: the caller owns every load and hands
+ * its state through, so this pane can be storied in every state without a network.
+ *
+ * ## A dashboard, not a scroll
+ *
+ * Every section arrives **closed**, and each one states its headline fact in its
+ * own header — `11 attributes · 3 flagged`, `2 of 40 members have no MFA factor
+ * enrolled`. The tab is therefore an index a reader skims before deciding what to
+ * open, rather than a column they scroll past. A section that folded away its
+ * finding would make that worse, not better: the reader would have to open all
+ * three to learn which one was worth opening.
+ *
+ * The pane used to stack five things, two of which repeated another. The
+ * `CompositionReports` panel drew the same `discoverAttributeBreakdowns` output
+ * as the attribute cards above it, in an older and smaller card, and its second
+ * tab drew the MFA factor distribution that the coverage section summarised in
+ * one sentence. Both duplicates are gone. The one capability Composition had that
+ * the cards did not — click a value, land on the Members tab filtered by it — did
+ * not go with it: it moved into the cards' own value rows, which is where a
+ * reader was already looking at the value.
  *
  * ## Why it is not called "Health"
  *
@@ -40,25 +58,25 @@
  *    ({@link module:sidepanel/hooks/useMemberMfaScan}, owned by the caller and
  *    passed through the same way `useGroupSource` is). Never auto-runs. Disabled
  *    with a "load members first" nudge until the roster above has loaded, since
- *    the scan needs the same member set.
+ *    the scan needs the same member set. Reported as two cards in the same
+ *    anatomy as the attribute cards — see {@link GroupMfaCoverageSection} for why
+ *    it is two and not one.
  * 3. **About this group** — the group's own reference facts
- *    ({@link GroupMetadataSection}), folded into a `CollapsibleSection` default
- *    closed. Moved here (and out of its old always-visible position below the tab
- *    card) because it answers the rarest questions of the five tabs.
+ *    ({@link GroupMetadataSection}). Moved here (and out of its old always-visible
+ *    position below the tab card) because it answers the rarest questions of the
+ *    five tabs.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { Button, CollapsibleSection, DetailSection } from '../../shared';
+import { Button, DetailSection } from '../../shared';
 import GroupMetadataSection from './GroupMetadataSection';
 import AttributeSpreadSection from './AttributeSpreadSection';
 import GroupMfaCoverageSection from './GroupMfaCoverageSection';
 import BreakdownDetailsModal from '../../members/BreakdownDetailsModal';
-import CompositionReports from '../../members/CompositionReports';
-import { mfaScanNeedsConfirm } from '../../../hooks/useMemberMfaScan';
 import {
   computeDimensionBreakdown,
-  computeMfaBreakdown,
+  computeMfaEnrollment,
   dimensionTitle,
-  discoverAttributeBreakdowns,
+  type BreakdownRow,
   type MemberFilter,
 } from '../../members/memberAnalytics';
 import type { AttributeReferencingRule } from '../../../../shared/rules/groupAttributeIndex';
@@ -92,10 +110,10 @@ interface GroupInsightsPaneProps {
   /**
    * Applies one value as a member filter and moves to the Members tab.
    *
-   * **Omit and the reveal stays read-only** — this pane has no member list of its
-   * own, so without a caller able to honour it the rows would offer a filter that
-   * goes nowhere. When it *is* wired, every row says where it goes and what it
-   * will apply before it is clicked (see `BreakdownReport`'s `rowIntent`).
+   * **Omit and every value row stays read-only** — this pane has no member list of
+   * its own, so without a caller able to honour it the rows would offer a filter
+   * that goes nowhere. When it *is* wired, every row says where it goes and what
+   * it will apply before it is clicked.
    */
   onFilterMembers?: (filter: MemberFilter) => void;
 
@@ -122,9 +140,6 @@ interface GroupInsightsPaneProps {
 
 /** No value can be an active filter here — this pane has no member list. */
 const EMPTY_ACTIVE_VALUES: Set<string> = new Set();
-
-/** Same reason, in the shape the composition reports read. */
-const NO_ACTIVE_FILTERS: MemberFilter[] = [];
 
 /**
  * Renders the attribute-spread cards, the gated MFA-coverage scan, and the
@@ -166,26 +181,6 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
     [detailKey, members],
   );
 
-  /*
-    The composition reports, moved off the Members tab. They are a distribution
-    of the roster, not a control over it, and the Members tab was stacking them
-    between a reader and the first member row.
-
-    Here every value is a *jump*: this pane has no member list, so a click
-    applies the filter over there and moves. That is why the whole section is
-    gated on `onFilterMembers` rather than rendered inert — the reports are
-    entirely made of value clicks, and a grid of them that does nothing is worse
-    than the section being absent (ADR-0039).
-  */
-  const attributes = useMemo(
-    () => (members ? discoverAttributeBreakdowns(members) : []),
-    [members],
-  );
-  const mfaRows = useMemo(
-    () => computeMfaBreakdown(members ?? [], mfaResults),
-    [members, mfaResults],
-  );
-
   const jumpToMembers = useCallback(
     (dimension: string, value: string, label: string) => {
       onFilterMembers?.({ dimension, value, label });
@@ -193,10 +188,36 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
     [onFilterMembers],
   );
 
-  const handleScanClick = useCallback(() => {
-    if (mfaScanNeedsConfirm(memberCount)) onRequestConfirm();
-    else onRunScan();
-  }, [memberCount, onRequestConfirm, onRunScan]);
+  /*
+    The attribute cards' own value rows are the jump now. They replace the
+    `CompositionReports` grid that used to sit below them drawing the same
+    distributions in a smaller card: a reader looking at a value in the card is
+    already looking at the thing they want to filter by, and the second grid only
+    ever offered a different-looking route to the same place.
+  */
+  const selectAttributeValue = useCallback(
+    (attributeKey: string, row: BreakdownRow) =>
+      jumpToMembers(attributeKey, row.value, `${dimensionTitle(attributeKey)}: ${row.label}`),
+    [jumpToMembers],
+  );
+
+  /*
+    What the MFA section says while folded — the one sentence this section used to
+    consist of, now doing the job it was always suited to. Before a scan completes
+    it names the absence rather than reporting a coverage of zero, and it counts
+    over the members the scan actually reached (`computeMfaEnrollment`'s
+    denominator), never over the roster.
+  */
+  const enrollment = useMemo(
+    () => (rosterReady ? computeMfaEnrollment(members, mfaResults) : null),
+    [rosterReady, members, mfaResults],
+  );
+  const noFactors = enrollment?.rows.find((row) => row.value === 'none');
+  const mfaSummary = !rosterReady
+    ? 'Load members first.'
+    : scanStatus === 'complete' && enrollment && noFactors
+      ? `${noFactors.count.toLocaleString()} of ${enrollment.scanned.toLocaleString()} members scanned have no MFA factor enrolled.`
+      : 'Not scanned.';
 
   return (
     <div className="space-y-(--sp-rung)">
@@ -210,11 +231,17 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
         feedingRules={feedingRules}
         onNavigateToRule={onNavigateToRule}
         onShowAll={setDetailKey}
+        onSelectValue={onFilterMembers ? selectAttributeValue : undefined}
+        collapsible
+        defaultOpen={false}
       />
 
       <DetailSection
         title="MFA coverage"
         description="Opt-in scan of each member's enrolled MFA factors. Never runs automatically."
+        collapsible
+        defaultOpen={false}
+        summary={<p className="text-sm text-neutral-600">{mfaSummary}</p>}
       >
         {!rosterReady ? (
           <div className="space-y-2">
@@ -239,26 +266,20 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
             onRunScan={onRunScan}
             onRequestConfirm={onRequestConfirm}
             onCancelConfirm={onCancelConfirm}
+            onFilterMembers={onFilterMembers}
           />
         )}
       </DetailSection>
 
-      {rosterReady && onFilterMembers && (
-        <CompositionReports
-          attributes={attributes}
-          filters={NO_ACTIVE_FILTERS}
-          onToggle={(dimension, row) =>
-            jumpToMembers(dimension, row.value, `${dimensionTitle(dimension)}: ${row.label}`)
-          }
-          onExpand={setDetailKey}
-          mfaRows={mfaRows}
-          mfaResults={mfaResults}
-          scanStatus={scanStatus}
-          memberCount={memberCount}
-          onToggleMfa={(row) => jumpToMembers('mfa', row.value, row.label)}
-          onRunScanClick={handleScanClick}
+      <DetailSection title="About this group" collapsible defaultOpen={false}>
+        <GroupMetadataSection
+          groupId={groupId}
+          description={description}
+          created={created}
+          lastUpdated={lastUpdated}
+          lastMembershipUpdated={lastMembershipUpdated}
         />
-      )}
+      </DetailSection>
 
       {/* Stage three: every value, including the ones a card's tail folded away.
         A row here *leaves* — it filters the Members tab — so it runs in
@@ -285,16 +306,6 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
             : undefined
         }
       />
-
-      <CollapsibleSection title="About this group" defaultOpen={false}>
-        <GroupMetadataSection
-          groupId={groupId}
-          description={description}
-          created={created}
-          lastUpdated={lastUpdated}
-          lastMembershipUpdated={lastMembershipUpdated}
-        />
-      </CollapsibleSection>
     </div>
   );
 };

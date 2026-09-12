@@ -50,8 +50,37 @@
  * is present — a section without one keeps the box model it has always had, so
  * nothing that currently relies on overflowing its card (a popover, a sticky
  * child) starts clipping because this prop was added.
+ *
+ * ## The disclosure is a capability of this card, not a second card
+ *
+ * `collapsible` turns the heading into a real `<button>` and folds the body into
+ * the shared `.disclose` wrapper. It exists here rather than in
+ * `CollapsibleSection` because that component's *entire header* is one `<button>`
+ * — so it can carry a title and a count and nothing else. A section that folds
+ * **and** owns a gate button (the Insights tab's "Attribute spread", with its
+ * `Analyze` action) cannot be built there without nesting a button inside a
+ * button. Here the trigger is scoped to the heading and `description`/`actions`
+ * stay beside it, outside the control.
+ *
+ * Every disclosure prop is additive: a call site that passes none of them renders
+ * exactly the markup it always did, down to the box model.
+ *
+ * ## A folded section still answers something
+ *
+ * `summary` is the section's headline fact, shown in the header **while the
+ * section is closed**. A stack of sections that all start closed is otherwise a
+ * column of bare headers, and a reader has to open each one to find out whether
+ * it was worth opening. It is subject to the same rule as everything else: a fact
+ * that has not loaded is named as absent, never rendered as a `0`.
+ *
+ * It is hidden once the section opens, because at that point it is a summary of
+ * something the reader can already see — and the body states it better than one
+ * line can. A summary that stayed would put the same number on screen twice, one
+ * above the other, which is the failure this whole shape exists to remove.
  */
-import React from 'react';
+import React, { useId, useState } from 'react';
+import Badge from './Badge';
+import Icon from './Icon';
 
 /** Props for {@link DetailSection}. */
 export interface DetailSectionProps {
@@ -77,12 +106,35 @@ export interface DetailSectionProps {
    * Ignored when there is no `title` to hang it on.
    */
   headingId?: string;
+  /**
+   * Fold the body behind the heading. Requires `title` — the heading text is the
+   * trigger's accessible name, and a disclosure with no name is not operable by
+   * anybody reading the control rather than the card. Passing `collapsible`
+   * without a `title` renders the ordinary, non-folding section.
+   *
+   * The body stays **mounted** while collapsed (held out of the tab order and the
+   * accessibility tree with `inert`), so a folded section keeps its own state —
+   * don't rely on collapsing to reset it.
+   */
+  collapsible?: boolean;
+  /** Whether a `collapsible` section starts expanded. Defaults to `true`. */
+  defaultOpen?: boolean;
+  /** Optional count rendered as a badge beside the title. */
+  itemCount?: number;
+  /**
+   * The section's headline fact, shown in the header **while the section is
+   * closed** and hidden once it opens, where the body states it better.
+   *
+   * Ignored on a non-collapsible section, which has no folded state for it to
+   * stand in for — the same way `headingId` is ignored without a `title`.
+   */
+  summary?: React.ReactNode;
   /** Section body. */
   children: React.ReactNode;
 }
 
 /**
- * One card-shaped section of a detail view.
+ * One card-shaped section of a detail view, optionally folding behind its heading.
  *
  * @param props - See {@link DetailSectionProps}.
  *
@@ -99,6 +151,20 @@ export interface DetailSectionProps {
  *   <MemberList members={visible} />
  * </DetailSection>
  * ```
+ *
+ * @example Folded, with a gate button beside the trigger and a headline fact under it.
+ * ```tsx
+ * <DetailSection
+ *   title="Attribute spread"
+ *   collapsible
+ *   defaultOpen={false}
+ *   itemCount={ranked.length}
+ *   summary={<p className="text-xs text-neutral-600">11 attributes · 3 flagged</p>}
+ *   actions={<Button size="sm">Analyze</Button>}
+ * >
+ *   <AttributeGrid entries={ranked} />
+ * </DetailSection>
+ * ```
  */
 const DetailSection: React.FC<DetailSectionProps> = ({
   title,
@@ -106,11 +172,73 @@ const DetailSection: React.FC<DetailSectionProps> = ({
   actions,
   band,
   headingId,
+  collapsible = false,
+  defaultOpen = true,
+  itemCount,
+  summary,
   children,
 }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const bodyId = useId();
+
+  // A disclosure with no heading has no accessible name, so `collapsible` alone
+  // is not enough to build the trigger — a titleless section stays open.
+  const discloses = collapsible && Boolean(title);
+
   // The header row exists if anything would go in it. `actions` alone is a real
   // case (an untitled pane with a gate button), so this is not just `!!title`.
-  const hasHeader = Boolean(title || description || actions);
+  const hasHeader = Boolean(title || description || actions || itemCount !== undefined);
+
+  const count =
+    itemCount !== undefined ? (
+      <Badge variant="neutral" testId="detail-section-count">
+        {itemCount}
+      </Badge>
+    ) : null;
+
+  const heading = title ? (
+    <h2
+      id={headingId}
+      className="text-xs font-semibold uppercase tracking-wide text-neutral-600"
+      style={{ fontFamily: 'var(--font-heading)' }}
+    >
+      {discloses ? (
+        <button
+          type="button"
+          aria-expanded={isOpen}
+          aria-controls={bodyId}
+          onClick={() => setIsOpen((open) => !open)}
+          className="flex items-center gap-(--sp-inline) text-left uppercase tracking-wide"
+        >
+          <Icon
+            type="chevron-right"
+            size="sm"
+            aria-hidden="true"
+            className={`shrink-0 text-neutral-400 transition-transform duration-(--dur-quick) ease-standard ${
+              isOpen ? 'rotate-90' : ''
+            }`}
+          />
+          <span>{title}</span>
+          {count}
+        </button>
+      ) : (
+        <span className="flex items-center gap-(--sp-inline)">
+          <span>{title}</span>
+          {count}
+        </span>
+      )}
+    </h2>
+  ) : null;
+
+  const header = hasHeader ? (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        {heading}
+        {description && <p className="mt-1 text-xs text-neutral-500">{description}</p>}
+      </div>
+      {actions && <div className="shrink-0">{actions}</div>}
+    </div>
+  ) : null;
 
   return (
     <section
@@ -121,29 +249,38 @@ const DetailSection: React.FC<DetailSectionProps> = ({
       className={`rounded-md border border-neutral-200 bg-white${band ? ' overflow-hidden' : ''}`}
     >
       {band && <div className="border-b border-neutral-200 bg-neutral-50 px-4 py-3">{band}</div>}
-      {/* The padding lives here rather than on the `<section>` so the band above
-          can reach the card's edges. For a band-less section the box model is
-          identical to what it was when the padding sat on the section itself. */}
-      <div className="px-4 py-3">
-        {hasHeader && (
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              {title && (
-                <h2
-                  id={headingId}
-                  className="text-xs font-semibold uppercase tracking-wide text-neutral-600"
-                  style={{ fontFamily: 'var(--font-heading)' }}
-                >
-                  {title}
-                </h2>
-              )}
-              {description && <p className="mt-1 text-xs text-neutral-500">{description}</p>}
-            </div>
-            {actions && <div className="shrink-0">{actions}</div>}
+      {discloses ? (
+        <>
+          {/* The header keeps its own padding so the disclosed body below can
+              own — and clip — the rest. */}
+          <div className="px-4 py-3">
+            {header}
+            {/* Only while folded: once the body is on screen this line is a
+                second copy of a number the reader can already see. */}
+            {summary && !isOpen && <div className="mt-2">{summary}</div>}
           </div>
-        )}
-        <div className={hasHeader ? 'mt-3' : undefined}>{children}</div>
-      </div>
+          {/*
+            `.disclose` animates `grid-template-rows` between 1fr and 0fr, so the
+            body collapses to zero height with no JS measurement (and without
+            toggling `display`, which cannot be transitioned). Its direct child is
+            the CSS-owned clipping row — the padding lives one level further in so
+            it is clipped with the content instead of holding the row open.
+          */}
+          <div id={bodyId} className="disclose" data-open={isOpen} inert={!isOpen || undefined}>
+            <div>
+              <div className="px-4 pb-3">{children}</div>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* The padding lives here rather than on the `<section>` so the band above
+           can reach the card's edges. For a band-less section the box model is
+           identical to what it was when the padding sat on the section itself. */
+        <div className="px-4 py-3">
+          {header}
+          <div className={hasHeader ? 'mt-3' : undefined}>{children}</div>
+        </div>
+      )}
     </section>
   );
 };

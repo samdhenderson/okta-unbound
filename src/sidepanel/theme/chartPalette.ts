@@ -44,3 +44,26 @@ export const CHART_OTHER_COLOR = '#e5e5e5'; // chart-only — a hair lighter tha
  */
 export const CHART_TAIL_HATCH =
   'repeating-linear-gradient(45deg, var(--color-neutral-300) 0 3px, var(--color-neutral-100) 3px 6px)';
+
+/**
+ * Paint for the MFA enrollment partition, keyed by **bucket** rather than by
+ * position in the row list.
+ *
+ * The sequential ramp above assigns its deepest stop to whichever row comes
+ * first, which is the right rule for attribute values — there the order *is* the
+ * ranking, largest share darkest. It is the wrong rule here. The enrollment rows
+ * arrive worst-first (`none`, `single`, `multiple`), so a positional ramp would
+ * paint "no factors enrolled" in the deepest, most-emphatic indigo whatever its
+ * size, and paint the covered majority in the palest tint — a picture that reads
+ * as importance while actually encoding nothing but row order.
+ *
+ * Keying on the bucket instead means the colour carries the meaning it looks
+ * like it carries: the gap is warning-toned, the thin cover is neutral, and full
+ * coverage takes the primary. The card states all three in words as well, so
+ * nothing here is load-bearing on colour alone.
+ */
+export const MFA_ENROLLMENT_PAINT: Readonly<Record<string, string>> = {
+  none: 'var(--color-warning)',
+  single: 'var(--color-neutral-300)',
+  multiple: 'var(--color-primary)',
+};

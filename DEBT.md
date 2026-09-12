@@ -1699,6 +1699,51 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Risk:** Low. Loading presentation only, no data path. The pane's story
   covers the settled render; the swap needs a story or a test of its own.
 
+### D-133 · Two demo-reel walks film a section the Insights tab no longer has
+
+- **Status:** open
+- **Category:** tooling
+- **Priority:** P2
+- **Size:** M
+- **Files:** `.storybook/scripts/capture/selectors.mjs`,
+  `.storybook/scripts/capture/walks/attributes.mjs`,
+  `.storybook/scripts/capture/walks/reporting.mjs`,
+  `.storybook/scripts/capture/capture.mjs`, `reel/src/script.ts`
+- **Verified:** 2026-09-11 — enumerated while removing `CompositionReports`
+  from `GroupInsightsPane`; every selector and beat below was read, not
+  inferred.
+- **Problem:** The Insights tab no longer mounts `CompositionReports`, and its
+  two remaining analytic sections now fold closed by default. The capture rig
+  drives both. Seven selectors target the removed section —
+  `compositionSection`, `compositionBody`, `compositionTab`, `facetSegment`,
+  `readFacets`, `readMfaBreakdown`, `noFactorsRow` — and match nothing.
+  `mfaCoverageSection` survives the removal but not the fold: it filters a
+  `<section>` on a heading role, and a collapsed body is `inert`, so the
+  heading leaves the accessibility tree. `walks/attributes.mjs` loses beats
+  `facets` and `filter`; `walks/reporting.mjs` loses `arm`, `breakdown` and
+  `unenrolled`, **including both of its `drive.waitFor` completion signals**
+  (`mfaScanningButton`, `noFactorsRow`), so that walk burns its 30s timeout and
+  fails rather than mis-framing. Downstream, `reel/src/script.ts` reads
+  `figure('facets')` and `figure('coverage')` and `figure()` throws on a missing
+  key; the `reporting` act additionally throws unless a row is labelled exactly
+  `No factors enrolled`. `npm run capture` and `npm run reel` are both red
+  until this is done. Neither is in the CI gate ladder.
+- **Done when:** The rig films both chapters again. The new UI supplies a
+  replacement for everything the old selectors read, so this is a re-point
+  rather than a redesign: the attribute cards' expanded value rows are now real
+  controls named `Open Members filtered by …` (the `facetSegment` /
+  `readFacets` replacement), the enrollment card still carries a
+  `No factors enrolled` bucket row, the factor-type card holds the tally
+  `readMfaBreakdown` wanted, and the MFA section's **collapsed** header states
+  the unprotected count — so a future completion signal needs no disclosure
+  click. Both walks need an open-the-section step before they scroll. `SCHEMA`
+  in `capture.mjs` gets bumped, since a selector-rig change does not show in a
+  chapter fingerprint. Then `npm run capture -- attributes reporting` and
+  `npm run capture:check`.
+- **Risk:** Medium. No production code involved, but the beat names in
+  `reel/src/script.ts` and the walks have to stay in agreement or the render
+  throws instead of degrading.
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
