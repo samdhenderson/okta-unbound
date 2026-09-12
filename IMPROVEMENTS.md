@@ -1161,6 +1161,69 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
 - **Status:** open
 - **Related:** `docs/ux-guidelines.md`, `docs/components.md`
 
+### I-046 · A rule tester surface: evaluate every rule against one user
+
+- **Category:** feature-completeness
+- **Priority:** P2
+- **Size:** L
+- **Files:** new surface; `src/sidepanel/components/shared/ClauseLedger.tsx`
+  (the display it would compose), `src/shared/rules/explainExpression.ts`
+- **Verified:** 2026-09-11 — no tester surface exists; breakdowns render only
+  inside group/user detail rungs.
+- **Problem:** The Clause Ledger explains one rule inside a detail rung, but an
+  admin diagnosing "what will happen to this user" has no surface that runs
+  every group rule against one user and lists the verdicts — the layout Sam
+  originally sketched. Deliberately cut from the ledger program to keep it to
+  existing surfaces.
+- **Done when:** a rung (or Home report) accepts a user, evaluates all cached
+  rules with the user's complete group context, and renders one ClauseLedger
+  card per rule with the aggregate counts; unevaluable rules render neutral.
+- **Risk:** needs the org rules listing and complete memberships; must respect
+  the certainty ladder (ADR-0001) and never fire per-rule API calls.
+- **Status:** open
+
+---
+
+### I-047 · MembershipRuleEvidence's "Reads" strip restates the ledger's evidence lines
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/MembershipRuleEvidence.tsx`
+- **Verified:** 2026-09-11 — the strip and the per-clause `path → value`
+  evidence lines both render for the same rule.
+- **Problem:** Since the ledger's leaves carry `reads`, the disclosure shows the
+  same attributes twice: once as bare "Reads" badges above, once as evidence
+  lines with values inside the breakdown. The strip predates the ledger.
+- **Done when:** the strip is removed (or demonstrably covers a case the
+  evidence lines cannot, recorded here), with its story/test coverage
+  retargeted.
+- **Risk:** low; the strip also renders in the no-user fallback path — keep
+  that case.
+- **Status:** open
+
+---
+
+### I-048 · accessCause.ts exceeds the module-size guideline
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/users/comparison/accessCause.ts`
+- **Verified:** 2026-09-11 — ~550 lines after the tree-leaf migration; it was
+  ~508 before, so the excess predates the ledger program.
+- **Problem:** The comparison cause classifier is one long logic module mixing
+  provenance classification, failing-leaf collection, and copy-adjacent
+  presentation records; the house guideline caps modules around 300 lines with
+  logic pushed into focused units.
+- **Done when:** split along its existing section seams with the current test
+  suite retargeted file-by-file and no behavior change.
+- **Risk:** attribution semantics are load-bearing (no-match vs unevaluable);
+  a refactor must keep the provenance tests green untouched.
+- **Status:** open
+
+---
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
