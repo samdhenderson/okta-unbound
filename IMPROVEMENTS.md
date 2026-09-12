@@ -1336,6 +1336,61 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
 
 ---
 
+### I-054 · The evaluator declines Okta's own recommended blank-check idiom
+
+- **Category:** feature-completeness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/shared/ruleEvaluator.ts`
+- **Verified:** 2026-09-12 — read `evaluateRelational` and Okta's "Blank versus
+  null attribute values" support article; the restriction is in the source and
+  the idiom is in Okta's own guidance.
+- **Problem:** `evaluateRelational` gives up unless **both** operands are
+  numbers, so every `<`/`>`/`<=`/`>=` over strings reports `operand-type`. That
+  is not an edge case: Okta's own support article tells admins to guard against
+  blank attributes by checking a value "is not `" "` and is greater than `" "`",
+  because "a blank string will always evaluate as 'less than' any other
+  populated string value". So the one comparison Okta documents for the most
+  common data-quality problem in a rule is the one this panel cannot run, and
+  every rule written to that guidance lands in "Could not be evaluated".
+- **Done when:** relational operators compare two strings by Okta's stated
+  ordering, with `""` below every populated value; a `null` operand still
+  declines (SpEL throws when ordering null, and ADR-0004 §1 deliberately did not
+  extend to ordering); mixed string/number operands still decline rather than
+  coercing; each direction has a test, and the blank-sorts-lowest claim is
+  pinned separately from the general string ordering.
+- **Risk:** better-pinned than ADR-0004 §3 but still short of a worked Okta
+  example — SpEL orders `Comparable`s and Okta states the blank rule, but Okta's
+  EL reference shows relational operators only over numbers. Cite both in the
+  commit, and do not extend the same reasoning to `<`/`>` over booleans or
+  arrays, where nothing pins an order at all.
+- **Status:** open
+
+### I-055 · `ClauseLedger`'s summary row wraps badly at side-panel width
+
+- **Category:** ux-consistency
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/shared/ClauseLedger.tsx`
+- **Verified:** 2026-09-12 — rendered `BlastRadiusRuleRow`'s ledger stories in a
+  real browser at 400px and read the screenshots; the wrap is in the rendered
+  output, not inferred from the classes.
+- **Problem:** `LedgerSummary` puts the clause tally, the verdict chip and the
+  **Raw expression** toggle on one row. At the side panel's real width the chip
+  and the toggle each drop onto their own line, right-aligned under a
+  left-aligned tally — three ragged rows where there should be one or two. It is
+  pre-existing and affects `MembershipRuleEvidence` identically; it became worth
+  filing when PR #142 put the ledger on a second, denser surface.
+- **Done when:** the summary reads as a deliberate block at 360–400px — the
+  measurements the panel actually ships at — with no element stranded on its own
+  line; both call sites are checked in a browser, not only in the story runner,
+  which applies no Tailwind and so cannot see this class of defect at all.
+- **Risk:** none to correctness; this is layout only. Resist moving the verdict
+  chip away from the tally — they are one statement, and separating them invites
+  reading the chip as a claim about the whole rule rather than the summary of
+  the clauses below it.
+- **Status:** open
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk

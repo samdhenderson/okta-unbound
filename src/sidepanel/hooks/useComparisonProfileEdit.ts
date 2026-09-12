@@ -68,6 +68,7 @@ import type {
   RuleInventoryState,
 } from '../../shared/membership/blastRadiusTypes';
 import type { GroupMembership, OktaUser } from '../../shared/types';
+import type { RuleGroupContext } from '../../shared/ruleEvaluator';
 
 /** Which column of the comparison an editor belongs to. */
 export type ComparisonEditSideKey = 'context' | 'compared';
@@ -152,6 +153,14 @@ export interface ComparisonPendingSave {
    * snapshot read the analysis used. No fetch, no second source.
    */
   readonly resolveGroupName: (groupId: string) => string | undefined;
+  /**
+   * The **post-draft** user and this user's complete group list, from the same
+   * commit as {@link report}, so each rule row can break its condition down clause
+   * by clause against the draft the verdicts describe.
+   */
+  readonly drafted?: OktaUser;
+  /** See {@link drafted}. */
+  readonly groupContext: RuleGroupContext;
   /** A message from a previous attempt that failed, kept on the re-armed confirmation. */
   readonly error?: string;
   /** Run the analysis against this column's draft. Costs no API calls. */
@@ -406,6 +415,10 @@ function useComparisonEditSide({
             // The names the analysis already read, so the rule rows can print a
             // condition's group ids as groups.
             resolveGroupName: blast.resolveGroupName,
+            // And the two inputs it judged against, so each row can break its
+            // condition down clause by clause against the same draft.
+            drafted: blast.drafted ?? undefined,
+            groupContext: blast.groupContext,
             ...(message?.type === 'danger' ? { error: message.text } : {}),
             analyze: analyzeSide,
             cancel: dismiss,
@@ -419,6 +432,8 @@ function useComparisonEditSide({
       blast.report,
       blast.isAnalyzing,
       blast.resolveGroupName,
+      blast.drafted,
+      blast.groupContext,
       message,
       analyzeSide,
       dismiss,

@@ -17,6 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import BlastRadiusReport from './BlastRadiusReport';
+import type { OktaUser } from '../../../shared/types';
 import type {
   BlastRadiusReport as BlastRadiusReportData,
   GroupEffect,
@@ -47,6 +48,23 @@ const groups: GroupEffect[] = [
     currentBucket: 'rule',
   },
 ];
+
+/**
+ * The subject, as Okta currently holds them. `department: 'Engineering'` matters:
+ * the drafted fixture below moves it to `Sales`, so a ledger rendered against the
+ * wrong side of the edit reaches the opposite verdict and the test notices.
+ */
+const user = {
+  id: '00uFAKEreport0000001',
+  status: 'ACTIVE',
+  profile: {
+    login: 'ada@example.com',
+    email: 'ada@example.com',
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    department: 'Engineering',
+  },
+} as unknown as OktaUser;
 
 const rules: RuleEffect[] = [
   {
@@ -128,6 +146,41 @@ describe('BlastRadiusReport', () => {
 
     await userEvent.click(groupsPill);
     expect(screen.getByRole('heading', { name: 'Added' })).toBeInTheDocument();
+  });
+
+  it('breaks a rule condition into clauses against the DRAFTED user, not the current one', async () => {
+    // The point of the ledger here: an admin looking at a verdict needs to see
+    // which clause produced it, and it has to be evaluated against the state the
+    // edit would create — the same side the badge describes. A fixture whose draft
+    // *changes* the attribute the clause reads is what catches a pre/post swap:
+    // the current user is in Engineering, the draft moves them to Sales, and only
+    // the drafted value makes this clause pass.
+    render(
+      <BlastRadiusReport
+        report={computed}
+        drafted={{ ...user, profile: { ...user.profile, department: 'Sales' } }}
+        groupContext={[]}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /^Rules \d+$/ }));
+
+    // The discriminator: `department == "Sales"` matches only the drafted value.
+    // Rendered against the pre-edit user it would read "Rule does not match".
+    expect(screen.getByText('Rule matches this user')).toBeInTheDocument();
+    expect(screen.queryByText('Rule does not match')).not.toBeInTheDocument();
+    // And the evidence line states the value it judged, so the verdict is checkable.
+    expect(screen.getByText(/user\.department/)).toBeInTheDocument();
+    expect(screen.getAllByText('"Sales"').length).toBeGreaterThan(0);
+  });
+
+  it('renders the condition as flat text when no drafted user is supplied', async () => {
+    // No user, no breakdown — and never a breakdown against the wrong user. The
+    // flat condition is the honest fallback, which is what the row did before.
+    render(<BlastRadiusReport report={computed} />);
+    await userEvent.click(screen.getByRole('button', { name: /^Rules \d+$/ }));
+
+    expect(screen.queryByText('Rule matches this user')).not.toBeInTheDocument();
+    expect(screen.getByText(/user\.department == "Sales"/)).toBeInTheDocument();
   });
 
   it('says how many of the unaffected rules were never read', async () => {

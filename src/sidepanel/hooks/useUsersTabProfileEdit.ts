@@ -280,7 +280,15 @@ export function useUsersTabProfileEdit({
   const { getUserRaw } = useOktaApi({ targetTabId: targetTabId ?? null });
 
   const { draftPatch, pendingSave, confirmSave } = edit;
-  const { reset: resetReport, analyze, report, isAnalyzing, resolveGroupName } = blast;
+  const {
+    reset: resetReport,
+    analyze,
+    report,
+    isAnalyzing,
+    resolveGroupName,
+    drafted,
+    groupContext,
+  } = blast;
 
   // A report belongs to exactly one draft. The moment the draft moves the
   // previous answer stops being about anything on screen, and a stale prediction
@@ -424,6 +432,10 @@ export function useUsersTabProfileEdit({
         // The names the analysis already read, so the rule rows can print a
         // condition's group ids as groups.
         resolveGroupName,
+        // And the two inputs it judged against, so each row can break its
+        // condition down clause by clause against the same draft.
+        drafted: drafted ?? undefined,
+        groupContext,
       },
     }),
     [
@@ -444,6 +456,8 @@ export function useUsersTabProfileEdit({
       draftPatch,
       isAnalyzing,
       resolveGroupName,
+      drafted,
+      groupContext,
     ],
   );
 }

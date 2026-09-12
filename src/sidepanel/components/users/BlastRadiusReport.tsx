@@ -44,6 +44,8 @@ import type {
   RuleEffect,
   RuleTransition,
 } from '../../../shared/membership/blastRadiusTypes';
+import type { OktaUser } from '../../../shared/types';
+import type { RuleGroupContext } from '../../../shared/ruleEvaluator';
 
 /** Props for {@link BlastRadiusReport}. */
 export interface BlastRadiusReportProps {
@@ -61,6 +63,20 @@ export interface BlastRadiusReportProps {
    * fetches nothing.
    */
   resolveGroupName?: GroupNameResolver;
+  /**
+   * The **post-draft** user, threaded to each rule row so its condition can be
+   * broken down clause by clause against the state this edit would create.
+   *
+   * Comes from `useBlastRadius`, which commits it in the same object as the
+   * report — so the breakdown always describes the draft the verdicts describe.
+   * Omitted, the rows render their conditions as flat text.
+   */
+  drafted?: OktaUser;
+  /**
+   * The user's **complete** group list, so `isMemberOf*` clauses in a breakdown
+   * reach a verdict. **Omit rather than pass a subset.**
+   */
+  groupContext?: RuleGroupContext;
 }
 
 /** Which of the two views the pills have selected. */
@@ -117,7 +133,18 @@ const RuleSection: React.FC<{
   cascadeLines: ReadonlyMap<string, readonly CascadeLine[]>;
   openRowIds: ReadonlySet<string>;
   onToggle: (rowId: string) => void;
-}> = ({ title, effects, resolveGroupName, cascadeLines, openRowIds, onToggle }) =>
+  drafted?: OktaUser;
+  groupContext?: RuleGroupContext;
+}> = ({
+  title,
+  effects,
+  resolveGroupName,
+  cascadeLines,
+  openRowIds,
+  onToggle,
+  drafted,
+  groupContext,
+}) =>
   effects.length === 0 ? null : (
     <section className="flex flex-col gap-2">
       <Eyebrow as="h3">{title}</Eyebrow>
@@ -130,6 +157,8 @@ const RuleSection: React.FC<{
             cascadeBlocks={blocksFor(effect, cascadeLines)}
             expanded={openRowIds.has(effect.ruleId)}
             onToggle={onToggle}
+            drafted={drafted}
+            groupContext={groupContext}
           />
         ))}
       </ul>
@@ -169,6 +198,8 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({
   report,
   className = '',
   resolveGroupName,
+  drafted,
+  groupContext,
 }) => {
   const [view, setView] = useState<ReportView>('groups');
   /*
@@ -306,6 +337,8 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({
                 cascadeLines={cascadeLines}
                 openRowIds={openRowIds}
                 onToggle={toggleRow}
+                drafted={drafted}
+                groupContext={groupContext}
               />
               <RuleSection
                 title="Stops matching"
@@ -314,6 +347,8 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({
                 cascadeLines={cascadeLines}
                 openRowIds={openRowIds}
                 onToggle={toggleRow}
+                drafted={drafted}
+                groupContext={groupContext}
               />
               <RuleSection
                 title="Could not be evaluated"
@@ -322,6 +357,8 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({
                 cascadeLines={cascadeLines}
                 openRowIds={openRowIds}
                 onToggle={toggleRow}
+                drafted={drafted}
+                groupContext={groupContext}
               />
             </>
           )}

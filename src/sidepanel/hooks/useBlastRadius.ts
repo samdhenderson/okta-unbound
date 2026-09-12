@@ -42,7 +42,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { analyzeBlastRadius } from '../../shared/membership/blastRadius';
+import { analyzeBlastRadius, draftedUser } from '../../shared/membership/blastRadius';
+import { groupContextOf } from '../../shared/membership/groupContext';
+import type { RuleGroupContext } from '../../shared/ruleEvaluator';
 import type {
   BlastRadiusReport,
   RuleInventoryState,
@@ -84,10 +86,34 @@ interface ReportState {
    * cannot feed a render; this can.
    */
   readonly groupNames: ReadonlyMap<string, string>;
+  /**
+   * The post-draft user the report is an answer about, exactly as the engine built
+   * it (`blastRadius`'s own `draftedUser`).
+   *
+   * Committed here, in the same object as the report, because a surface that
+   * explains a rule clause by clause has to explain **this** user. A drafted user
+   * assembled anywhere else, or held in separate state, could drift out of step
+   * with the badge it sits under — and a breakdown that contradicts its own verdict
+   * is worse than no breakdown.
+   */
+  readonly drafted: OktaUser | null;
+  /**
+   * The user's complete group list, as the `isMemberOf*` clauses are answered from.
+   *
+   * Same reason as {@link drafted}: the report's membership answers and the
+   * ledger's must come from one list, or the two disagree on screen.
+   */
+  readonly groupContext: RuleGroupContext;
 }
 
 /** The resting state. One shared instance, so `setState(IDLE)` on an idle hook bails out. */
-const IDLE: ReportState = { userId: null, report: NOT_COMPUTED, groupNames: new Map() };
+const IDLE: ReportState = {
+  userId: null,
+  report: NOT_COMPUTED,
+  groupNames: new Map(),
+  drafted: null,
+  groupContext: [],
+};
 
 /** What {@link useBlastRadius} needs to answer a question about an edit. */
 export interface UseBlastRadiusOptions {
@@ -158,6 +184,21 @@ export interface UseBlastRadiusReturn {
    * report has been computed.
    */
   resolveGroupName: (groupId: string) => string | undefined;
+  /**
+   * The post-draft user this report is about, or `null` before one is computed.
+   *
+   * For a surface that explains a rule's condition clause by clause: it is the
+   * state the admin is about to create, which is the state the report's verdicts
+   * describe. Retracted with the report, and scoped to the same subject check, so
+   * it can never describe a different draft or a different person.
+   */
+  drafted: OktaUser | null;
+  /**
+   * The complete group list the report's `isMemberOf*` answers came from. Empty
+   * before a report exists — and **omit it rather than pass a subset** downstream,
+   * for the reason in {@link UseBlastRadiusOptions.memberships}.
+   */
+  groupContext: RuleGroupContext;
 }
 
 /**
@@ -230,6 +271,10 @@ export function useBlastRadius({
   // ids with the previous user's names would be confident and wrong, which is
   // the failure `groupNamesRef`'s origin key already guards against upstream.
   const committedNames = state.userId === currentUserId ? state.groupNames : undefined;
+  // Gated on the same check, for the same reason: explaining a clause against the
+  // previous user's profile would be confident and wrong.
+  const drafted = state.userId === currentUserId ? state.drafted : null;
+  const groupContext = state.userId === currentUserId ? state.groupContext : [];
   const resolveGroupName = useCallback(
     (groupId: string) => committedNames?.get(groupId),
     [committedNames],
@@ -256,7 +301,15 @@ export function useBlastRadius({
         if (!mountedRef.current || runIdRef.current !== runId) return;
 
         const next = analyzeBlastRadius({ user, draft, memberships, rules, groupNames });
-        setState({ userId: user.id, report: next, groupNames });
+        setState({
+          userId: user.id,
+          report: next,
+          groupNames,
+          // The same two inputs the engine just judged against, so a clause-level
+          // explanation of any row cannot disagree with the row.
+          drafted: draftedUser(user, draft),
+          groupContext: groupContextOf(memberships),
+        });
         setIsAnalyzing(false);
         // Counts and the status enum only — never a name, an expression, or a
         // drafted value.
@@ -266,5 +319,5 @@ export function useBlastRadius({
     [user, memberships, rules, oktaOrigin, reset],
   );
 
-  return { report, analyze, reset, isAnalyzing, resolveGroupName };
+  return { report, analyze, reset, isAnalyzing, resolveGroupName, drafted, groupContext };
 }

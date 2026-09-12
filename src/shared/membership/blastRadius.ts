@@ -137,9 +137,15 @@ function targetGroupIdsOf(rule: MembershipRule): readonly string[] {
  * outcome for a draft that sets `department` to a number.
  *
  * A key present with `undefined` clears the attribute, and reads the same as an
- * absent one.
+ * absent one — both resolve to `null` (ADR-0004).
+ *
+ * **Exported so a surface can explain the same user the engine judged.** The
+ * Clause Ledger on a rule row re-evaluates the condition to break it into clauses,
+ * and it has to do that against byte-identical input or the breakdown could
+ * contradict the badge above it. Two spread expressions in two files would be one
+ * refactor away from disagreeing.
  */
-function draftedUser(user: OktaUser, draft: Readonly<Record<string, unknown>>): OktaUser {
+export function draftedUser(user: OktaUser, draft: Readonly<Record<string, unknown>>): OktaUser {
   return { ...user, profile: { ...user.profile, ...draft } as OktaUser['profile'] };
 }
 

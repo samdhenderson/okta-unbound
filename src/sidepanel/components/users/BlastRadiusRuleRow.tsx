@@ -47,6 +47,7 @@ import React, { useId } from 'react';
 import {
   Badge,
   Button,
+  ClauseLedger,
   ListRow,
   RuleExpressionText,
   type BadgeVariant,
@@ -57,6 +58,8 @@ import Icon, { type IconType } from '../shared/Icon';
 import { unevaluableReasonText } from '../../../shared/rules/unevaluableReasonText';
 import { ruleStatusBadge } from '../../../shared/ruleUtils';
 import type { RuleEffect, RuleTransition } from '../../../shared/membership/blastRadiusTypes';
+import type { OktaUser } from '../../../shared/types';
+import type { RuleGroupContext } from '../../../shared/ruleEvaluator';
 
 /** Props for {@link BlastRadiusRuleRow}. */
 export interface BlastRadiusRuleRowProps {
@@ -96,6 +99,30 @@ export interface BlastRadiusRuleRowProps {
   expanded?: boolean;
   /** Toggle the panel. Absent, no trigger renders — a verb with no handler is omitted. */
   onToggle?: (ruleId: string) => void;
+  /**
+   * The **post-draft** user, so the condition can be broken down clause by clause
+   * against the state this edit would create.
+   *
+   * Supplied, the row renders a {@link ClauseLedger} in place of the flat
+   * condition text: an admin looking at "Could not be evaluated" needs to know
+   * *which clause* could not be read, and a single summary sentence cannot say.
+   * Post-draft rather than pre-draft on purpose — it is the state the badge above
+   * describes, the same side {@link RuleEffect.afterReason} reports from.
+   *
+   * Omitted, the condition renders as flat text exactly as it did. It comes from
+   * `useBlastRadius`, which commits it in the same object as the report, so the
+   * breakdown can never describe a different draft than the verdict does.
+   */
+  drafted?: OktaUser;
+  /**
+   * The user's **complete** group list, so `isMemberOf*` clauses reach a verdict
+   * instead of a neutral "not evaluated".
+   *
+   * **Omit it rather than pass a subset** — see {@link ClauseLedgerProps.groupContext}:
+   * membership is two-valued over the list it is given, so a partial list turns
+   * every omitted group into a confident "not a member".
+   */
+  groupContext?: RuleGroupContext;
 }
 
 /** How one {@link RuleTransition} is presented: badge wording, treatment, glyph. */
@@ -176,6 +203,8 @@ const BlastRadiusRuleRow: React.FC<BlastRadiusRuleRowProps> = ({
   cascadeBlocks,
   expanded = false,
   onToggle,
+  drafted,
+  groupContext,
 }) => {
   const presentation = transitionPresentation[effect.transition];
   // Absorbed from either side, so report whichever side gave up — after first,
@@ -185,6 +214,12 @@ const BlastRadiusRuleRow: React.FC<BlastRadiusRuleRowProps> = ({
       ? unevaluableReasonText(effect.afterReason ?? effect.beforeReason)
       : null;
   const broken = effect.status === 'INVALID' ? ruleStatusBadge('INVALID') : null;
+  /*
+    One name for "can this row break the condition down", read once. The ledger
+    needs a user to evaluate against; without one there is nothing to break down
+    and the row falls back to flat text.
+  */
+  const ledgerUser = drafted;
 
   // Never the rule id: a DOM id built from untrusted Okta data is a selector
   // waiting to break, the reason `GroupMembershipRow` gives at its own.
@@ -267,17 +302,34 @@ const BlastRadiusRuleRow: React.FC<BlastRadiusRuleRowProps> = ({
         {effect.touchedAttributes.length > 0 && (
           <MetaLine label="Reads" value={effect.touchedAttributes.join(', ')} />
         )}
-        {undeterminedReason && <p className="text-xs text-neutral-600">{undeterminedReason}</p>}
+        {/*
+          The summary sentence is suppressed once the ledger is rendering, because
+          the ledger says the same thing per clause and with the clause in hand —
+          two statements of one fact invite the reader to look for a difference.
+          Without a drafted user there is no ledger, and the sentence is all there
+          is.
+        */}
+        {undeterminedReason && !ledgerUser && (
+          <p className="text-xs text-neutral-600">{undeterminedReason}</p>
+        )}
 
-        {effect.expression !== '' && (
-          <div className="rounded-md bg-neutral-50 px-2 py-1">
-            <RuleExpressionText
-              text={effect.expression}
-              tone="subdued"
+        {effect.expression !== '' &&
+          (ledgerUser ? (
+            <ClauseLedger
+              expression={effect.expression}
+              user={ledgerUser}
+              groupContext={groupContext}
               resolveGroupName={resolveGroupName}
             />
-          </div>
-        )}
+          ) : (
+            <div className="rounded-md bg-neutral-50 px-2 py-1">
+              <RuleExpressionText
+                text={effect.expression}
+                tone="subdued"
+                resolveGroupName={resolveGroupName}
+              />
+            </div>
+          ))}
         {discloses && (
           <Button
             variant="ghost"

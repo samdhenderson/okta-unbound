@@ -52,6 +52,8 @@ import React from 'react';
 import { AlertMessage, Badge, Button, Eyebrow, Modal, type GroupNameResolver } from '../shared';
 import BlastRadiusReport from './BlastRadiusReport';
 import type { BlastRadiusReport as BlastRadiusReportData } from '../../../shared/membership/blastRadiusTypes';
+import type { OktaUser } from '../../../shared/types';
+import type { RuleGroupContext } from '../../../shared/ruleEvaluator';
 import type { DraftChange } from './profileDraft';
 
 /** Props for {@link ProfileSaveModal}. */
@@ -91,6 +93,17 @@ export interface ProfileSaveModalProps {
    * modal fetches nothing.
    */
   resolveGroupName?: GroupNameResolver;
+  /**
+   * The **post-draft** user and the user's complete group list, both from
+   * `useBlastRadius` and both threaded straight through to the report, where each
+   * rule row uses them to break its condition down clause by clause.
+   *
+   * They travel together and come from the same commit as the report, so a
+   * breakdown cannot describe a different draft than the verdict above it.
+   */
+  drafted?: OktaUser;
+  /** See {@link drafted}. Omit rather than pass a subset of the memberships. */
+  groupContext?: RuleGroupContext;
   /** Message from a previous save attempt that failed, if the parent kept the modal open. */
   error?: string;
 }
@@ -161,6 +174,8 @@ const ProfileSaveModal: React.FC<ProfileSaveModalProps> = ({
   onAnalyze,
   isAnalyzing,
   resolveGroupName,
+  drafted,
+  groupContext,
   error,
 }) => {
   const items = changes ?? [];
@@ -244,7 +259,12 @@ const ProfileSaveModal: React.FC<ProfileSaveModalProps> = ({
             </Button>
           )}
           {/* Renders nothing at all under `not-computed`, so it needs no gate. */}
-          <BlastRadiusReport report={report} resolveGroupName={resolveGroupName} />
+          <BlastRadiusReport
+            report={report}
+            resolveGroupName={resolveGroupName}
+            drafted={drafted}
+            groupContext={groupContext}
+          />
         </section>
       </div>
     </Modal>
