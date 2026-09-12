@@ -142,6 +142,15 @@ const transitionPresentation: Record<RuleTransition, TransitionPresentation> = {
     icon: null,
     iconClass: 'text-neutral-500',
   },
+  // Says what it is about — the edit, not the rule. "Still does not match" would
+  // assert a verdict nobody read, and "Could not be evaluated" would put it back
+  // among the findings it is not one of.
+  'unchanged-unevaluable': {
+    label: 'Unaffected by this edit',
+    variant: 'neutral',
+    icon: null,
+    iconClass: 'text-neutral-500',
+  },
 };
 
 /** A labelled, wrapping metadata line — "Targets", "Reads". */

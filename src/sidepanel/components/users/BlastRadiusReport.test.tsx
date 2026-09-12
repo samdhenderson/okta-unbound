@@ -130,6 +130,41 @@ describe('BlastRadiusReport', () => {
     expect(screen.getByRole('heading', { name: 'Added' })).toBeInTheDocument();
   });
 
+  it('says how many of the unaffected rules were never read', async () => {
+    // A rule that could not be read but that this edit cannot reach is collapsed
+    // into the tail count rather than listed as a finding — that is the whole
+    // point of the arm. But the tail must not let it pass silently: "unaffected"
+    // and "unread" are different facts, and the count would otherwise read as the
+    // first when half of it is the second.
+    const outOfReach: RuleEffect = {
+      ruleId: '0prFAKErule00006',
+      ruleName: 'Contractor pattern',
+      expression: 'isMemberOfGroupNameRegex("(?=contractor).*")',
+      transition: 'unchanged-unevaluable',
+      beforeReason: 'regex-unsupported-syntax',
+      afterReason: 'regex-unsupported-syntax',
+      targetGroupIds: ['00gFAKE00000000000007'],
+      targetGroupNames: ['Contractors'],
+      touchedAttributes: [],
+      active: true,
+    };
+
+    render(<BlastRadiusReport report={{ ...computed, rules: [...rules, outOfReach] }} />);
+    await userEvent.click(screen.getByRole('button', { name: /^Rules \d+$/ }));
+
+    expect(screen.getByText(/And 3 rules are unaffected by this edit\./)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /1 of those could not be read, but it reads no attribute this edit changes\./,
+      ),
+    ).toBeInTheDocument();
+    // And it is not listed as a finding.
+    expect(screen.queryByText('Contractor pattern')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Could not be evaluated' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('keeps an open cascade across a switch, and hedges nothing else', async () => {
     render(<BlastRadiusReport report={computed} />);
 

@@ -17,6 +17,7 @@ import {
   type ClauseTreeNode,
   type ConnectiveNode,
   type LeafClauseNode,
+  userAttributeNamesRead,
 } from './explainExpression';
 import { tryEvaluateRuleExpression } from '../ruleEvaluator';
 import type { OktaUser } from '../types';
@@ -827,5 +828,60 @@ describe('conditional expressions are a single clause', () => {
     ]);
     expect(requirements(tree).map(statusOf)).toEqual(['pass', 'fail']);
     expect(summary.result).toEqual({ outcome: 'no-match' });
+  });
+});
+
+// ===========================================================================
+// The exact read set — a correctness input, not a label
+// ===========================================================================
+// `blastRadius` decides whether a profile edit can possibly move a rule's verdict
+// by comparing this set against the drafted keys. A miss would claim an edit
+// cannot reach a rule it does reach, so the two failure directions are pinned
+// separately: a name that must be found, and a shape that must refuse to answer.
+describe('userAttributeNamesRead', () => {
+  it('reads the dotted and computed forms as the same attribute name', () => {
+    expect(userAttributeNamesRead('user.department == "Eng"')).toEqual(new Set(['department']));
+    expect(userAttributeNamesRead('user["department"] == "Eng"')).toEqual(new Set(['department']));
+    expect(userAttributeNamesRead('user[\'cost center\'] == "CC-9"')).toEqual(
+      new Set(['cost center']),
+    );
+  });
+
+  it('finds every read, however deeply nested', () => {
+    expect(
+      userAttributeNamesRead(
+        'String.startsWith(user.title, "Sr") && (user.city == "Berlin" || !(user.headcount > 3)) ? user.region == "EU" : user.division == "EMEA"',
+      ),
+    ).toEqual(new Set(['title', 'city', 'headcount', 'region', 'division']));
+  });
+
+  it('finds a read inside a group-membership argument', () => {
+    expect(userAttributeNamesRead('isMemberOfGroupName(user.department)')).toEqual(
+      new Set(['department']),
+    );
+  });
+
+  it('reports no reads for a condition that reads none', () => {
+    // An empty set, not `undefined`: "this reads nothing" is a real answer, and a
+    // profile edit genuinely cannot move such a rule's own verdict.
+    expect(userAttributeNamesRead('isMemberOfGroupName("Engineering")')).toEqual(new Set());
+  });
+
+  it('refuses to answer for a read whose name is not statically knowable', () => {
+    // `undefined`, never a partial set. A caller reads an incomplete set as "the
+    // edit cannot reach this rule", which is exactly the wrong conclusion.
+    expect(userAttributeNamesRead('user[user.department] == "x"')).toBeUndefined();
+    expect(userAttributeNamesRead('user[user.a] == "x" && user.b == "y"')).toBeUndefined();
+  });
+
+  it('refuses to answer for an expression it cannot parse', () => {
+    expect(userAttributeNamesRead('user.department ==')).toBeUndefined();
+    expect(userAttributeNamesRead('')).toBeUndefined();
+  });
+
+  it('does not mistake a quoted attribute name for a read', () => {
+    // The whole reason this walks the AST rather than the text: a string literal
+    // that happens to spell a read is not one.
+    expect(userAttributeNamesRead('user.title == "user.department"')).toEqual(new Set(['title']));
   });
 });

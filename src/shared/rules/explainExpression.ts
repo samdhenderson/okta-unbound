@@ -1236,6 +1236,72 @@ function attributePathOf(node: jsep.Expression): string | undefined {
 }
 
 /**
+ * The **attribute name** a `user.*` read names, or `undefined` for any other node.
+ *
+ * The name, not {@link attributePathOf}'s display path: `department` rather than
+ * `user.department`, so it can be compared against a draft's keys. Both forms of
+ * the read collapse to the same name, which is the point — `user["department"]`
+ * and `user.department` are one attribute.
+ */
+function attributeNameOf(node: jsep.Expression): string | undefined {
+  const member = asMemberExpression(node);
+  if (!member) return undefined;
+  if (asIdentifier(member.object)?.name !== 'user') return undefined;
+
+  if (member.computed) {
+    const key = asLiteral(member.property)?.value;
+    return typeof key === 'string' ? key : undefined;
+  }
+  return asIdentifier(member.property)?.name;
+}
+
+/**
+ * Every `user.*` attribute name an expression reads, derived from its AST.
+ *
+ * **Exact, and load-bearing** — which is why it exists rather than reusing
+ * `ruleUtils.extractUserAttributes` or `RuleEffect.touchedAttributes`. Both of
+ * those are regex scans over the condition text, documented as display aids: a
+ * quoted `"user.department"` naming a group is indistinguishable from a read, and
+ * a miss merely costs a label. A caller deciding whether an edit *can* move a
+ * rule's verdict cannot spend a miss that cheaply, so this walks the parsed tree.
+ *
+ * A computed key that is not a string literal (`user[x]`) names no attribute this
+ * module can enumerate, so it reports `undefined` rather than an incomplete set —
+ * "we cannot list the reads" must not read as "there are none".
+ *
+ * @param expression - The rule condition. **Untrusted** tenant text.
+ * @returns The names read, or `undefined` when the expression could not be parsed
+ *   or contains a read whose name is not statically knowable.
+ */
+export function userAttributeNamesRead(expression: string): ReadonlySet<string> | undefined {
+  const parsed = parseRuleExpression(expression);
+  if (!parsed.ok) return undefined;
+
+  const names = new Set<string>();
+  let enumerable = true;
+
+  const visit = (node: jsep.Expression): void => {
+    const member = asMemberExpression(node);
+    if (member && asIdentifier(member.object)?.name === 'user') {
+      const name = attributeNameOf(node);
+      if (name === undefined) {
+        // `user[someExpression]` — a read whose target depends on a value. Its own
+        // operands still get walked below, but the set can no longer claim to be
+        // complete.
+        enumerable = false;
+      } else {
+        names.add(name);
+        return;
+      }
+    }
+    for (const child of childExpressions(node)) visit(child);
+  };
+
+  visit(parsed.ast);
+  return enumerable ? names : undefined;
+}
+
+/**
  * Every `user.*` attribute read under one node, in source order, deduplicated by
  * path.
  *

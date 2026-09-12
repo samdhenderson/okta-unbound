@@ -84,6 +84,7 @@ import {
 } from '../ruleEvaluator';
 import {
   explainRuleExpression,
+  userAttributeNamesRead,
   type ClauseGroupMatch,
   type ClauseGroupReference,
   type ClauseGroupRequirement,
@@ -142,6 +143,29 @@ function draftedUser(user: OktaUser, draft: Readonly<Record<string, unknown>>): 
   return { ...user, profile: { ...user.profile, ...draft } as OktaUser['profile'] };
 }
 
+/**
+ * Whether this draft could possibly move the rule's verdict.
+ *
+ * `true` unless the expression's reads are **exactly enumerable** and disjoint from
+ * the drafted keys. Both halves of that are deliberate:
+ *
+ * - The read set comes from the parsed AST, never from the regex scan behind
+ *   {@link RuleEffect.touchedAttributes} — a display aid is allowed to miss a read,
+ *   and a miss here would claim an edit cannot reach a rule it does reach.
+ * - An expression whose reads cannot be listed (unparseable, or a computed key like
+ *   `user[x]`) answers `true`. "We cannot enumerate the reads" must never be read as
+ *   "there are none", which would silently hide a real effect.
+ *
+ * A rule the draft *can* reach is still reported however its evaluation turns out;
+ * this only decides whether an unreadable pair is a finding.
+ */
+function draftCouldMove(expression: string, draftKeys: ReadonlySet<string>): boolean {
+  const reads = userAttributeNamesRead(expression);
+  if (reads === undefined) return true;
+  for (const name of reads) if (draftKeys.has(name)) return true;
+  return false;
+}
+
 /** `user.<name>` reads in an expression — a display aid only. See {@link RuleEffect.touchedAttributes}. */
 const USER_ATTRIBUTE_PATTERN = /\buser\.([A-Za-z_$][A-Za-z0-9_$]*)/g;
 
@@ -172,8 +196,19 @@ function touchedAttributesOf(
  * pair `unchanged-no-match` would be the exact "unevaluable became a no" this
  * module exists to prevent.
  */
-function transitionOf(before: RuleMatchResult, after: RuleMatchResult): RuleTransition {
-  if (before.outcome === 'unevaluable' || after.outcome === 'unevaluable') return 'undetermined';
+function transitionOf(
+  before: RuleMatchResult,
+  after: RuleMatchResult,
+  movable: boolean,
+): RuleTransition {
+  if (before.outcome === 'unevaluable' || after.outcome === 'unevaluable') {
+    // An unreadable rule the edit provably cannot reach is settled, even though its
+    // verdict is not: whatever that verdict is, this draft does not move it. Saying
+    // so is a claim about the edit and not about the rule — it never becomes
+    // `unchanged-no-match`, which would assert the user fails a condition nobody
+    // read. See {@link RuleTransition}.
+    return movable ? 'undetermined' : 'unchanged-unevaluable';
+  }
   if (before.outcome === after.outcome) {
     return before.outcome === 'match' ? 'unchanged-match' : 'unchanged-no-match';
   }
@@ -219,7 +254,7 @@ function evaluateRule(
       ruleId: rule.id,
       ruleName: rule.name,
       expression,
-      transition: transitionOf(before, after),
+      transition: transitionOf(before, after, draftCouldMove(expression, draftKeys)),
       ...(before.outcome === 'unevaluable' ? { beforeReason: before.reasonCode } : {}),
       ...(after.outcome === 'unevaluable' ? { afterReason: after.reasonCode } : {}),
       targetGroupIds,
@@ -514,6 +549,9 @@ const SECOND_ORDER_TRANSITIONS: ReadonlySet<RuleTransition> = new Set<RuleTransi
   'unchanged-match',
   'unchanged-no-match',
   'undetermined',
+  // Out of the edit's reach, but still standing: its condition can name a group
+  // this edit moves, which is exactly what a one-hop cascade reports.
+  'unchanged-unevaluable',
 ]);
 
 /**
@@ -646,6 +684,9 @@ const TRANSITION_ORDER: Record<RuleTransition, number> = {
   undetermined: 2,
   'unchanged-match': 3,
   'unchanged-no-match': 4,
+  // Last: the rule is out of this edit's reach, so it is the least of the "no
+  // change" rows rather than one of the findings above.
+  'unchanged-unevaluable': 5,
 };
 
 /** A sortable position: coarse rank first, then the human-facing label. */

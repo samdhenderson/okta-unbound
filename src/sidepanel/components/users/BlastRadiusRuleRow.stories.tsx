@@ -220,6 +220,30 @@ export const UnchangedNoMatch: Story = {
   },
 };
 
+/**
+ * Unreadable, but out of this edit's reach — the row says so about the **edit**,
+ * not about the rule.
+ *
+ * The badge reads "Unaffected by this edit" rather than "Still does not match",
+ * because nobody read the condition and claiming a verdict would be a guess; and
+ * rather than "Could not be evaluated", because that is the badge for a rule the
+ * edit could have moved. The reason sentence is still carried: we did not read it,
+ * and the row does not pretend otherwise.
+ */
+export const UnchangedUnevaluable: Story = {
+  args: {
+    effect: effect({
+      ruleId: '0prFAKErule00009',
+      ruleName: 'Contractor pattern',
+      transition: 'unchanged-unevaluable',
+      expression: 'isMemberOfGroupNameRegex("(?=contractor).*")',
+      beforeReason: 'regex-unsupported-syntax',
+      afterReason: 'regex-unsupported-syntax',
+      touchedAttributes: [],
+    }),
+  },
+};
+
 /** Several targets and several read attributes, both wrapping rather than clipping. */
 export const ManyTargets: Story = {
   args: {

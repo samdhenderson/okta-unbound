@@ -304,14 +304,18 @@ describe('an unevaluable sibling rule is never read as a no (ADR-0020)', () => {
     });
     expect(report.counts.removed).toBe(0);
 
-    // And the reason really is the one the UI will render, carried as a code.
+    // And the reason really is the one the UI will render, carried as a code. The
+    // row reads `unchanged-unevaluable` because its condition reads no attribute
+    // this draft touches — but the *group* decision above is unmoved by that
+    // label: it withholds off the post-draft verdict, which is still unreadable.
+    // Being out of an edit's reach is not being read.
     const regexRow = report.rules.find((rule) => rule.ruleId === REGEX_FEEDER.id);
     expect(regexRow).toMatchObject({
-      transition: 'undetermined',
+      transition: 'unchanged-unevaluable',
       beforeReason: 'regex-unsupported-syntax',
       afterReason: 'regex-unsupported-syntax',
     });
-    expect(report.counts.undetermined).toBe(1);
+    expect(report.counts.undetermined).toBe(0);
   });
 
   it('MIRROR: without the unevaluable rule, the same fixture loses the group', () => {
@@ -356,24 +360,85 @@ describe('a rule whose verdict the draft does not move contributes no group effe
   });
 
   it('still emits no group effect for a rule it genuinely cannot settle', () => {
-    // The other half of the original case, kept on its own lever now that an
-    // absent attribute is no longer one: a tenant regex the safe engine declines
-    // is unreadable on both sides, and an unsettled rule must not become an
-    // addition either.
-    const regexRule = ruleOf({
+    // The other half of the original case. `>` declines on strings, so this is
+    // unreadable on both sides, and it reads `department`, which the draft sets —
+    // so the edit really could have moved it and `undetermined` is the honest
+    // answer. An unsettled rule must not become an addition either.
+    const unreadableRule = ruleOf({
       id: '0prFAKEre',
+      name: 'Threshold feeder',
+      groupIds: [FINANCE.id],
+      conditionExpression: 'user.department > "A"',
+      userAttributes: ['department'],
+    });
+
+    const report = analyze({ rules: [unreadableRule] });
+
+    expect(report.rules).toHaveLength(1);
+    expect(report.rules[0]).toMatchObject({ transition: 'undetermined' });
+    expect(report.groups).toEqual([]);
+    expect(report.counts).toMatchObject({ added: 0, removed: 0, notPredicted: 0 });
+  });
+
+  it('settles a rule the draft cannot reach, without claiming its verdict', () => {
+    // The case this arm exists for: unreadable on both sides, but the condition
+    // reads nothing the draft touches. Reported as unaffected rather than as a
+    // finding — and never as `unchanged-no-match`, which would assert the user
+    // fails a condition nobody managed to read.
+    const outOfReach = ruleOf({
+      id: '0prFAKEoor',
       name: 'Pattern feeder',
       groupIds: [FINANCE.id],
       conditionExpression: 'isMemberOfGroupNameRegex("(?=Fin).*")',
       userAttributes: [],
     });
 
-    const report = analyze({ rules: [regexRule] });
+    const report = analyze({ rules: [outOfReach] });
 
-    expect(report.rules).toHaveLength(1);
-    expect(report.rules[0]).toMatchObject({ transition: 'undetermined' });
+    expect(report.rules[0]).toMatchObject({
+      transition: 'unchanged-unevaluable',
+      // The reason codes stay: we still did not read it, and the row still says so.
+      beforeReason: 'regex-unsupported-syntax',
+      afterReason: 'regex-unsupported-syntax',
+    });
+    expect(report.counts.undetermined).toBe(0);
     expect(report.groups).toEqual([]);
-    expect(report.counts).toMatchObject({ added: 0, removed: 0, notPredicted: 0 });
+  });
+
+  it('keeps an unreadable rule a finding when the draft names an attribute it reads', () => {
+    // MIRROR of the above, and the assertion that stops the new arm from swallowing
+    // real findings: the same unreadable shape, reachable this time, stays
+    // `undetermined`.
+    const reachable = ruleOf({
+      id: '0prFAKEreach',
+      name: 'Reachable feeder',
+      groupIds: [FINANCE.id],
+      conditionExpression: 'user.department > "A" && isMemberOfGroupNameRegex("(?=Fin).*")',
+      userAttributes: ['department'],
+    });
+
+    const report = analyze({ rules: [reachable] });
+
+    expect(report.rules[0]).toMatchObject({ transition: 'undetermined' });
+    expect(report.counts.undetermined).toBe(1);
+  });
+
+  it('treats an unlistable read as reachable, never as out of reach', () => {
+    // `user[user.department]` names an attribute that depends on a value, so the
+    // read set cannot be enumerated. "We cannot list the reads" must not be read as
+    // "there are none" — that is how a real effect would go missing silently.
+    const computed = ruleOf({
+      id: '0prFAKEcomp',
+      name: 'Computed feeder',
+      groupIds: [FINANCE.id],
+      conditionExpression: 'user[user.department] == "x"',
+      userAttributes: [],
+    });
+
+    const report = analyze({ rules: [computed] });
+
+    expect(report.rules[0]).toMatchObject({ transition: 'undetermined' });
+    expect(report.counts.undetermined).toBe(1);
   });
 });
 
@@ -751,21 +816,35 @@ describe('report order is total and deterministic', () => {
     expect(report.counts).toMatchObject({ added: 2, removed: 1, notPredicted: 1 });
   });
 
-  it('orders rules starts → stops → undetermined → unchanged, then by name', () => {
+  it('orders rules starts → stops → undetermined → unchanged → out-of-reach', () => {
     const starter = ruleOf({
       id: '0prFAKEstart',
       name: 'Sales feeder',
       groupIds: [NEW_HIRES.id],
       conditionExpression: 'user.department=="Sales"',
     });
+    // Unreadable AND reachable: the relational operator declines on strings, and
+    // the condition reads `department`, which this draft sets. That combination is
+    // what `undetermined` is for, and it is the only thing that earns the rank.
+    const unreadable = ruleOf({
+      id: '0prFAKEunread',
+      name: 'Threshold feeder',
+      groupIds: [NEW_HIRES.id],
+      conditionExpression: 'user.department > "A"',
+    });
 
-    const report = analyze({ rules: [STAFF_FEEDER, REGEX_FEEDER, ENG_FEEDER, starter] });
+    const report = analyze({
+      rules: [STAFF_FEEDER, REGEX_FEEDER, ENG_FEEDER, starter, unreadable],
+    });
 
     expect(report.rules.map((r) => [r.transition, r.ruleName])).toEqual([
       ['starts-matching', 'Sales feeder'],
       ['stops-matching', 'Engineering feeder'],
-      ['undetermined', 'Regex feeder'],
+      ['undetermined', 'Threshold feeder'],
       ['unchanged-match', 'Staff feeder'],
+      // Last: unreadable, but its condition reads no attribute this draft touches,
+      // so the edit cannot move it whatever the verdict is.
+      ['unchanged-unevaluable', 'Regex feeder'],
     ]);
     expect(report.counts).toMatchObject({ starts: 1, stops: 1, undetermined: 1 });
   });

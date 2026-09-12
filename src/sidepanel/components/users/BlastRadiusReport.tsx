@@ -42,6 +42,7 @@ import type {
   BlastRadiusReport as BlastRadiusReportData,
   GroupEffect,
   RuleEffect,
+  RuleTransition,
 } from '../../../shared/membership/blastRadiusTypes';
 
 /** Props for {@link BlastRadiusReport}. */
@@ -65,8 +66,23 @@ export interface BlastRadiusReportProps {
 /** Which of the two views the pills have selected. */
 type ReportView = 'groups' | 'rules';
 
-/** The transitions that constitute an *affected* rule; the rest are carried but collapsed. */
-const AFFECTED_TRANSITIONS = new Set(['starts-matching', 'stops-matching', 'undetermined']);
+/**
+ * The transitions that constitute an *affected* rule; the rest are carried but
+ * collapsed into the trailing count.
+ *
+ * Typed against {@link RuleTransition} rather than left as a bare string set, so a
+ * new arm has to be classified here deliberately instead of defaulting into
+ * "unaffected" — which is how a real finding would go missing.
+ *
+ * `unchanged-unevaluable` sits outside it on purpose: the rule could not be read,
+ * but the edit provably does not reach it, and this view answers what the edit
+ * changes. Listing it here is what put ~200 rules in front of an admin.
+ */
+const AFFECTED_TRANSITIONS: ReadonlySet<RuleTransition> = new Set<RuleTransition>([
+  'starts-matching',
+  'stops-matching',
+  'undetermined',
+]);
 
 /** A titled block of group rows, or nothing when the block is empty. */
 const GroupSection: React.FC<{
@@ -181,13 +197,19 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({
     [report.groups],
   );
 
-  const { starts, stops, undetermined, unaffectedCount } = useMemo(() => {
+  const { starts, stops, undetermined, unaffectedCount, outOfReachCount } = useMemo(() => {
     const affected = report.rules.filter((effect) => AFFECTED_TRANSITIONS.has(effect.transition));
     return {
       starts: affected.filter((effect) => effect.transition === 'starts-matching'),
       stops: affected.filter((effect) => effect.transition === 'stops-matching'),
       undetermined: affected.filter((effect) => effect.transition === 'undetermined'),
       unaffectedCount: report.rules.length - affected.length,
+      // Counted separately so the tail can say what it is not showing. These rules
+      // were never read — they are unaffected because the edit cannot reach them,
+      // which is a different fact from a verdict that held.
+      outOfReachCount: report.rules.filter(
+        (effect) => effect.transition === 'unchanged-unevaluable',
+      ).length,
     };
   }, [report.rules]);
 
@@ -307,7 +329,16 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({
             <p className="text-xs text-neutral-500">
               {unaffectedCount === 1
                 ? 'And 1 rule is unaffected by this edit.'
-                : `And ${unaffectedCount} rules are unaffected by this edit.`}
+                : `And ${unaffectedCount} rules are unaffected by this edit.`}{' '}
+              {/*
+                Say what the count is hiding. These rows are collapsed because the
+                edit cannot reach them, not because we read them and found no
+                change — and an admin is entitled to know which of the two it is.
+              */}
+              {outOfReachCount > 0 &&
+                (outOfReachCount === 1
+                  ? '1 of those could not be read, but it reads no attribute this edit changes.'
+                  : `${outOfReachCount} of those could not be read, but none reads an attribute this edit changes.`)}
             </p>
           )}
         </div>
