@@ -38,6 +38,7 @@
  */
 
 import type { RuleUnevaluableReason } from '../ruleEvaluator';
+import type { ClauseGroupMatch } from '../rules/explainExpression';
 import type { GroupMembership, GroupRuleStatus, MembershipRule, OktaUser } from '../types';
 import type { MembershipBucket } from '../../sidepanel/components/users/membershipVerdict';
 
@@ -204,6 +205,61 @@ export type WithheldReason =
   | 'rule-inactive'
   | 'app-mastered-group';
 
+/**
+ * Which way this edit turns the membership test a rule makes of an affected
+ * group.
+ *
+ * **Structural, and never a prediction.** It is derived from the clause's own
+ * `member`/`non-member` sense against the group's own `added`/`removed` kind —
+ * not from evaluating the rule a second time. A `toward-match` rule has *not*
+ * been shown to match; it has been shown to ask a question this edit answers.
+ * Whether it then fires is the second hop `docs/claims.md` forbids chasing.
+ *
+ * `undetermined` is not a third shade of the other two: it means one rule reads
+ * the group in both directions at once, so no single answer is available. It
+ * absorbs on merge, exactly as {@link RuleTransition}'s own `undetermined` does,
+ * so no caller can read a direction off a half-known pair.
+ */
+export type CascadeDirection = 'toward-match' | 'away-from-match' | 'undetermined';
+
+/**
+ * One rule that reads an affected group in its condition.
+ *
+ * **Carries ids, not names.** {@link BlastRadiusReport.rules} already holds every
+ * rule in the inventory with its `ruleName`, `targetGroupIds` and
+ * `targetGroupNames`; duplicating them here would double the untrusted-string
+ * surface and give one name two places to go stale. Join by {@link ruleId}.
+ */
+export interface GroupCascadeRule {
+  /** Okta rule id (`0pr…`), joinable against {@link BlastRadiusReport.rules}. */
+  readonly ruleId: string;
+  /** Which way this edit turns the rule's test of this group. See {@link CascadeDirection}. */
+  readonly direction: CascadeDirection;
+  /**
+   * How the rule's condition named this group — a literal id or name, or one of
+   * the three pattern forms.
+   *
+   * A compile-time union rather than the matched literal precisely so that
+   * surfacing "this link is a pattern match" costs no new untrusted string: the
+   * pattern itself is already on screen in the rule's own condition.
+   */
+  readonly matchedBy: ClauseGroupMatch;
+}
+
+/**
+ * The rules that read one group this edit is predicted to add or remove.
+ *
+ * The one-hop cascade, and deliberately only one hop — see the engine's module
+ * documentation and `docs/claims.md`'s withheld list. Every entry is a fact about
+ * the rule inventory's structure; none is a claim that the rule will fire.
+ */
+export interface GroupCascade {
+  /** The affected group's Okta id (`00g…`), joinable against {@link BlastRadiusReport.groups}. */
+  readonly groupId: string;
+  /** The rules whose condition reads it, in a total order. Never empty. */
+  readonly rules: readonly GroupCascadeRule[];
+}
+
 /** What the draft is predicted to do to one group's membership. */
 export interface GroupEffect {
   /** Okta group id (`00g…`). */
@@ -297,16 +353,19 @@ export interface BlastRadiusReport {
   /** Tallies over {@link groups} and {@link rules}. */
   readonly counts: BlastRadiusCounts;
   /**
-   * Whether some *other* rule reads membership of a group this draft is
-   * predicted to change — so applying it could cascade.
+   * The one-hop cascade: for each group this draft adds or removes, the rules
+   * whose condition reads that group.
    *
-   * Reported rather than resolved, deliberately. See the engine's module
-   * documentation for why a second round is not run.
+   * **Reported rather than resolved, deliberately.** Naming the rules that read a
+   * moving group is structure, read off the rule text. Chasing whether they then
+   * fire is the second pass the engine refuses to make — see the module
+   * documentation for why, and `docs/claims.md`'s withheld list for the rule.
+   *
+   * Groups with no cascade are absent entirely, so this is never a way to ask
+   * "does nothing read this group?" — the scan under-reports by design (a negated
+   * connective and a declined regex pattern both yield no references), and a
+   * caller that rendered an absence here would turn that blind spot into a false
+   * claim. Render what is present; never render its lack.
    */
-  readonly secondOrderPossible: boolean;
-  /**
-   * The names of those rules, de-duplicated and sorted. **Untrusted** — render
-   * escaped, never log.
-   */
-  readonly secondOrderRuleNames: readonly string[];
+  readonly cascades: readonly GroupCascade[];
 }

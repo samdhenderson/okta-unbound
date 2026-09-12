@@ -36,8 +36,10 @@
  * Group names and rule names are end-user-controllable tenant data. They are
  * rendered through React's escaping only, and **nothing in this module logs**.
  */
-import React from 'react';
-import { Badge, ListRow } from '../shared';
+import React, { useId } from 'react';
+import { Badge, Button, ListRow } from '../shared';
+import BlastRadiusCascade from './BlastRadiusCascade';
+import type { CascadeLine } from './cascadeLines';
 import Icon, { type IconType } from '../shared/Icon';
 import { BUCKET_PILL_LABELS, type MembershipBucket } from './membershipVerdict';
 import type { GroupEffect, GroupEffectKind } from '../../../shared/membership/blastRadiusTypes';
@@ -50,6 +52,22 @@ export interface BlastRadiusGroupRowProps {
    * `blockingRuleName` are untrusted — render only.
    */
   effect: GroupEffect;
+  /**
+   * The rules that read this group, when any do. Absent or empty renders **no
+   * disclosure and no trigger at all** — never "nothing reads this group", which
+   * the cascade scan cannot back (see {@link BlastRadiusCascade}).
+   */
+  cascade?: readonly CascadeLine[];
+  /**
+   * Whether the cascade panel is open.
+   *
+   * Owned by the report rather than this row: the groups/rules pill switch
+   * unmounts every row, so local state would silently collapse an open panel on
+   * a switch.
+   */
+  expanded?: boolean;
+  /** Toggle the panel. Absent, no trigger renders — a verb with no handler is omitted. */
+  onToggle?: (groupId: string) => void;
 }
 
 /** How one {@link GroupEffectKind} is presented: label, glyph, and token classes. */
@@ -166,14 +184,57 @@ function effectSentence(effect: GroupEffect): string {
  *
  * @param props - See {@link BlastRadiusGroupRowProps}.
  */
-const BlastRadiusGroupRow: React.FC<BlastRadiusGroupRowProps> = ({ effect }) => {
+const BlastRadiusGroupRow: React.FC<BlastRadiusGroupRowProps> = ({
+  effect,
+  cascade,
+  expanded = false,
+  onToggle,
+}) => {
   const presentation = kindPresentation[effect.kind];
   // Only a withheld row shows how Okta credits the membership today: it is the
   // fact that makes "we are not predicting this" legible.
   const bucket = effect.kind === 'not-predicted' ? effect.currentBucket : undefined;
 
+  // Never the group id: a DOM id built from untrusted Okta data is a selector
+  // waiting to break, the reason `GroupMembershipRow` gives at its own.
+  const disclosureId = useId();
+  const discloses = Boolean(cascade?.length) && onToggle !== undefined;
+
   return (
-    <ListRow as="li" density="compact">
+    <ListRow
+      as="li"
+      density="compact"
+      body={
+        discloses ? (
+          /*
+            `.disclose` animates `grid-template-rows` between 0fr and 1fr, so the
+            panel collapses to zero height with no JS measurement and stays
+            mounted while closed — held out of the tab order and the
+            accessibility tree by `inert`.
+          */
+          <div
+            id={disclosureId}
+            className="disclose"
+            data-open={expanded}
+            inert={!expanded || undefined}
+          >
+            <div>
+              <div className="border-t border-neutral-200 px-(--sp-row-x) pt-2 pb-3">
+                <BlastRadiusCascade
+                  groups={[
+                    {
+                      groupId: effect.groupId,
+                      groupName: effect.groupName,
+                      lines: cascade ?? [],
+                    },
+                  ]}
+                />
+              </div>
+            </div>
+          </div>
+        ) : undefined
+      }
+    >
       <div className="flex min-w-0 items-start gap-2">
         <span
           role="img"
@@ -202,6 +263,23 @@ const BlastRadiusGroupRow: React.FC<BlastRadiusGroupRowProps> = ({ effect }) => 
             )}
           </span>
           <span className="text-xs break-words text-neutral-600">{effectSentence(effect)}</span>
+          {discloses && (
+            <Button
+              variant="ghost"
+              size="xs"
+              expanded={expanded}
+              controls={disclosureId}
+              onClick={() => onToggle?.(effect.groupId)}
+              className="self-start"
+            >
+              Rules that use this group
+              <Icon
+                type="chevron-right"
+                size="sm"
+                className={`transition-transform duration-(--dur-quick) ${expanded ? 'rotate-90' : ''}`}
+              />
+            </Button>
+          )}
         </div>
       </div>
     </ListRow>

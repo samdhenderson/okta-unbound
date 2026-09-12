@@ -115,7 +115,12 @@ export const EvaluatedAgainstUser: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     // The chips name the attribute the condition reads…
-    await expect(canvas.getByText('department')).toBeInTheDocument();
+    //
+    // Twice, since the Clause Ledger landed: once as the attribute chip above the
+    // ledger, and once as the subject of the clause phrase inside it. Both are
+    // correct, so this asserts the pair rather than demanding a single match —
+    // `getByText` throws on more than one, which is what made this go red.
+    await expect(canvas.getAllByText('department')).toHaveLength(2);
     // …and the checklist states the outcome in words, never in colour alone.
     await expect(canvas.getByText('Pass')).toBeInTheDocument();
   },
@@ -157,7 +162,11 @@ export const AttributeTheUserLacks: Story = {
   args: { rule: missingAttribute },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('costCenter')).toBeInTheDocument();
+    // Named in both places the ledger names an attribute — the chip and the
+    // clause phrase — so the rule reading it survives the attribute being absent
+    // from the user. See `EvaluatedAgainstUser` for why this counts rather than
+    // asserting a single match.
+    await expect(canvas.getAllByText('costCenter')).toHaveLength(2);
   },
 };
 

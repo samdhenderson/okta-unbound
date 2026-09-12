@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, within } from 'storybook/test';
+import { expect, fn, within } from 'storybook/test';
 import BlastRadiusRuleRow from './BlastRadiusRuleRow';
 import type { RuleEffect } from '../../../shared/membership/blastRadiusTypes';
 
@@ -61,6 +61,9 @@ const meta = {
     },
   },
   args: {
+    // Spied so a disclosure story can assert the row reports the toggle rather
+    // than owning the state itself.
+    onToggle: fn(),
     effect: effect({
       ruleId: '0prFAKErule00001',
       ruleName: 'Sales auto-add',
@@ -250,5 +253,120 @@ export const Compact: Story = {
       expression:
         'user.department == "Sales" && user.countryCode in {"GB", "IE", "FR", "DE"} && user.employeeType != "CONTRACTOR"',
     }),
+  },
+};
+
+/**
+ * A rule whose one affected target group is read by other rules. The trigger
+ * names that group, so the panel does not caption it a second time.
+ */
+export const CascadeSingleGroup: Story = {
+  args: {
+    effect: effect({
+      ruleId: '0prFAKErule00031',
+      ruleName: 'Sales onboarding',
+      transition: 'starts-matching',
+      targetGroupIds: ['00gFAKEnewhires1'],
+      targetGroupNames: ['New Hires'],
+    }),
+    expanded: true,
+    cascadeBlocks: [
+      {
+        groupId: '00gFAKEnewhires1',
+        groupName: 'New Hires',
+        lines: [
+          {
+            ruleId: '0prFAKErule00032',
+            ruleName: 'Downstream feeder',
+            direction: 'toward-match',
+            matchedBy: 'name',
+            targetGroupNames: ['Finance'],
+          },
+        ],
+      },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole('button', { name: /Rules that use New Hires/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(canvas.getByText('Downstream feeder')).toBeInTheDocument();
+    // One block, so the panel adds no caption repeating the group the trigger
+    // already named. Scoped to the panel: the row's own "Targets" line names it
+    // too, and that is not the duplication being guarded against.
+    const panel = canvasElement.querySelector('.disclose');
+    await expect(panel?.textContent).not.toMatch(/New Hires/);
+  },
+};
+
+/**
+ * Two affected target groups. **One** disclosure holds both, captioned per group
+ * — N triggers above a single panel would put the second trigger above the
+ * first one's content.
+ */
+export const CascadeAcrossTwoGroups: Story = {
+  args: {
+    effect: effect({
+      ruleId: '0prFAKErule00041',
+      ruleName: 'Regional onboarding',
+      transition: 'starts-matching',
+      targetGroupIds: ['00gFAKEnewhires1', '00gFAKEemea00001'],
+      targetGroupNames: ['New Hires', 'EMEA'],
+    }),
+    expanded: false,
+    cascadeBlocks: [
+      {
+        groupId: '00gFAKEnewhires1',
+        groupName: 'New Hires',
+        lines: [
+          {
+            ruleId: '0prFAKErule00042',
+            ruleName: 'Downstream feeder',
+            direction: 'toward-match',
+            matchedBy: 'name',
+            targetGroupNames: ['Finance'],
+          },
+        ],
+      },
+      {
+        groupId: '00gFAKEemea00001',
+        groupName: 'EMEA',
+        lines: [
+          {
+            ruleId: '0prFAKErule00043',
+            ruleName: 'EMEA tooling',
+            direction: 'toward-match',
+            matchedBy: 'nameContains',
+            targetGroupNames: ['EMEA-Tools'],
+          },
+        ],
+      },
+    ],
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: /Rules that use these groups/ });
+
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    trigger.click();
+    await expect(args.onToggle).toHaveBeenCalledWith('0prFAKErule00041');
+  },
+};
+
+/** Nothing reads the groups this rule assigns, so no trigger renders at all. */
+export const NoCascade: Story = {
+  args: {
+    effect: effect({
+      ruleId: '0prFAKErule00051',
+      ruleName: 'Sales auto-add',
+      transition: 'starts-matching',
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: /Rules that use/ })).toBeNull();
   },
 };

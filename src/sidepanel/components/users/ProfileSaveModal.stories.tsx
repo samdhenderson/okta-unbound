@@ -133,8 +133,7 @@ const EMPTY = (status: BlastRadiusReportData['status']): BlastRadiusReportData =
   groups: [],
   rules: [],
   counts: { added: 0, removed: 0, notPredicted: 0, starts: 0, stops: 0, undetermined: 0 },
-  secondOrderPossible: false,
-  secondOrderRuleNames: [],
+  cascades: [],
 });
 
 const COMPUTED: BlastRadiusReportData = {
@@ -142,8 +141,7 @@ const COMPUTED: BlastRadiusReportData = {
   groups: GROUPS,
   rules: RULES,
   counts: { added: 1, removed: 1, notPredicted: 1, starts: 1, stops: 1, undetermined: 0 },
-  secondOrderPossible: false,
-  secondOrderRuleNames: [],
+  cascades: [],
 };
 
 /** The last thing between an admin's profile edits and a live write to Okta. */

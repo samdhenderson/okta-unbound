@@ -101,8 +101,17 @@ const COMPUTED: BlastRadiusReportData = {
   groups: GROUPS,
   rules: RULES,
   counts: { added: 1, removed: 1, notPredicted: 1, starts: 1, stops: 1, undetermined: 1 },
-  secondOrderPossible: true,
-  secondOrderRuleNames: ['Managers of Sales', 'Sales tooling'],
+  // 'Tokyo office' and 'Everyone' both read Sales-All, which this edit adds —
+  // the one-hop cascade the added row discloses.
+  cascades: [
+    {
+      groupId: '00gFAKE00000000000001',
+      rules: [
+        { ruleId: '0prFAKErule00005', direction: 'toward-match', matchedBy: 'name' },
+        { ruleId: '0prFAKErule00004', direction: 'away-from-match', matchedBy: 'nameStartsWith' },
+      ],
+    },
+  ],
 };
 
 const EMPTY = (status: BlastRadiusReportData['status']): BlastRadiusReportData => ({
@@ -110,8 +119,7 @@ const EMPTY = (status: BlastRadiusReportData['status']): BlastRadiusReportData =
   groups: [],
   rules: [],
   counts: { added: 0, removed: 0, notPredicted: 0, starts: 0, stops: 0, undetermined: 0 },
-  secondOrderPossible: false,
-  secondOrderRuleNames: [],
+  cascades: [],
 });
 
 /** What this profile edit is predicted to do to a user's group access. */
@@ -177,8 +185,11 @@ export const Default: Story = {
     // The withheld row names its reason rather than reading as "no change".
     await expect(canvas.getByText(/credits this membership to a direct add/i)).toBeInTheDocument();
 
-    // Second-order effects are named, not resolved.
-    await expect(canvas.getByText(/2 rules test membership of a group/i)).toBeInTheDocument();
+    // Second-order effects are still named rather than resolved — now on the row
+    // of the group that pulls them in, rather than in a flat footnote.
+    await expect(
+      canvas.getByRole('button', { name: /Rules that use this group/ }),
+    ).toBeInTheDocument();
   },
 };
 
@@ -250,4 +261,48 @@ export const NotComputed: Story = {
  */
 export const Compact: Story = {
   parameters: { viewport: { value: 'sidepanelCompact' } },
+};
+
+/**
+ * The cascade disclosure, opened. Unlike the row stories — where the report owns
+ * `expanded` and the row only reports a toggle — here the component owns the
+ * state, so this is the genuine `false` → `true` flip.
+ *
+ * It also pins that the one-hop caveat appears **once**: the detail now lives on
+ * the row that owns it, so a global count beside it would be the same sentence in
+ * a second shape.
+ */
+export const OpeningACascade: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: /Rules that use this group/ });
+
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(trigger);
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+    await expect(canvas.getByText('Tokyo office')).toBeInTheDocument();
+    await expect(canvas.getByText(/Tokyo-Everyone/)).toBeInTheDocument();
+    await expect(canvas.getAllByText(/prediction stops at one hop/i)).toHaveLength(1);
+  },
+};
+
+/**
+ * An open panel survives the pill switch. That is why `expanded` is owned by the
+ * report rather than each row: the switch unmounts every row, so local state
+ * would silently collapse what the admin opened.
+ */
+export const CascadeSurvivesTheViewSwitch: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: /Rules that use this group/ }));
+    await userEvent.click(canvas.getByRole('button', { name: /^Rules \d/ }));
+    await userEvent.click(canvas.getByRole('button', { name: /^Groups \d/ }));
+
+    await expect(canvas.getByRole('button', { name: /Rules that use this group/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  },
 };

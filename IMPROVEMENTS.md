@@ -1267,6 +1267,75 @@ void`, passed through to `ReportsCard`, and `App` routes it into the existing
 
 ---
 
+### I-052 · One exported clause-tree walker, not one per consumer
+
+- **Category:** feature-completeness
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/shared/rules/explainExpression.ts`,
+  `src/shared/membership/blastRadius.ts`,
+  `src/sidepanel/components/users/comparison/accessCause.ts`,
+  `src/sidepanel/components/users/profileRuleReads.ts`
+- **Verified:** 2026-09-12 — grep for `node === 'leaf'` across `src/`, reading
+  each production hit; confirmed while building PR #140.
+- **Problem:** #139 replaced the flat `clauses` projection with the recursive
+  `ClauseTreeNode`, and `explainExpression.ts` exports no walker for it. Three
+  production modules have each written their own private recursion over the
+  same shape — `membershipLeavesUnder` (blastRadius), `collectFailingLeaves`
+  (accessCause), `collectReads` (profileRuleReads) — plus test-local copies in
+  the explainExpression suites. They differ only in what they keep, so one
+  exported leaf-collector plus a caller-side `filter` subsumes all three. Three
+  copies of a tree walk is three places for a missed `children` recursion to
+  hide, which is exactly the bug class #139 closed when it found nested
+  membership calls were invisible to the cascade scan.
+  (`ClauseLedger.tsx`/`ClauseLedgerBranch.tsx` also switch on `node` but are
+  mutually-recursive _renderers_, not collectors — they are not in scope.)
+- **Done when:** `explainExpression.ts` exports one documented leaf walker with
+  its own test; the three private collectors are gone and their modules call it;
+  every existing suite stays green untouched.
+- **Risk:** a public contract change on a module three features read, so it
+  meets the plan-and-approval gate — write the plan before the code. The three
+  callers keep different _filters_, and collapsing those too would change
+  behaviour rather than deduplicate it.
+- **Status:** open
+
+---
+
+### I-053 · `currentGroupRelations` finds group references by id only
+
+- **Category:** feature-completeness
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/shared/rules/currentGroupRelations.ts`,
+  `src/shared/rules/groupRuleIndex.ts`
+- **Verified:** 2026-09-12 — read both module headers and `GROUP_ID_FN_RE`;
+  the partiality is documented in the source, not inferred.
+- **Problem:** the "references this group" half of `splitCurrentGroupRuleRelations`
+  runs through `groupRuleIndex.extractReferencedGroupIds`, a **regex over the
+  condition text** matching the two of Okta's seven membership functions that
+  take group ids. A rule reading the group by name — `isMemberOfGroupName`,
+  the two `…StartsWith`/`…Contains` forms, or `isMemberOfGroupNameRegex` — is
+  genuinely reading it and is not found. `currentGroupRelations`'s own header
+  says so ("Reference detection is partial by design… any copy built on these
+  numbers has to keep that caveat visible"), and the rules strip's _This group
+  (N)_ label is built on exactly those numbers. PR #140's cascade scan answers
+  the same question off the clause AST, so it already catches all five name
+  forms plus regex (ADR-0002) — the stronger path exists and this surface does
+  not use it.
+- **Done when:** the reference half resolves through the AST rather than
+  `GROUP_ID_FN_RE`; a rule naming the group by name, by prefix/substring and by
+  a runnable regex each appear in `referencing`, with a MIRROR case per form;
+  the `assigning` half is untouched; the partiality caveat is removed from the
+  header only if it has actually stopped being true.
+- **Risk:** the _This group (N)_ count will legitimately rise for orgs using
+  name-based rules, so any copy or test pinning today's number moves with it —
+  that is the fix landing, not a regression. Needs a user group list to resolve
+  name matches, which this path may not have; if it does not, narrow the claim
+  rather than guessing.
+- **Status:** open
+
+---
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk

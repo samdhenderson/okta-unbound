@@ -66,8 +66,7 @@ const NOT_COMPUTED: BlastRadiusReport = Object.freeze({
   groups: [],
   rules: [],
   counts: { added: 0, removed: 0, notPredicted: 0, starts: 0, stops: 0, undetermined: 0 },
-  secondOrderPossible: false,
-  secondOrderRuleNames: [],
+  cascades: [],
 }) as BlastRadiusReport;
 
 /** The stored report, tagged with the user it is an answer about. */
