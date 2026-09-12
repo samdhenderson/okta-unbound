@@ -56,3 +56,12 @@ export const Unevaluable: Story = {
     result: { outcome: 'unevaluable', reasonCode: 'parse-error' },
   },
 };
+
+/**
+ * No `result` at all — a caller with no user in scope to evaluate against, such
+ * as `RuleDetailView` browsing a rule with nobody picked. The footer row is
+ * absent entirely, never a placeholder or a dash.
+ */
+export const NoEvaluation: Story = {
+  args: { result: undefined },
+};

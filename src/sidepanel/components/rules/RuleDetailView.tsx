@@ -39,7 +39,7 @@ import {
   CopyableId,
   DetailSection,
   EntityLink,
-  RuleExpressionText,
+  RawExpressionWell,
   type GroupNameResolver,
 } from '../shared';
 import Icon from '../shared/Icon';
@@ -161,20 +161,18 @@ const RuleDetailView: React.FC<RuleDetailViewProps> = ({
         title="When"
         description="The condition Okta evaluates against every user in the org."
       >
-        <div className="rounded-md border border-neutral-200 bg-white p-(--sp-card)">
-          {/*
-            The shared renderer, not a local one. This rung kept its own id-regex
-            tokeniser doing the same job — and being id-shaped only, it could not
-            badge a group a condition names by *name*, which the shared one does
-            (I-036). Two renderers for one string is exactly the drift
-            `RuleExpressionText` was promoted to `shared/` to stop, and this is
-            the surface where a divergence would be most visible.
-          */}
-          <RuleExpressionText
-            text={rule.conditionExpression || rule.condition}
-            resolveGroupName={resolveGroupName}
-          />
-        </div>
+        {/*
+          The shared well, not a hand-styled card around the shared renderer.
+          This rung has no user in scope — `RulesTab` pushes it straight from a
+          row, evaluating nothing — so `result` is omitted and the well's footer
+          simply does not render (absent is not zero: no "Resolved value" row,
+          never a placeholder). The expression text itself still gets the shared
+          renderer's group-id badging, via `resolveGroupName` below.
+        */}
+        <RawExpressionWell
+          expression={rule.conditionExpression || rule.condition}
+          resolveGroupName={resolveGroupName}
+        />
 
         {rule.userAttributes.length > 0 && (
           <div className="mt-(--sp-card)">
