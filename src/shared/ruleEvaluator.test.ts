@@ -241,7 +241,9 @@ describe('tryEvaluateRuleExpression', () => {
 
     it('is unevaluable for an unsupported reference', () => {
       expect(tryEvaluateRuleExpression('session.amr == "pwd"', user)).toBe('unevaluable');
-      expect(tryEvaluateRuleExpression('user["department"] == "Engineering"', user)).toBe(
+      // A non-literal computed key stays unsupported; a string-literal one now
+      // resolves — see "computed member access" below.
+      expect(tryEvaluateRuleExpression('user[user.department] == "Engineering"', user)).toBe(
         'unevaluable',
       );
     });
@@ -318,6 +320,11 @@ describe('supported subset', () => {
       employeeNumber: 42,
       active: true,
       roles: ['admin', 'dev'],
+      // A negative numeric attribute, for the unary-minus relational tests.
+      floor: -1,
+      // A custom attribute whose name is not a valid bare identifier, so only
+      // computed access can reach it.
+      'cost center': 'CC-9',
       // An object-valued attribute, so the refusal to read `[object Object]` has
       // something real to refuse, and an attribute whose name begins with a word
       // operator, for the boundary check.
@@ -387,6 +394,52 @@ describe('supported subset', () => {
     expect(tryEvaluateRuleExpression('user.notes == null', user)).toBe('match');
   });
 
+  describe('unary minus on a numeric literal', () => {
+    it('negates a positive literal against a negative attribute', () => {
+      expect(tryEvaluateRuleExpression('user.floor >= -1', user)).toBe('match');
+      expect(tryEvaluateRuleExpression('user.floor > -1', user)).toBe('no-match');
+    });
+
+    it('folds a fractional literal', () => {
+      expect(tryEvaluateRuleExpression('user.employeeNumber >= -0.5', user)).toBe('match');
+    });
+
+    it('stays unevaluable when the operand is not a numeric literal', () => {
+      // `-user.x`, `-(expr)` and `-"a"` are not group-rule conditions Okta's own
+      // syntax produces — only `-<number literal>` folds.
+      expect(tryEvaluateRuleExpression('user.employeeNumber >= -user.floor', user)).toBe(
+        'unevaluable',
+      );
+      // `(1 + 1)` is a BinaryExpression, not a Literal — jsep drops parentheses
+      // that wrap a single literal, so `-(1)` alone would (correctly) fold the
+      // same as `-1` and isn't a useful negative case here.
+      expect(tryEvaluateRuleExpression('user.employeeNumber >= -(1 + 1)', user)).toBe(
+        'unevaluable',
+      );
+      expect(tryEvaluateRuleExpression('user.department == -"a"', user)).toBe('unevaluable');
+    });
+  });
+
+  describe('computed member access with a string-literal key', () => {
+    it('resolves the same as the dotted form would, were the name a valid identifier', () => {
+      expect(tryEvaluateRuleExpression('user["cost center"] == "CC-9"', user)).toBe('match');
+      expect(tryEvaluateRuleExpression('user["cost center"] == "CC-1"', user)).toBe('no-match');
+    });
+
+    it('reports attribute-absent for a computed key the profile does not carry', () => {
+      expect(tryEvaluateRuleExpression('user["cost centre"] == "CC-9"', user)).toBe('unevaluable');
+    });
+
+    it('stays unevaluable for a non-literal or nested computed key', () => {
+      expect(tryEvaluateRuleExpression('user[user.department] == "Engineering"', user)).toBe(
+        'unevaluable',
+      );
+      expect(tryEvaluateRuleExpression('user["cost center"]["nested"] == "x"', user)).toBe(
+        'unevaluable',
+      );
+    });
+  });
+
   // The Kleene core, observed through `evaluateRuleNode` — the same walk the
   // gated API runs, minus the grammar gate that would answer `unevaluable` for
   // every expression here before the walk ever started. These assertions were
@@ -422,8 +475,10 @@ describe('supported subset', () => {
   });
 
   describe('rejections reachable only through the ungated walk', () => {
-    it('rejects computed and non-user member access', () => {
-      expect(walkUngated('user["department"] == "Engineering"', user).resolved).toBe(false);
+    it('rejects a non-literal computed key and non-user member access', () => {
+      // A string-literal computed key now resolves the same as its dotted form
+      // — see "computed member access" below.
+      expect(walkUngated('user[user.department] == "Engineering"', user).resolved).toBe(false);
       expect(walkUngated('app.id == "0oaFAKE"', user).resolved).toBe(false);
       expect(walkUngated('user.a.b == 1', user).resolved).toBe(false);
     });
@@ -630,7 +685,10 @@ describe('tryEvaluateRuleExpressionDetailed', () => {
     { expression: 'user.roles == "admin,dev"', reasonCode: 'operand-type' },
     { expression: 'String.startsWith(user.firstName)', reasonCode: 'fn-arity' },
     { expression: 'app.clientId == "x"', reasonCode: 'unsupported-node' },
-    { expression: 'user["department"] == "Engineering"', reasonCode: 'unsupported-node' },
+    // A non-literal computed key stays unsupported — only a string-literal key
+    // (`user["department"]`) is modelled, and that case now resolves rather
+    // than being rejected: see "computed member access" below.
+    { expression: 'user[foo] == "Engineering"', reasonCode: 'unsupported-node' },
     { expression: 'user.department > "A"', reasonCode: 'operand-type' },
     { expression: 'String.startsWith(user.employeeNumber, "4")', reasonCode: 'operand-type' },
     { expression: 'user.department', reasonCode: 'not-a-boolean' },

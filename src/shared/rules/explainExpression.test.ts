@@ -32,6 +32,9 @@ const user: OktaUser = {
     // against.
     nullable: null,
     roles: ['admin', 'dev'],
+    // A custom attribute whose name is not a valid bare identifier, reachable
+    // only through computed access.
+    'cost center': 'CC-9',
   },
 };
 
@@ -146,9 +149,12 @@ describe('clauses the grammar gate rejects', () => {
       reasonCode: 'fn-arity',
     },
     {
-      name: 'computed member access',
-      expression: 'user["department"] == "Engineering"',
-      expressionText: 'user["department"] == "Engineering"',
+      // A string-literal computed key now resolves the same as its dotted
+      // form; only a non-literal computed key stays unsupported. See
+      // "computed member access" below for the now-supported case.
+      name: 'a non-literal computed member access',
+      expression: 'user[user.department] == "Engineering"',
+      expressionText: 'user[user.department] == "Engineering"',
       reasonCode: 'unsupported-node',
     },
     {
@@ -303,6 +309,45 @@ describe('nesting, parentheses and negation', () => {
   });
 });
 
+describe('unary minus and computed member access', () => {
+  it('stringifies a negative literal faithfully', () => {
+    const { clauses, summary } = explainRuleExpression('user.headcount >= -1', user);
+
+    expect(clauses[0]).toEqual({
+      expressionText: 'user.headcount >= -1',
+      resolvedValue: 42,
+      status: 'pass',
+    });
+    expect(summary.result).toEqual({ outcome: 'match' });
+  });
+
+  it('stringifies computed member access with its original quoting', () => {
+    const { clauses, summary } = explainRuleExpression('user["cost center"] == "CC-9"', user);
+
+    expect(clauses[0]).toEqual({
+      expressionText: 'user["cost center"] == "CC-9"',
+      resolvedValue: 'CC-9',
+      status: 'pass',
+    });
+    expect(summary.result).toEqual({ outcome: 'match' });
+  });
+
+  it('reports a failing computed-access clause, never as not-evaluated', () => {
+    const { clauses } = explainRuleExpression('user["cost center"] == "CC-1"', user);
+    expect(clauses[0]).toEqual({
+      expressionText: 'user["cost center"] == "CC-1"',
+      resolvedValue: 'CC-9',
+      status: 'fail',
+    });
+  });
+
+  it('reports attribute-absent for a computed key the profile does not carry', () => {
+    const { clauses } = explainRuleExpression('user["cost centre"] == "CC-9"', user);
+    expect(clauses[0].status).toBe('not-evaluated');
+    expect(clauses[0].reasonCode).toBe('attribute-absent');
+  });
+});
+
 describe('nothing is short-circuited', () => {
   it('reports the right side of an && whose left side already failed', () => {
     const { clauses, summary } = explainRuleExpression(
@@ -416,7 +461,9 @@ describe('an unresolvable clause is never a failure', () => {
     'isMemberOfGroupNameStartsWith("Eng") && user.department == "Engineering"',
     'app.clientId == "0oaFAKE" || user.city == "Berlin"',
     'session.amr == "pwd"',
-    'user["department"] == "Engineering"',
+    // A string-literal computed key now resolves (see the dedicated describe
+    // block below); only a non-literal one stays unsupported.
+    'user[user.department] == "Engineering"',
     'user.department + "x" == "Engineeringx"',
     'String.replaceFirst(user.email, "a", "b") == "ada"',
     'Arrays.flatten(user.roles)',

@@ -87,9 +87,12 @@ for (const operator of WORD_UNARY_OPERATORS) {
 }
 
 /**
- * Every unary operator this evaluator understands — logical negation, in its
- * symbolic and word forms. Anything else (`-`, `+`, `~`) is not a group-rule
- * condition and stays unevaluable.
+ * Every unary *negation* operator this evaluator understands — symbolic and
+ * word forms. Unary minus (`-1`) is handled separately, and only when its
+ * argument is a numeric literal (`evaluateNode`/`isSupportedNode`'s own
+ * `operator === '-'` branch): it negates a constant rather than negating a
+ * boolean, so it does not belong in this set. Anything else (`+`, `~`) is not
+ * a group-rule condition and stays unevaluable.
  */
 const NEGATION_OPERATORS: ReadonlySet<string> = new Set(['!', ...WORD_UNARY_OPERATORS]);
 
@@ -143,15 +146,18 @@ export type RuleExprValue = ExprValue;
  * - `empty` — the expression was empty or whitespace-only.
  * - `too-long` — longer than {@link MAX_EXPRESSION_LENGTH}; rejected before parsing.
  * - `parse-error` — jsep could not parse it.
- * - `unsupported-operator` — a binary operator outside {@link SUPPORTED_BINARY_OPERATORS}.
+ * - `unsupported-operator` — a binary operator outside {@link SUPPORTED_BINARY_OPERATORS},
+ *   or a unary minus whose argument is not a numeric literal (`-user.x`, `-(expr)`, `-"a"`).
  * - `group-membership-fn` — a {@link GROUP_MEMBERSHIP_FUNCTIONS} call made without
  *   a {@link RuleGroupContext}; answering it needs the user's full group list.
  * - `group-name-regex` — `isMemberOfGroupNameRegex`, which this module declines to
  *   run **even with** a group list. See {@link GROUP_MEMBERSHIP_FUNCTIONS}.
  * - `unknown-fn` — a call outside {@link SUPPORTED_FUNCTIONS}.
  * - `fn-arity` — an allow-listed function called with the wrong argument count.
- * - `unsupported-node` — a node shape we do not model (computed or non-`user.*`
- *   member access, a bare identifier, `this`, a regex literal, a `Compound`, …).
+ * - `unsupported-node` — a node shape we do not model (non-`user.*` member
+ *   access, a non-string-literal or nested computed key (`user[x]`,
+ *   `user["a"]["b"]`), a bare identifier, `this`, a regex literal, a
+ *   `Compound`, …).
  * - `operand-type` — allow-listed grammar, but an operand's runtime type is
  *   outside what the operator or function accepts (`user.department > "A"`,
  *   `String.startsWith(user.employeeNumber, "4")`, an object-valued attribute).
@@ -815,8 +821,10 @@ function asOperand(raw: unknown, options: EvaluationWalkOptions): EvalResult {
 
 /**
  * Read `user.<attribute>`, from the profile or from the user's own top-level
- * fields. Only the single-level `user.*` form is modelled; `app.*`, `session.*`,
- * computed access and nested paths are unresolvable.
+ * fields. Only the single-level `user.*` form is modelled, dotted
+ * (`user.department`) or computed with a string-literal key
+ * (`user["cost center"]`); `app.*`, `session.*`, a non-literal or nested
+ * computed key, and any deeper path are unresolvable.
  *
  * **An absent attribute is not `null`.** A profile that does not carry the name
  * at all resolves to `attribute-absent` — the evaluator failing to understand
@@ -826,10 +834,23 @@ function asOperand(raw: unknown, options: EvaluationWalkOptions): EvalResult {
  * licenses a comparison.
  */
 function resolveMember(node: jsep.MemberExpression, options: EvaluationWalkOptions): EvalResult {
-  if (node.computed) return giveUp('unsupported-node', options);
   const { object, property } = node;
   if (!isIdentifier(object) || object.name !== 'user') return giveUp('unsupported-node', options);
-  if (!isIdentifier(property)) return giveUp('unsupported-node', options);
+
+  // `user.<name>` is the dotted form; `user["<name>"]` is the computed form with
+  // a string-literal key — same attribute, same resolution below. A computed key
+  // that is not a string literal (`user[x]`), or nested computed access, is a
+  // shape this module does not model.
+  let attributeName: string;
+  if (node.computed) {
+    if (!isLiteral(property) || typeof property.value !== 'string') {
+      return giveUp('unsupported-node', options);
+    }
+    attributeName = property.value;
+  } else {
+    if (!isIdentifier(property)) return giveUp('unsupported-node', options);
+    attributeName = property.name;
+  }
 
   const profile = options.user.profile as Record<string, unknown>;
   // The profile wins over the top-level field of the same name. An org whose
@@ -838,11 +859,11 @@ function resolveMember(node: jsep.MemberExpression, options: EvaluationWalkOptio
   // `hasOwnProperty.call`, not `in`: a profile attribute is only what this user
   // actually carries, and `in` would find inherited `toString` and answer about
   // a function.
-  if (Object.prototype.hasOwnProperty.call(profile, property.name)) {
-    return asOperand(profile[property.name], options);
+  if (Object.prototype.hasOwnProperty.call(profile, attributeName)) {
+    return asOperand(profile[attributeName], options);
   }
-  if (USER_TOP_LEVEL_FIELDS.has(property.name)) {
-    const raw = (options.user as unknown as Record<string, unknown>)[property.name];
+  if (USER_TOP_LEVEL_FIELDS.has(attributeName)) {
+    const raw = (options.user as unknown as Record<string, unknown>)[attributeName];
     // Present in the type but not on this response — `lastLogin` on a user who
     // has never signed in, say. Absent is absent, whichever half it is missing
     // from.
@@ -1000,6 +1021,17 @@ function evaluateNode(node: jsep.Expression, options: EvaluationWalkOptions): Ev
   if (isCallExpression(node)) return evaluateCall(node, options);
   if (isBinaryExpression(node)) return evaluateBinary(node, options);
   if (isUnaryExpression(node)) {
+    if (node.operator === '-') {
+      // Unary minus on a numeric literal only — `-1`, `-0.5`. `-user.x`,
+      // `-(expr)` and `-"a"` are not group-rule conditions Okta's own syntax
+      // produces, so they stay unevaluable under the same reason a foreign
+      // binary operator gets rather than the generic `unsupported-node`.
+      const { argument } = node;
+      if (isLiteral(argument) && typeof argument.value === 'number') {
+        return -argument.value;
+      }
+      return giveUp('unsupported-operator', options);
+    }
     if (!NEGATION_OPERATORS.has(node.operator)) return giveUp('unsupported-node', options);
     const argument = truthiness(evaluateNode(node.argument, options));
     return isUnresolved(argument) ? UNRESOLVED : !argument;
@@ -1103,11 +1135,16 @@ function isSupportedNode(node: jsep.Expression, options: GrammarWalkOptions = {}
     return supported || reject('unsupported-node', options);
   }
   if (isMemberExpression(node)) {
+    const isUserObject = isIdentifier(node.object) && node.object.name === 'user';
+    // Dotted access (`user.department`) needs an identifier property; computed
+    // access (`user["cost center"]`) needs a string-literal one — `user[x]` and
+    // nested computed access (`user["a"]["b"]`) are not. Both routes resolve
+    // through the identical `resolveMember` lookup.
     const supported =
-      !node.computed &&
-      isIdentifier(node.object) &&
-      node.object.name === 'user' &&
-      isIdentifier(node.property);
+      isUserObject &&
+      (node.computed
+        ? isLiteral(node.property) && typeof node.property.value === 'string'
+        : isIdentifier(node.property));
     return supported || reject('unsupported-node', options);
   }
   if (isCallExpression(node)) {
@@ -1134,6 +1171,10 @@ function isSupportedNode(node: jsep.Expression, options: GrammarWalkOptions = {}
     return node.arguments.every((argument) => isSupportedNode(argument, options));
   }
   if (isUnaryExpression(node)) {
+    if (node.operator === '-') {
+      const supported = isLiteral(node.argument) && typeof node.argument.value === 'number';
+      return supported || reject('unsupported-operator', options);
+    }
     if (!NEGATION_OPERATORS.has(node.operator)) return reject('unsupported-node', options);
     return isSupportedNode(node.argument, options);
   }

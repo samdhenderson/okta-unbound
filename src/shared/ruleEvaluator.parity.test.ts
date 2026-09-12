@@ -74,6 +74,11 @@ const user: OktaUser = {
     andy: null,
     orbit: null,
     notes: null,
+    // A negative numeric attribute, for the unary-minus relational rows, and a
+    // custom attribute whose name is not a valid bare identifier — reachable
+    // only through computed access.
+    floor: -1,
+    'cost center': 'CC-9',
   },
 };
 
@@ -662,8 +667,11 @@ const OUTCOME_CASES: readonly OutcomeCase[] = [
     expected: 'unevaluable',
   },
   {
-    name: 'unsupported reference: computed member access',
-    expression: 'user["department"] == "Engineering"',
+    // A non-literal computed key stays unsupported; a string-literal key now
+    // resolves through the identical `user.<attribute>` lookup — see the
+    // "computed member access" rows below.
+    name: 'unsupported reference: non-literal computed member access',
+    expression: 'user[user.department] == "Engineering"',
     expected: 'unevaluable',
   },
   {
@@ -732,6 +740,50 @@ const OUTCOME_CASES: readonly OutcomeCase[] = [
     name: 'a bare false literal reduces to no-match',
     expression: 'false',
     expected: 'no-match',
+  },
+
+  // --- unary minus on a numeric literal ---------------------------------------
+  {
+    name: 'unary minus on a numeric literal, matching',
+    expression: 'user.floor == -1',
+    expected: 'match',
+  },
+  {
+    name: 'unary minus on a numeric literal, non-matching',
+    expression: 'user.floor == -2',
+    expected: 'no-match',
+  },
+  {
+    name: 'unary minus on a fractional literal',
+    expression: 'user.headcount >= -0.5',
+    expected: 'match',
+  },
+  {
+    name: 'unary minus on a non-literal operand stays unevaluable',
+    expression: 'user.headcount == -user.floor',
+    expected: 'unevaluable',
+  },
+
+  // --- computed member access with a string-literal key ----------------------
+  {
+    name: 'computed member access, matching',
+    expression: 'user["cost center"] == "CC-9"',
+    expected: 'match',
+  },
+  {
+    name: 'computed member access, non-matching',
+    expression: 'user["cost center"] == "CC-1"',
+    expected: 'no-match',
+  },
+  {
+    name: 'computed member access, attribute the profile does not carry',
+    expression: 'user["cost centre"] == "CC-9"',
+    expected: 'unevaluable',
+  },
+  {
+    name: 'computed member access with a non-literal key stays unevaluable',
+    expression: 'user[user.department] == "Engineering"',
+    expected: 'unevaluable',
   },
 ];
 
@@ -915,7 +967,19 @@ const GATE_CASES: readonly GateCase[] = [
     expression: 'user.department + "x" == "y"',
     expected: false,
   },
-  { name: 'rejects a unary minus', expression: '-user.headcount == -42', expected: false },
+  {
+    // Rejected because the LEFT operand, `-user.headcount`, is a unary minus on
+    // a non-literal — not because of the right operand, which is now accepted
+    // on its own (see the next row).
+    name: 'rejects a unary minus applied to a non-literal',
+    expression: '-user.headcount == -42',
+    expected: false,
+  },
+  {
+    name: 'accepts a unary minus applied to a numeric literal',
+    expression: 'user.headcount == -42',
+    expected: true,
+  },
   {
     name: 'rejects isMemberOfGroup',
     expression: 'isMemberOfGroup("00gFAKE0000000000000")',
@@ -990,9 +1054,16 @@ const GATE_CASES: readonly GateCase[] = [
   { name: 'rejects app context', expression: 'app.id == "0oaFAKE"', expected: false },
   { name: 'rejects session context', expression: 'session.amr == "pwd"', expected: false },
   {
-    name: 'rejects computed member access',
-    expression: 'user["department"] == "Engineering"',
+    // A string-literal computed key is now on the allow-list — see the
+    // "computed member access" rows below. Only a non-literal key is rejected.
+    name: 'rejects a non-literal computed member access',
+    expression: 'user[user.department] == "Engineering"',
     expected: false,
+  },
+  {
+    name: 'accepts computed member access with a string-literal key',
+    expression: 'user["department"] == "Engineering"',
+    expected: true,
   },
   {
     name: 'rejects nested member access',
