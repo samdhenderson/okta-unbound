@@ -122,6 +122,31 @@ export const NonMemberPolarity: Story = {
   },
 };
 
+/** A long clause with wrapping chips and evidence at the panel's narrowest width. */
+export const CompactPanel: Story = {
+  args: {
+    leaf: {
+      node: 'leaf',
+      expressionText:
+        'isMemberOfAnyGroupName("Engineering-Platform-Infrastructure", "Engineering-Developer-Experience")',
+      resolvedValue: true,
+      status: 'pass',
+      groupRequirement: 'member',
+      groupReferences: [
+        {
+          match: 'name',
+          value: 'Engineering-Platform-Infrastructure',
+          satisfied: true,
+          matchedGroupName: 'Engineering-Platform-Infrastructure',
+        },
+        { match: 'name', value: 'Engineering-Developer-Experience', satisfied: false },
+      ],
+      reads: [],
+    },
+  },
+  parameters: { viewport: { value: 'sidepanelCompact' } },
+};
+
 /** `null` and absent are two different facts: neither collapses to a dash. */
 export const NullVersusAbsentAttribute: Story = {
   args: {

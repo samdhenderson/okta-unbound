@@ -24,7 +24,7 @@
  * ## Each failing clause is a ledger clause
  *
  * Every failing leaf renders through {@link ClauseLedgerClause} — the same
- * clause presentation `ClauseChecklist`'s own tree view uses — rather than a
+ * clause presentation `ClauseLedger`'s own tree view uses — rather than a
  * bespoke line of `RuleExpressionText` plus a hand-rolled "Resolved value:"
  * caption. That is what surfaces a failing clause's attribute reads (`reads`):
  * the `user.department → "Sales"` line that answers "why does this user lack

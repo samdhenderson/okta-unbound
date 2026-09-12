@@ -186,6 +186,15 @@ describe('ClauseLedger', () => {
     expect(screen.queryByText('Fail')).not.toBeInTheDocument();
   });
 
+  it('names the unreadable state instead of rendering an empty clause row', () => {
+    render(<ClauseLedger expression="user.department ==" user={user} />);
+
+    expect(
+      screen.getByText('This condition could not be read clause by clause.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Not evaluated')).not.toBeInTheDocument();
+  });
+
   it('discloses truncation via an AlertMessage when the clause cap drops siblings', () => {
     // 70 flat OR'd clauses — past the explainer's default 64-clause cap — with no
     // nesting at all, so this exercises the sibling-drop path rather than the

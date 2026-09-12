@@ -38,6 +38,7 @@ import RawExpressionWell from './RawExpressionWell';
 import { useClauseLedger } from './useClauseLedger';
 import type { GroupNameResolver } from './RuleExpressionText';
 import type { RuleExplanationSummary } from '../../../shared/rules/explainExpression';
+import { UNEVALUABLE_REASON_TEXT } from '../../../shared/rules/unevaluableReasonText';
 import type { RuleGroupContext } from '../../../shared/ruleEvaluator';
 import type { OktaUser } from '../../../shared/types';
 
@@ -184,6 +185,15 @@ const ClauseLedger: React.FC<ClauseLedgerProps> = ({
           result={explanation.summary.result}
           resolveGroupName={mergedResolveGroupName}
         />
+      ) : explanation.tree.node === 'leaf' && explanation.tree.expressionText === '' ? (
+        // An unparsed or empty condition roots at a leaf with no text; a blank
+        // <code> block beside the chip says nothing, so name the state instead.
+        <div className="space-y-1 text-xs text-neutral-600">
+          <p>This condition could not be read clause by clause.</p>
+          {explanation.tree.reasonCode !== undefined && (
+            <p>{UNEVALUABLE_REASON_TEXT[explanation.tree.reasonCode]}</p>
+          )}
+        </div>
       ) : (
         <ClauseTreeNodeView node={explanation.tree} resolveGroupName={mergedResolveGroupName} />
       )}

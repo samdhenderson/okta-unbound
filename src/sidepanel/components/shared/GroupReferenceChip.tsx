@@ -101,9 +101,15 @@ const GroupReferenceChip: React.FC<GroupReferenceChipProps> = ({
     <span className="border-primary-highlight bg-primary-light text-primary-text inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium">
       {hasContext &&
         (reference.satisfied ? (
-          <Icon type="check" size="xs" className="text-success" />
+          <>
+            <Icon type="check" size="xs" className="text-success" />
+            <span className="sr-only">Matched</span>
+          </>
         ) : (
-          <Icon type="minus" size="xs" className="text-neutral-400" />
+          <>
+            <Icon type="minus" size="xs" className="text-neutral-400" />
+            <span className="sr-only">Not matched</span>
+          </>
         ))}
       <span className={label.mono ? 'font-mono' : ''}>{label.text}</span>
       {reference.match === 'id' && (

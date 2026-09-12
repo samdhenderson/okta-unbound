@@ -105,3 +105,16 @@ export const RegexUnsatisfied: Story = { args: { reference: regexUnsatisfied } }
  * with no glyph — the tick is never shown for a check that was not actually run.
  */
 export const NoContext: Story = { args: { reference: idSatisfied, hasContext: false } };
+
+/** A long resolved name at the panel's narrowest width — the chip wraps, the copy control stays. */
+export const CompactPanel: Story = {
+  args: {
+    reference: {
+      match: 'id',
+      value: '00gFAKELONGID001122',
+      satisfied: true,
+      matchedGroupName: 'Engineering-Platform-Infrastructure-Observability',
+    },
+  },
+  parameters: { viewport: { value: 'sidepanelCompact' } },
+};
