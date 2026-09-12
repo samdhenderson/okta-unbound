@@ -37,11 +37,13 @@ import React from 'react';
 import RuleLinkRow from './RuleLinkRow';
 import AttributeSpreadBar from './AttributeSpreadBar';
 import { spreadSegments } from './attributeSpread';
-import { Badge, Button, InsightCard, type BadgeVariant } from '../../shared';
+import { Badge, Button, InsightCard, ListRow, type BadgeVariant } from '../../shared';
 import {
   attributeTailCount,
   outlierValues,
   NONE_VALUE,
+  OTHER_VALUE,
+  type BreakdownRow,
   type AttributeSignal,
   type AttributeSignalKind,
   type AttributeSummary,
@@ -86,6 +88,16 @@ export interface AttributeHealthCardProps {
    * drill-in is only offered when something is wired to answer it.
    */
   onShowOther?: () => void;
+  /**
+   * Applies one value as a member filter and moves to the Members tab.
+   *
+   * **Omit and the value rows stay plain text.** This card has no member list of
+   * its own, so without a caller able to honour it a row would offer a filter
+   * that goes nowhere. The aggregated `Other` row is never offered either way —
+   * it stands for a set of values rather than one, so there is no single filter
+   * it could apply.
+   */
+  onSelectValue?: (row: BreakdownRow) => void;
   /** Starts the card expanded. For stories and tests; the app opens cards on demand. */
   defaultExpanded?: boolean;
 }
@@ -108,6 +120,7 @@ const AttributeHealthCard: React.FC<AttributeHealthCardProps> = ({
   rules,
   onNavigateToRule,
   onShowOther,
+  onSelectValue,
   defaultExpanded = false,
 }) => {
   const outliers = new Set(outlierValues(summary));
@@ -154,37 +167,64 @@ const AttributeHealthCard: React.FC<AttributeHealthCardProps> = ({
     >
       {segments.length > 0 && (
         <ul className="space-y-1">
-          {segments.map(({ row, background }) => (
-            <li
-              key={row.value}
-              className="flex items-center justify-between gap-(--sp-inline) text-xs"
-            >
-              <span className="flex min-w-0 items-center gap-(--sp-inline)">
-                <span
-                  aria-hidden="true"
-                  className="size-2 shrink-0 rounded-xs"
-                  style={{ background }}
-                />
-                <span
-                  className={`min-w-0 truncate font-mono ${
-                    outliers.has(row.value) ? 'text-warning-text' : 'text-neutral-700'
-                  }`}
-                  title={outliers.has(row.value) ? 'Diverges from the dominant value' : row.label}
-                >
-                  {outliers.has(row.value) && (
-                    /* The marker is text, not colour alone: colour is not an
-                     accessible signal on its own, and this list is read as much
-                     as it is scanned. */
-                    <span className="me-1 font-sans font-medium">Outlier:</span>
-                  )}
-                  {row.label}
+          {segments.map(({ row, background }) => {
+            const line = (
+              <span className="flex w-full items-center justify-between gap-(--sp-inline) text-xs">
+                <span className="flex min-w-0 items-center gap-(--sp-inline)">
+                  <span
+                    aria-hidden="true"
+                    className="size-2 shrink-0 rounded-xs"
+                    style={{ background }}
+                  />
+                  <span
+                    className={`min-w-0 truncate font-mono ${
+                      outliers.has(row.value) ? 'text-warning-text' : 'text-neutral-700'
+                    }`}
+                    title={outliers.has(row.value) ? 'Diverges from the dominant value' : row.label}
+                  >
+                    {outliers.has(row.value) && (
+                      /* The marker is text, not colour alone: colour is not an
+                       accessible signal on its own, and this list is read as much
+                       as it is scanned. */
+                      <span className="me-1 font-sans font-medium">Outlier:</span>
+                    )}
+                    {row.label}
+                  </span>
+                </span>
+                <span className="shrink-0 tabular-nums text-neutral-500">
+                  {row.count.toLocaleString()} ({Math.round(row.pct)}%)
                 </span>
               </span>
-              <span className="shrink-0 tabular-nums text-neutral-500">
-                {row.count.toLocaleString()} ({Math.round(row.pct)}%)
-              </span>
-            </li>
-          ))}
+            );
+
+            /* The tail stands for a set of values, not one, so there is no single
+              filter it could apply — its drill-in is the "Show all" button below,
+              which opens the full distribution instead. */
+            const selectable = onSelectValue && row.value !== OTHER_VALUE;
+            if (!selectable) {
+              return (
+                <li key={row.value} className="px-1 py-1">
+                  {line}
+                </li>
+              );
+            }
+
+            return (
+              <li key={row.value}>
+                <ListRow
+                  as="button"
+                  density="compact"
+                  onClick={() => onSelectValue(row)}
+                  /* The row names its destination and its filter before it is
+                    taken — this list leaves the tab, and a reader should not
+                    discover that mid-navigation. */
+                  ariaLabel={`Open Members filtered by ${summary.label}: ${row.label} — ${row.count.toLocaleString()} of ${summary.total.toLocaleString()} members`}
+                >
+                  {line}
+                </ListRow>
+              </li>
+            );
+          })}
         </ul>
       )}
 

@@ -31,6 +31,7 @@ import AttributeHealthCard from './AttributeHealthCard';
 import {
   discoverAttributeBreakdowns,
   rankAttributes,
+  type BreakdownRow,
   type RankedAttribute,
 } from '../../members/memberAnalytics';
 import {
@@ -63,6 +64,17 @@ export interface AttributeSpreadSectionProps {
   onNavigateToRule?: (ruleId: string) => void;
   /** Opens the pane's full-distribution reveal for one attribute key. */
   onShowAll: (attributeKey: string) => void;
+  /**
+   * Applies one attribute value as a member filter and moves to the Members tab.
+   *
+   * Omit and every card's value rows stay plain text — see
+   * {@link AttributeHealthCardProps.onSelectValue}.
+   */
+  onSelectValue?: (attributeKey: string, row: BreakdownRow) => void;
+  /** Fold the section behind its heading. */
+  collapsible?: boolean;
+  /** Whether a `collapsible` section starts expanded. */
+  defaultOpen?: boolean;
 }
 
 /**
@@ -81,6 +93,9 @@ const AttributeSpreadSection: React.FC<AttributeSpreadSectionProps> = ({
   feedingRules,
   onNavigateToRule,
   onShowAll,
+  onSelectValue,
+  collapsible = false,
+  defaultOpen = true,
 }) => {
   const quietLabelId = useId();
 
@@ -108,15 +123,41 @@ const AttributeSpreadSection: React.FC<AttributeSpreadSectionProps> = ({
           rules={ruleIndex.get(summary.key) ?? []}
           onNavigateToRule={onNavigateToRule}
           onShowOther={() => onShowAll(summary.key)}
+          onSelectValue={onSelectValue ? (row) => onSelectValue(summary.key, row) : undefined}
         />
       ))}
     </div>
   );
 
+  /*
+    What the section says while folded. Every branch states the same thing the
+    body would: a count it has computed, or the reason it has none. Nothing here
+    rounds an unloaded roster down to `0 attributes` — a section that has not run
+    its analysis says so.
+  */
+  const summary =
+    memberCount === 0
+      ? 'No members to profile.'
+      : memberStatus === 'idle'
+        ? 'Not analyzed yet.'
+        : memberStatus === 'loading'
+          ? 'Analyzing members…'
+          : memberStatus === 'error'
+            ? 'Analysis failed.'
+            : ranked.length === 0
+              ? 'No attribute here has a meaningful spread.'
+              : `${ranked.length.toLocaleString()} attribute${ranked.length === 1 ? '' : 's'} · ${
+                  flagged.length === 0 ? 'nothing flagged' : `${flagged.length} flagged`
+                }`;
+
   return (
     <DetailSection
       title="Attribute spread"
       description="How each profile attribute is populated across this group's members. Flagged first: drift, a hidden long tail, or a rule that depends on it."
+      collapsible={collapsible}
+      defaultOpen={defaultOpen}
+      itemCount={ranked.length > 0 ? ranked.length : undefined}
+      summary={<p className="text-sm text-neutral-600">{summary}</p>}
       actions={
         memberStatus === 'idle' && memberCount > 0 ? (
           <Button

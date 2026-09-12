@@ -134,6 +134,18 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
+ * Open one of the pane's folded sections.
+ *
+ * Every section arrives closed, so a story that asserts on a section's *body*
+ * has to open it first. A collapsed body is `inert`, which keeps it out of the
+ * accessibility tree — so this is not a convenience, it is what makes the
+ * queries below reach anything at all.
+ */
+const openSection = async (canvas: ReturnType<typeof within>, name: RegExp): Promise<void> => {
+  await userEvent.click(canvas.getByRole('button', { name }));
+};
+
+/**
  * Roster not yet loaded — the attribute gate offers "Analyze"; the MFA
  * section nudges to load members first. This is the minority case in
  * practice — `GroupDetailView` auto-loads the roster (and this pane with it)
@@ -151,9 +163,56 @@ export const RosterError: Story = {
   args: { memberStatus: 'error', error: 'Members could not be read.' },
 };
 
-/** Roster loaded: a card per discovered attribute, ranked by what wants reading first. */
+/** Roster loaded and the section opened: a card per discovered attribute, ranked. */
 export const AttributeCards: Story = {
   args: { members, memberStatus: 'done' },
+  play: async ({ canvas }) => {
+    await openSection(canvas, /Attribute spread/);
+    await expect(canvas.getByText('department')).toBeVisible();
+  },
+};
+
+/**
+ * How the tab actually arrives: three folded sections, each stating its own
+ * headline fact.
+ *
+ * The fact is the point. A stack of sections that all start closed and say
+ * nothing is a column of bare headers, and a reader has to open every one to
+ * find out which was worth opening — so the summary line is what makes folding
+ * them by default an improvement rather than a extra click.
+ */
+export const AllSectionsClosed: Story = {
+  args: { members, memberStatus: 'done', scanStatus: 'complete', mfaResults },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('2 attributes · 2 flagged')).toBeVisible();
+    await expect(
+      canvas.getByText('3 of 12 members scanned have no MFA factor enrolled.'),
+    ).toBeVisible();
+
+    // Closed, not absent: each heading is a real disclosure control.
+    await expect(canvas.getByRole('button', { name: /Attribute spread/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    await expect(canvas.getByRole('button', { name: /MFA coverage/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  },
+};
+
+/**
+ * A roster that has not loaded reports **absent**, never zero.
+ *
+ * `0 attributes` on a section that never ran its analysis would be a fact nobody
+ * established. The folded header says what it actually knows instead.
+ */
+export const ClosedSummariesWithoutARoster: Story = {
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Not analyzed yet.')).toBeVisible();
+    await expect(canvas.getByText('Load members first.')).toBeVisible();
+    await expect(canvas.queryByText(/0 attributes/)).toBeNull();
+  },
 };
 
 /**
@@ -167,6 +226,7 @@ export const AttributeCards: Story = {
 export const NoDependentAttributes: Story = {
   args: { members, memberStatus: 'done', feedingRules: [] },
   play: async ({ canvas }) => {
+    await openSection(canvas, /Attribute spread/);
     await expect(canvas.getByText('department')).toBeVisible();
     await expect(canvas.queryByText(/Depended on by/)).toBeNull();
   },
@@ -187,7 +247,7 @@ export const MfaScanning: Story = {
   args: { members, memberStatus: 'done', scanStatus: 'scanning' },
 };
 
-/** MFA scan complete — the no-factors coverage summary plus a "Rescan" trigger. */
+/** MFA scan complete — the enrollment and factor-type cards, plus a "Rescan" trigger. */
 export const MfaComplete: Story = {
   args: { members, memberStatus: 'done', scanStatus: 'complete', mfaResults },
 };
@@ -201,30 +261,30 @@ export const MfaError: Story = {
 export const Disabled: Story = { args: { canAnalyze: false } };
 
 /**
- * The composition reports, moved here off the Members tab.
+ * RETARGETED (`CompositionJumpsToMembers`). The jump lives on the attribute card
+ * now, not in a second grid below it.
  *
- * They describe the roster rather than control it, and on the Members tab they
- * were one of seven surfaces stacked above the first member row. Here every
- * value is a jump: the pane holds no member list, so a click applies the filter
- * on Members and moves — which the copy says before anybody clicks.
+ * `CompositionReports` drew the same `discoverAttributeBreakdowns` output the
+ * cards above it already drew, in an older and smaller card, purely so its values
+ * could be clicked. The capability was worth keeping and the duplicate grid was
+ * not — so the card's own value rows became the control. A reader looking at a
+ * value in the card is already looking at the thing they want to filter by.
+ *
+ * The row still *leaves*: this pane holds no member list, so a click applies the
+ * filter on Members and moves, which the row's accessible name says before
+ * anybody clicks it.
  */
-export const CompositionJumpsToMembers: Story = {
+export const ValueJumpsToMembersFromCard: Story = {
   args: { members, memberStatus: 'done', onFilterMembers: fn() },
-  play: async ({ args, canvas, canvasElement }) => {
-    const disclosure = canvas.getByRole('button', { name: /Composition/ });
-    await userEvent.click(disclosure);
-    await expect(canvas.getByText('Pick a value to open the Members tab filtered by it.'));
+  play: async ({ args, canvas }) => {
+    await openSection(canvas, /Attribute spread/);
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Show the value breakdown for department' }),
+    );
 
-    // Two things in this region are buttons named for the value: the spread
-    // bar's `Engineering` segment (`Department: Engineering, 5 members`) and
-    // the value row itself. A bare /Engineering/ matches both, so the click
-    // would depend on document order. Scope to the region through the
-    // disclosure's own `aria-controls` — the region's contract, not a test id
-    // — and anchor the name, which the segment's `Department:` prefix fails.
-    const regionId = disclosure.getAttribute('aria-controls')!;
-    const composition = within(canvasElement.querySelector(`#${regionId}`) as HTMLElement);
-
-    await userEvent.click(composition.getByRole('button', { name: /^Engineering/ }));
+    await userEvent.click(
+      canvas.getByRole('button', { name: /^Open Members filtered by Department: Engineering/ }),
+    );
     await expect(args.onFilterMembers).toHaveBeenCalledWith(
       expect.objectContaining({ dimension: 'department', value: 'Engineering' }),
     );
@@ -232,14 +292,26 @@ export const CompositionJumpsToMembers: Story = {
 };
 
 /**
- * Without a caller able to honour a jump the section is **absent**, not inert.
- * It is made of nothing but value clicks, so an unwired copy of it would be a
- * grid of controls that do nothing (ADR-0039).
+ * RETARGETED (`CompositionOmittedWithNowhereToGo`). Same rule, applied one level
+ * down.
+ *
+ * The old section was **absent** without a caller to honour a jump, because it
+ * was made of nothing but value clicks and an unwired copy would have been a grid
+ * of controls that did nothing (ADR-0039). A card is not that — it carries a
+ * spread bar, badges and counts that are worth reading with no destination wired
+ * — so the card renders and the *rows* stop being controls.
  */
-export const CompositionOmittedWithNowhereToGo: Story = {
+export const ValueRowsInertWithNowhereToGo: Story = {
   args: { members, memberStatus: 'done' },
   play: async ({ canvas }) => {
-    await expect(canvas.queryByRole('button', { name: /Composition/ })).toBeNull();
+    await openSection(canvas, /Attribute spread/);
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Show the value breakdown for department' }),
+    );
+
+    // The value is still stated; it just does not promise to take you anywhere.
+    await expect(canvas.getByText('Engineering')).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: /Open Members filtered by/ })).toBeNull();
   },
 };
 
@@ -278,6 +350,7 @@ export const HiddenTailRevealedInThreeStages: Story = {
   args: { members: wideMembers, memberCount: wideMembers.length, memberStatus: 'done' },
   play: async ({ canvas, canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
+    await openSection(canvas, /Attribute spread/);
 
     // Stage one: the collapsed card measures the tail and says so in words.
     await expect(canvas.getByText('costCenter')).toBeVisible();
