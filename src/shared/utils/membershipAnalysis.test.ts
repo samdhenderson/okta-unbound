@@ -469,6 +469,31 @@ describe("analyzeMemberships — with the user's complete group list", () => {
     expect(m.attribution).toBe('exact');
   });
 
+  it('attributes a matching isMemberOfGroupNameRegex rule exactly, not by the unevaluable fallback', () => {
+    // Pinned by docs/adr/0002-linear-time-tenant-regex.md, and the consequence
+    // that record names deliberately: a tenant pattern is evaluated now, so a
+    // rule built on one resolves at rung 2 (RULE_BASED, exact) instead of
+    // falling through to a heuristic `inferred` attribution.
+    const r = membershipRule('isMemberOfGroupNameRegex("Contr.*")');
+    const [m] = analyzeMemberships(memberOf, [r], user, {
+      groups: groupContextOfGroups(memberOf),
+    });
+    expect(m.membershipType).toBe('RULE_BASED');
+    expect(m.rules.map((rr) => rr.id)).toEqual(['rMember']);
+    expect(m.attribution).toBe('exact');
+  });
+
+  it('leaves a rule whose pattern the safe engine declines unproven', () => {
+    // The other half of the same bargain: a lookahead is outside the engine's
+    // subset, so the rule is not evaluated — and an unevaluated rule is never
+    // read as a no.
+    const r = membershipRule('isMemberOfGroupNameRegex("(?=Contr).*")');
+    const [m] = analyzeMemberships(memberOf, [r], user, {
+      groups: groupContextOfGroups(memberOf),
+    });
+    expect(m.attribution).toBe('inferred');
+  });
+
   it('matches isMemberOfGroupName by name, case-sensitively', () => {
     const context = groupContextOfGroups(memberOf);
     expect(

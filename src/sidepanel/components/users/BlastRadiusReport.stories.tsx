@@ -66,9 +66,9 @@ const RULES: RuleEffect[] = [
   {
     ruleId: '0prFAKErule00003',
     ruleName: 'Reviewers — by group',
-    expression: 'isMemberOfGroupNameRegex("^sec-.*$")',
+    expression: 'isMemberOfGroupNameRegex("(?=sec)sec-.*")',
     transition: 'undetermined',
-    afterReason: 'group-name-regex',
+    afterReason: 'regex-unsupported-syntax',
     targetGroupIds: ['00gFAKE00000000000004'],
     targetGroupNames: ['Security-Reviewers'],
     touchedAttributes: [],

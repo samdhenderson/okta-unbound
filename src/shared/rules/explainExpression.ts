@@ -68,6 +68,7 @@ import {
   type RuleMatchResult,
   type RuleUnevaluableReason,
 } from '../ruleEvaluator';
+import { compileSafeRegex, matchCompiled } from './safeRegex';
 import type { OktaUser } from '../types';
 
 /**
@@ -83,8 +84,14 @@ export const DEFAULT_MAX_CLAUSES = 64;
 /** Outcome of a single clause. `fail` means "resolved to false", nothing else. */
 export type ClauseStatus = 'pass' | 'fail' | 'not-evaluated';
 
-/** How an `isMemberOf*` argument identifies the group it asks about. */
-export type ClauseGroupMatch = 'id' | 'name' | 'nameStartsWith' | 'nameContains';
+/**
+ * How an `isMemberOf*` argument identifies the group it asks about.
+ *
+ * `nameRegex` is the tenant-authored pattern of `isMemberOfGroupNameRegex`,
+ * evaluated by `shared/rules/safeRegex` (ADR-0002) with full-match semantics.
+ * It was absent while that function was refused outright.
+ */
+export type ClauseGroupMatch = 'id' | 'name' | 'nameStartsWith' | 'nameContains' | 'nameRegex';
 
 /**
  * Which way round an `isMemberOf*` clause asks its question.
@@ -454,18 +461,30 @@ const GROUP_MATCH_BY_FUNCTION = new Map<string, ClauseGroupMatch>([
   ['isMemberOfAnyGroupName', 'name'],
   ['isMemberOfGroupNameStartsWith', 'nameStartsWith'],
   ['isMemberOfGroupNameContains', 'nameContains'],
-  // `isMemberOfGroupNameRegex` is absent on purpose: the evaluator declines to
-  // run tenant-authored patterns, so listing its groups would imply a check that
-  // never happened.
+  ['isMemberOfGroupNameRegex', 'nameRegex'],
 ]);
+
+/**
+ * Which of the user's groups satisfies one reference — or the fact that the
+ * question could not be answered at all.
+ *
+ * Only the regex form can decline: `shared/rules/safeRegex` refuses a pattern
+ * outside its subset or past its caps, and a declined pattern is not a "no
+ * group matched". Reporting it as one would print `satisfied: false` beside a
+ * check that never ran.
+ */
+type ReferenceResolution =
+  | { readonly kind: 'resolved'; readonly matched?: RuleGroupContextEntry }
+  | { readonly kind: 'declined' };
 
 /** Which of the user's groups satisfies one reference, if any. */
 function findMatchingGroup(
   match: ClauseGroupMatch,
   value: string,
   groups: RuleGroupContext,
-): RuleGroupContextEntry | undefined {
-  return groups.find((group) => {
+): ReferenceResolution {
+  if (match === 'nameRegex') return findMatchingGroupByRegex(value, groups);
+  const matched = groups.find((group) => {
     switch (match) {
       case 'id':
         return group.id === value;
@@ -477,6 +496,29 @@ function findMatchingGroup(
         return group.name.includes(value);
     }
   });
+  return { kind: 'resolved', ...(matched ? { matched } : {}) };
+}
+
+/**
+ * The regex form, compiled **once** and matched against each name in full.
+ *
+ * Mirrors `ruleEvaluator`'s own eagerness: a name that matches answers the
+ * question whatever the rest of the list did, but an unmatched pass in which
+ * some name could not be read is a decline, not a `false`.
+ */
+function findMatchingGroupByRegex(pattern: string, groups: RuleGroupContext): ReferenceResolution {
+  const program = compileSafeRegex(pattern);
+  if (program.kind === 'declined') return { kind: 'declined' };
+  let declined = false;
+  for (const group of groups) {
+    const result = matchCompiled(program, group.name);
+    if (result.kind === 'declined') {
+      declined = true;
+      continue;
+    }
+    if (result.matched) return { kind: 'resolved', matched: group };
+  }
+  return declined ? { kind: 'declined' } : { kind: 'resolved' };
 }
 
 /** What one group-membership clause asks about, and which way round. */
@@ -521,7 +563,12 @@ function groupClauseFactsOf(
   for (const argument of call.arguments) {
     const value = asLiteral(argument)?.value;
     if (typeof value !== 'string') return undefined;
-    const matched = findMatchingGroup(match, value, groups);
+    const resolution = findMatchingGroup(match, value, groups);
+    // A reference whose `satisfied` is not known is dropped along with the whole
+    // clause: `false` there reads as a definite "they are not in one of these",
+    // which is the claim a declined pattern has not earned.
+    if (resolution.kind === 'declined') return undefined;
+    const { matched } = resolution;
     references.push({
       match,
       value,

@@ -92,8 +92,9 @@ interface ClauseChecklistProps {
    * worse than the honest "Cannot be determined" this prop replaces.
    *
    * Absent, this view behaves exactly as it did before the prop existed.
-   * `isMemberOfGroupNameRegex` stays unevaluated either way, under its own
-   * `group-name-regex` reason.
+   * With it, all seven `isMemberOf*` functions answer — `isMemberOfGroupNameRegex`
+   * included, via the linear-time engine in `shared/rules/safeRegex` (ADR-0002),
+   * which declines a pattern outside its subset rather than guessing at it.
    */
   groupContext?: RuleGroupContext;
   /**

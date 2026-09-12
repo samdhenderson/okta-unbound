@@ -124,6 +124,65 @@ describe('clauses that need group context', () => {
   });
 });
 
+describe('isMemberOfGroupNameRegex references (ADR-0002)', () => {
+  /** The user's complete membership set, as the group-context option requires. */
+  const groups = [
+    { id: '00gFAKEgroup0001', name: 'SecOps-Alpha' },
+    { id: '00gFAKEgroup0002', name: 'Engineering' },
+  ];
+
+  it('carries the pattern as a structured reference, satisfied by the name that matched', () => {
+    const { clauses } = explainRuleExpression('isMemberOfGroupNameRegex("^SecOps-.*")', user, {
+      groups,
+    });
+
+    expect(clauses[0].status).toBe('pass');
+    expect(clauses[0].groupRequirement).toBe('member');
+    expect(clauses[0].groupReferences).toEqual([
+      {
+        match: 'nameRegex',
+        value: '^SecOps-.*',
+        satisfied: true,
+        matchedGroupName: 'SecOps-Alpha',
+      },
+    ]);
+  });
+
+  it('reports an unsatisfied pattern as unsatisfied, with no group named', () => {
+    const { clauses } = explainRuleExpression('isMemberOfGroupNameRegex("^Finance-.*")', user, {
+      groups,
+    });
+
+    expect(clauses[0].status).toBe('fail');
+    expect(clauses[0].groupReferences).toEqual([
+      { match: 'nameRegex', value: '^Finance-.*', satisfied: false },
+    ]);
+  });
+
+  it('carries no references at all when the engine declined the pattern', () => {
+    // `satisfied: false` beside a check that never ran reads as a definite "not
+    // in any of these", which is the claim a decline has not earned.
+    const { clauses } = explainRuleExpression('isMemberOfGroupNameRegex("(?=Sec).*")', user, {
+      groups,
+    });
+
+    expect(clauses[0].status).toBe('not-evaluated');
+    expect(clauses[0].reasonCode).toBe('regex-unsupported-syntax');
+    expect(clauses[0].groupReferences).toBeUndefined();
+    expect(clauses[0].groupRequirement).toBeUndefined();
+  });
+
+  it('looks through a negation, like the other membership forms', () => {
+    const { clauses } = explainRuleExpression('!isMemberOfGroupNameRegex("^SecOps-.*")', user, {
+      groups,
+    });
+
+    expect(clauses[0].status).toBe('fail');
+    expect(clauses[0].groupRequirement).toBe('non-member');
+    expect(clauses[0].groupReferences?.map((r) => r.satisfied)).toEqual([true]);
+  });
+});
+
 describe('clauses the grammar gate rejects', () => {
   it.each([
     {

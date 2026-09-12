@@ -133,6 +133,18 @@ describe('group ids are labelled, not dumped', () => {
 
     expect(screen.getByText(/any group whose name starts with/i)).toBeInTheDocument();
   });
+
+  it('reads a regex reference as a description too', () => {
+    // `isMemberOfGroupNameRegex` names a pattern, never one group (ADR-0002).
+    render(
+      <ClauseGroupList
+        requirement="member"
+        references={[ref({ match: 'nameRegex', value: '^sso-.*' })]}
+      />,
+    );
+
+    expect(screen.getByText(/any group whose name matches/i)).toBeInTheDocument();
+  });
 });
 
 describe('nothing to say', () => {

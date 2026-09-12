@@ -43,6 +43,7 @@ const groupMatchLabel: Record<ClauseGroupReference['match'], (value: string) => 
   name: (value) => value,
   nameStartsWith: (value) => `any group whose name starts with “${value}”`,
   nameContains: (value) => `any group whose name contains “${value}”`,
+  nameRegex: (value) => `any group whose name matches “${value}”`,
 };
 
 /** Props for {@link ClauseGroupList}. */

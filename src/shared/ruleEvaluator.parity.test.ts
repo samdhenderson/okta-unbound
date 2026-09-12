@@ -1203,6 +1203,141 @@ describe('ruleEvaluator parity — grammar gate table', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Table 3 — the regex membership function, with a group context.
+//
+// The tables above evaluate every row WITHOUT a group list, where all seven
+// `isMemberOf*` calls are `group-membership-fn`. `isMemberOfGroupNameRegex` is
+// the one whose with-context answer can itself be a decline (ADR-0002), so it
+// gets its own table: gate and outcome are pinned together, both ways round.
+// ---------------------------------------------------------------------------
+
+/** The user's complete membership set, as the group-context option requires. */
+const CONTEXT_GROUPS = [
+  { id: '00gFAKE0000000000000', name: 'SecOps-Alpha' },
+  { id: '00gFAKE1111111111111', name: 'Engineering' },
+];
+
+interface RegexCase {
+  readonly name: string;
+  readonly expression: string;
+  /** Outcome with `CONTEXT_GROUPS` supplied. */
+  readonly expected: RuleMatchOutcome;
+  /**
+   * Whether the grammar gate accepts it once a group context exists. `true` for
+   * every well-formed call, including the ones whose *pattern* the engine
+   * declines: which tenant patterns are runnable is not a grammar question.
+   */
+  readonly gated?: false;
+}
+
+const REGEX_CASES: readonly RegexCase[] = [
+  {
+    name: 'full-match against one of the names',
+    expression: 'isMemberOfGroupNameRegex("^SecOps-.*")',
+    expected: 'match',
+  },
+  {
+    name: 'a substring match is not a match (Java matches() semantics)',
+    expression: 'isMemberOfGroupNameRegex("SecOps")',
+    expected: 'no-match',
+  },
+  {
+    name: 'no name satisfies the pattern',
+    expression: 'isMemberOfGroupNameRegex("^Finance-[0-9]+")',
+    expected: 'no-match',
+  },
+  {
+    name: 'alternation and character classes are inside the subset',
+    expression: 'isMemberOfGroupNameRegex("(SecOps|NetOps)-[A-Za-z]+")',
+    expected: 'match',
+  },
+  {
+    name: 'negated, answering the other way round',
+    expression: '!isMemberOfGroupNameRegex("^SecOps-.*")',
+    expected: 'no-match',
+  },
+  {
+    name: 'beside a clause that resolves, the conjunction resolves',
+    expression: 'user.department == "Engineering" && isMemberOfGroupNameRegex("^SecOps-.*")',
+    expected: 'match',
+  },
+  {
+    name: 'lookahead is declined, not approximated',
+    expression: 'isMemberOfGroupNameRegex("(?=Sec)SecOps-.*")',
+    expected: 'unevaluable',
+  },
+  {
+    name: 'a backreference is declined',
+    expression: 'isMemberOfGroupNameRegex("(Sec)\\\\1")',
+    expected: 'unevaluable',
+  },
+  {
+    name: 'bounded repetition is declined',
+    expression: 'isMemberOfGroupNameRegex("Sec{2,4}Ops")',
+    expected: 'unevaluable',
+  },
+  {
+    name: 'a malformed pattern is declined',
+    expression: 'isMemberOfGroupNameRegex("SecOps-(")',
+    expected: 'unevaluable',
+  },
+  {
+    name: 'a declined pattern poisons its conjunction rather than answering false',
+    expression: 'user.department == "Engineering" && isMemberOfGroupNameRegex("(?=Sec)")',
+    expected: 'unevaluable',
+  },
+  {
+    name: 'wrong arity — not variadic, unlike the `…Any…` forms',
+    expression: 'isMemberOfGroupNameRegex("^SecOps-.*", "^NetOps-.*")',
+    expected: 'unevaluable',
+    gated: false,
+  },
+];
+
+describe('ruleEvaluator parity — isMemberOfGroupNameRegex with a group context', () => {
+  it.each(REGEX_CASES)('$name', ({ expression, expected }) => {
+    expect(tryEvaluateRuleExpression(expression, user, CONTEXT_GROUPS)).toBe(expected);
+  });
+
+  it('is unevaluable for every row without a group context', () => {
+    for (const { name, expression } of REGEX_CASES) {
+      expect(tryEvaluateRuleExpression(expression, user), name).toBe('unevaluable');
+    }
+  });
+
+  it('agrees with the grammar gate: the gate needs the context, and never accepts what answers unevaluable for a grammar reason', () => {
+    for (const { name, expression, gated } of REGEX_CASES) {
+      const parsed = parseRuleExpression(expression);
+      expect(parsed.ok, name).toBe(true);
+      if (!parsed.ok) continue;
+      // Without the context: rejected, exactly like its six siblings.
+      const ungated = checkRuleNodeSupport(parsed.ast);
+      expect(ungated.supported, name).toBe(false);
+      if (!ungated.supported) {
+        // The missing list is reported before the arity is looked at, so every
+        // row — the mis-arity one included — reads the same without a context.
+        expect(ungated.reasonCode, name).toBe('group-membership-fn');
+      }
+      // With it: the gate is a grammar question, so it accepts every well-formed
+      // row — a pattern outside the engine's subset is declined by the
+      // evaluation walk, not by the gate.
+      expect(checkRuleNodeSupport(parsed.ast, { hasGroupContext: true }).supported, name).toBe(
+        gated ?? true,
+      );
+    }
+  });
+
+  it('never answers match or no-match for a row the gate rejects', () => {
+    for (const { name, expression, expected } of REGEX_CASES) {
+      const parsed = parseRuleExpression(expression);
+      if (!parsed.ok) continue;
+      if (checkRuleNodeSupport(parsed.ast, { hasGroupContext: true }).supported) continue;
+      expect(expected, name).toBe('unevaluable');
+    }
+  });
+});
+
 describe('ruleEvaluator parity — determinism', () => {
   it('returns the same outcome on repeated evaluation of every table row', () => {
     for (const { name, expression, expected } of OUTCOME_CASES) {

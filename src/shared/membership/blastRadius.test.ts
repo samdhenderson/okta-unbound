@@ -120,12 +120,19 @@ const STAFF_FEEDER = ruleOf({
   userAttributes: ['title'],
 });
 
-/** ACTIVE, feeds Engineering, and this panel declines to run its pattern. */
+/**
+ * ACTIVE, feeds Engineering, and stays unevaluable.
+ *
+ * Tenant regexes are evaluated now (ADR-0002), so the pattern carries a
+ * lookahead — outside the safe engine's subset, and therefore declined rather
+ * than approximated. The fixture's job is unchanged: be the rule whose answer
+ * this panel does not have.
+ */
 const REGEX_FEEDER = ruleOf({
   id: '0prFAKEregex',
   name: 'Regex feeder',
   groupIds: [ENGINEERING.id],
-  conditionExpression: 'isMemberOfGroupNameRegex("^Eng")',
+  conditionExpression: 'isMemberOfGroupNameRegex("(?=Eng).*")',
 });
 
 /** The membership Engineering is held by, credited to `ENG_FEEDER` beyond doubt. */
@@ -301,8 +308,8 @@ describe('an unevaluable sibling rule is never read as a no (ADR-0020)', () => {
     const regexRow = report.rules.find((rule) => rule.ruleId === REGEX_FEEDER.id);
     expect(regexRow).toMatchObject({
       transition: 'undetermined',
-      beforeReason: 'group-name-regex',
-      afterReason: 'group-name-regex',
+      beforeReason: 'regex-unsupported-syntax',
+      afterReason: 'regex-unsupported-syntax',
     });
     expect(report.counts.undetermined).toBe(1);
   });

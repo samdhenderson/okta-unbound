@@ -27,8 +27,15 @@ export const UNEVALUABLE_REASON_TEXT: Record<RuleUnevaluableReason, string> = {
   'parse-error': 'The condition could not be parsed here.',
   'unsupported-operator': 'Uses an operator this panel cannot evaluate.',
   'group-membership-fn': "Needs the user's full group list, which this panel does not have.",
+  // Retired from the emit path by ADR-0002 — group-name regexes are evaluated
+  // now. Kept until the flat-explanation cleanup removes the code itself, so a
+  // value stored before that change still renders a true sentence.
   'group-name-regex':
-    'Matches group names with a regular expression, which this panel does not run.',
+    'Matches group names with a regular expression, which was not run for this rule.',
+  'regex-unsupported-syntax':
+    'Matches group names with a regular expression using syntax this panel does not implement, so it was not run.',
+  'regex-too-complex':
+    'The group-name regular expression is past the size this panel will run, so it was not run.',
   'unknown-fn': 'Calls a function this panel cannot evaluate.',
   'fn-arity': 'Calls a function with an unexpected number of arguments.',
   'unsupported-node': 'Uses a form of expression this panel cannot evaluate.',
@@ -52,8 +59,8 @@ export const UNEVALUABLE_REASON_TEXT: Record<RuleUnevaluableReason, string> = {
  *
  * @example
  * ```ts
- * unevaluableReasonText('group-name-regex');
- * // "Matches group names with a regular expression, which this panel does not run."
+ * unevaluableReasonText('regex-unsupported-syntax');
+ * // "Matches group names with a regular expression using syntax this panel does not implement, so it was not run."
  * ```
  */
 export function unevaluableReasonText(reason: RuleUnevaluableReason | undefined): string {

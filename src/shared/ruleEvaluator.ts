@@ -17,9 +17,12 @@
  * never answer `no-match` when it merely failed to understand the expression.
  *
  * Group-membership functions (`isMemberOfGroup`, `isMemberOfGroupName`,
- * `isMemberOfAnyGroup*`, `…NameStartsWith`, `…NameContains`, `…NameRegex`) and
- * app-context (`app.*`) expressions cannot be resolved client-side — see
- * {@link GROUP_MEMBERSHIP_FUNCTIONS} for the seam that would resolve the former.
+ * `isMemberOfAnyGroup*`, `…NameStartsWith`, `…NameContains`, `…NameRegex`) are
+ * answered only against a caller-supplied group list — see
+ * {@link GROUP_MEMBERSHIP_FUNCTIONS} for that seam, including how the regex
+ * variant runs its tenant-authored pattern through the linear-time engine in
+ * `shared/rules/safeRegex` rather than a `RegExp` (ADR-0002). App-context
+ * (`app.*`) expressions cannot be resolved client-side at all.
  *
  * Parsing is memoised in a bounded, FIFO-evicting cache ({@link PARSE_CACHE_LIMIT}
  * entries) because attribution evaluates the same few rule conditions once per
@@ -49,6 +52,7 @@
 
 import jsep from 'jsep';
 import { createLogger } from './utils/logger';
+import { compileSafeRegex, matchCompiled, type SafeRegexDeclineReason } from './rules/safeRegex';
 import type { OktaUser } from './types';
 
 const log = createLogger('RuleEvaluator');
@@ -150,8 +154,16 @@ export type RuleExprValue = ExprValue;
  *   or a unary minus whose argument is not a numeric literal (`-user.x`, `-(expr)`, `-"a"`).
  * - `group-membership-fn` — a {@link GROUP_MEMBERSHIP_FUNCTIONS} call made without
  *   a {@link RuleGroupContext}; answering it needs the user's full group list.
- * - `group-name-regex` — `isMemberOfGroupNameRegex`, which this module declines to
- *   run **even with** a group list. See {@link GROUP_MEMBERSHIP_FUNCTIONS}.
+ * - `group-name-regex` — retired from the emit path by ADR-0002, which replaced the
+ *   blanket refusal of `isMemberOfGroupNameRegex` with the linear-time engine in
+ *   `shared/rules/safeRegex`. Nothing produces this code any more; it stays in the
+ *   union (and in the copy table) until the flat-explanation cleanup lands, so a
+ *   stored or in-flight value still renders.
+ * - `regex-unsupported-syntax` — `isMemberOfGroupNameRegex` was given a pattern the
+ *   safe engine does not implement (lookaround, a backreference, `{n,m}`) or cannot
+ *   parse at all. Declined, never approximated.
+ * - `regex-too-complex` — the pattern or a group name is past one of the engine's
+ *   hard caps (length, state count, step budget), so the check did not run.
  * - `unknown-fn` — a call outside {@link SUPPORTED_FUNCTIONS}.
  * - `fn-arity` — an allow-listed function called with the wrong argument count,
  *   or (for a variadic function like `String.stringSwitch`) trailing arguments
@@ -179,6 +191,8 @@ export type RuleUnevaluableReason =
   | 'unsupported-operator'
   | 'group-membership-fn'
   | 'group-name-regex'
+  | 'regex-unsupported-syntax'
+  | 'regex-too-complex'
   | 'unknown-fn'
   | 'fn-arity'
   | 'unsupported-node'
@@ -539,10 +553,12 @@ function evaluateStringSwitch(args: readonly ExprValue[]): EvalResult {
  *   ambiguous.
  * - **`String.replaceFirst`** — Java, which Okta's expression language is built
  *   on, takes a **regular expression** as `replaceFirst`'s target. Implementing
- *   it as a literal replace would be wrong for any rule that relies on that;
- *   implementing it faithfully would compile a tenant-authored pattern, which is
- *   the same catastrophic-backtracking lever `isMemberOfGroupNameRegex` is
- *   refused over. Both roads are closed, so the function is not listed.
+ *   it as a literal replace would be wrong for any rule that relies on that.
+ *   Implementing it faithfully needs more than `isMemberOfGroupNameRegex` does:
+ *   that function only asks a yes/no question, which `shared/rules/safeRegex`
+ *   answers without backtracking (ADR-0002), whereas `replaceFirst` needs the
+ *   matched *span* — capture and submatch tracking the safe engine deliberately
+ *   does not implement. So the function stays unlisted until it does.
  *   `String.replace` is safe by contrast: its target is a literal.
  *
  * ## `Arrays.*` is available, contrary to this map's former comment
@@ -627,14 +643,17 @@ export const SUPPORTED_FUNCTIONS: ReadonlyMap<string, SupportedFunction> = new M
  * why `RuleGroupContext` insists on the user's *complete* membership set rather
  * than the Okta groups a screen happens to have cached.
  *
- * ## `isMemberOfGroupNameRegex` is deliberately never run
+ * ## `isMemberOfGroupNameRegex` is answered too, without a `RegExp`
  *
- * It is the one member of this set that stays unevaluable even with a group list,
- * under its own reason code (`group-name-regex`). The pattern is tenant-authored
- * text, and building a `RegExp` from it hands an untrusted author a
- * catastrophic-backtracking lever over the side panel's only thread — a rule
- * whose evaluation hangs the UI. There is no way to bound backtracking in a
- * JavaScript `RegExp`, so the honest, safe answer is to say we did not check.
+ * It was the one member of this set that stayed unevaluable even with a group
+ * list: the pattern is tenant-authored text, and building a `RegExp` from it
+ * hands an untrusted author a catastrophic-backtracking lever over the side
+ * panel's only thread. ADR-0002 kept that ban and removed the refusal — the
+ * pattern is run by `shared/rules/safeRegex`, a hand-written linear-time engine
+ * (parser → Thompson NFA → breadth-wise simulation) with hard caps and full-match
+ * (Java `matches()`) semantics. Patterns outside its supported subset, and inputs
+ * past its caps, are **declined**, surfacing as `regex-unsupported-syntax` or
+ * `regex-too-complex` — never as a guessed answer.
  */
 export const GROUP_MEMBERSHIP_FUNCTIONS: ReadonlySet<string> = new Set([
   'isMemberOfGroup',
@@ -646,8 +665,18 @@ export const GROUP_MEMBERSHIP_FUNCTIONS: ReadonlySet<string> = new Set([
   'isMemberOfGroupNameRegex',
 ]);
 
-/** The one membership function that stays unevaluable even with a group list. */
-const GROUP_NAME_REGEX_FUNCTION = 'isMemberOfGroupNameRegex';
+/**
+ * One argument's answer against the user's whole group list: a definite
+ * membership verdict, or the reason none could be produced.
+ *
+ * A decline is **not** a `false`. Only the id/name comparisons can always answer;
+ * `isMemberOfGroupNameRegex` runs a tenant pattern through a bounded engine that
+ * is entitled to say it has no opinion, and collapsing that into "not a member"
+ * is exactly the confident-wrong answer this module exists to avoid.
+ */
+type GroupArgumentVerdict =
+  | { readonly kind: 'answer'; readonly matched: boolean }
+  | { readonly kind: 'declined'; readonly reason: RuleUnevaluableReason };
 
 /**
  * How one membership function reads its arguments against the group list.
@@ -657,10 +686,77 @@ const GROUP_NAME_REGEX_FUNCTION = 'isMemberOfGroupNameRegex';
  * arity is checked as a minimum rather than an exact count.
  */
 interface GroupMembershipFunction {
-  /** Whether the user is in a group matching one argument. */
-  readonly matches: (group: RuleGroupContextEntry, argument: string) => boolean;
+  /**
+   * Whether the user is in a group matching one argument.
+   *
+   * Takes the **whole list** rather than one group so a function with
+   * per-argument setup cost pays it once per evaluation: the regex variant
+   * compiles its pattern here, not once per group name.
+   */
+  readonly matchesAny: (groups: RuleGroupContext, argument: string) => GroupArgumentVerdict;
   /** Whether Okta allows more than one group argument. */
   readonly variadic: boolean;
+}
+
+/** A verdict that is definitely known, either way. */
+function groupAnswer(matched: boolean): GroupArgumentVerdict {
+  return { kind: 'answer', matched };
+}
+
+/**
+ * The six functions that compare an argument against a field of each group.
+ *
+ * Every one of them can always answer, because the comparison is a plain string
+ * operation over a list documented to be complete.
+ */
+function byField(
+  matches: (group: RuleGroupContextEntry, argument: string) => boolean,
+): GroupMembershipFunction['matchesAny'] {
+  return (groups, argument) => groupAnswer(groups.some((group) => matches(group, argument)));
+}
+
+/**
+ * Map a `safeRegex` decline onto this module's vocabulary.
+ *
+ * The split is fixed by ADR-0002: the two codes that mean "this pattern is not
+ * something the engine implements" become `regex-unsupported-syntax`, and the
+ * five that mean "the engine stopped rather than spend unbounded work" become
+ * `regex-too-complex`. Both are reason **codes**, safe to log; the pattern and
+ * the group names are not, and never leave this function.
+ */
+function regexDeclineReason(reason: SafeRegexDeclineReason): RuleUnevaluableReason {
+  return reason === 'unsupported-syntax' || reason === 'parse-error'
+    ? 'regex-unsupported-syntax'
+    : 'regex-too-complex';
+}
+
+/**
+ * `isMemberOfGroupNameRegex`, run through the linear-time engine (ADR-0002).
+ *
+ * The pattern is compiled **once** and then matched against each group name in
+ * full (Java `matches()` semantics, as Okta evaluates it server-side).
+ *
+ * A per-name decline — one group name past the engine's input cap, say — is not
+ * allowed to silently drop that group from the list. A definite `true` from any
+ * other name still answers `true` (a found match is a found match), but a
+ * definite `false` is only claimable when **every** name actually evaluated;
+ * otherwise the whole call declines.
+ */
+function matchesAnyByRegex(groups: RuleGroupContext, pattern: string): GroupArgumentVerdict {
+  const program = compileSafeRegex(pattern);
+  if (program.kind === 'declined') {
+    return { kind: 'declined', reason: regexDeclineReason(program.reason) };
+  }
+  let declined: RuleUnevaluableReason | undefined;
+  for (const group of groups) {
+    const result = matchCompiled(program, group.name);
+    if (result.kind === 'declined') {
+      declined ??= regexDeclineReason(result.reason);
+      continue;
+    }
+    if (result.matched) return groupAnswer(true);
+  }
+  return declined === undefined ? groupAnswer(false) : { kind: 'declined', reason: declined };
 }
 
 /**
@@ -669,12 +765,19 @@ interface GroupMembershipFunction {
  * report a membership the tenant does not have.
  */
 const GROUP_MEMBERSHIP_IMPLEMENTATIONS: ReadonlyMap<string, GroupMembershipFunction> = new Map([
-  ['isMemberOfGroup', { matches: (g, a) => g.id === a, variadic: false }],
-  ['isMemberOfAnyGroup', { matches: (g, a) => g.id === a, variadic: true }],
-  ['isMemberOfGroupName', { matches: (g, a) => g.name === a, variadic: false }],
-  ['isMemberOfAnyGroupName', { matches: (g, a) => g.name === a, variadic: true }],
-  ['isMemberOfGroupNameStartsWith', { matches: (g, a) => g.name.startsWith(a), variadic: false }],
-  ['isMemberOfGroupNameContains', { matches: (g, a) => g.name.includes(a), variadic: false }],
+  ['isMemberOfGroup', { matchesAny: byField((g, a) => g.id === a), variadic: false }],
+  ['isMemberOfAnyGroup', { matchesAny: byField((g, a) => g.id === a), variadic: true }],
+  ['isMemberOfGroupName', { matchesAny: byField((g, a) => g.name === a), variadic: false }],
+  ['isMemberOfAnyGroupName', { matchesAny: byField((g, a) => g.name === a), variadic: true }],
+  [
+    'isMemberOfGroupNameStartsWith',
+    { matchesAny: byField((g, a) => g.name.startsWith(a)), variadic: false },
+  ],
+  [
+    'isMemberOfGroupNameContains',
+    { matchesAny: byField((g, a) => g.name.includes(a)), variadic: false },
+  ],
+  ['isMemberOfGroupNameRegex', { matchesAny: matchesAnyByRegex, variadic: false }],
 ]);
 
 // ---------------------------------------------------------------------------
@@ -1021,18 +1124,21 @@ function evaluateBinary(node: jsep.BinaryExpression, options: EvaluationWalkOpti
  * Answer one `isMemberOf*` call against the supplied group list.
  *
  * Returns {@link UNRESOLVED} only for reasons that are genuinely unknowable here
- * — no group list, the regex variant, a bad arity, or a non-string argument.
- * Otherwise the answer is definite in both directions: finding no matching group
- * is `false`, which is sound precisely because {@link RuleGroupContext} is
- * documented to be the user's complete membership set.
+ * — no group list, a bad arity, a non-string argument, or a tenant pattern the
+ * safe regex engine declined. Otherwise the answer is definite in both
+ * directions: finding no matching group is `false`, which is sound precisely
+ * because {@link RuleGroupContext} is documented to be the user's complete
+ * membership set.
+ *
+ * The arguments of a variadic `…Any…` call are an **eager OR**: one matching
+ * argument answers `true` even if another declined, and only an all-false pass
+ * in which nothing declined answers `false`.
  */
 function evaluateGroupMembershipCall(
   node: jsep.CallExpression,
   name: string,
   options: EvaluationWalkOptions,
 ): EvalResult {
-  if (name === GROUP_NAME_REGEX_FUNCTION) return giveUpLogged('group-name-regex', options);
-
   const { groups } = options;
   if (!groups) return giveUpLogged('group-membership-fn', options);
 
@@ -1052,7 +1158,16 @@ function evaluateGroupMembershipCall(
     targets.push(value);
   }
 
-  return targets.some((target) => groups.some((group) => fn.matches(group, target)));
+  let declined: RuleUnevaluableReason | undefined;
+  for (const target of targets) {
+    const verdict = fn.matchesAny(groups, target);
+    if (verdict.kind === 'declined') {
+      declined ??= verdict.reason;
+      continue;
+    }
+    if (verdict.matched) return true;
+  }
+  return declined === undefined ? false : giveUpLogged(declined, options);
 }
 
 function evaluateCall(node: jsep.CallExpression, options: EvaluationWalkOptions): EvalResult {
@@ -1273,9 +1388,10 @@ function isSupportedNode(node: jsep.Expression, options: GrammarWalkOptions = {}
     if (!fn) {
       if (!name || !GROUP_MEMBERSHIP_FUNCTIONS.has(name)) return reject('unknown-fn', options);
       // Support for these tracks what the evaluation walk can actually do, so the
-      // two never disagree: the regex variant is refused outright, and the rest
-      // are supported exactly when a group list will be there to answer them.
-      if (name === GROUP_NAME_REGEX_FUNCTION) return reject('group-name-regex', options);
+      // two never disagree: all seven, the regex variant included (ADR-0002), are
+      // supported exactly when a group list will be there to answer them. Whether
+      // a given tenant pattern is inside the safe engine's subset is not a
+      // grammar question — that decline surfaces from the evaluation walk.
       if (!options.hasGroupContext) return reject('group-membership-fn', options);
       const membershipFn = GROUP_MEMBERSHIP_IMPLEMENTATIONS.get(name);
       if (!membershipFn) return reject('group-membership-fn', options);

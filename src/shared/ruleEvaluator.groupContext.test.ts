@@ -11,10 +11,11 @@
  * - **Without** one, nothing changes. Every existing caller keeps the old
  *   behaviour, so upgrading the module cannot silently turn a shrug into a verdict.
  *
- * `isMemberOfGroupNameRegex` is the deliberate exception and is pinned separately:
- * it stays unevaluable even with a list, because building a `RegExp` from
- * tenant-authored text hands its author a backtracking lever over the panel's only
- * thread.
+ * `isMemberOfGroupNameRegex` was the deliberate exception — unevaluable even with a
+ * list, because building a `RegExp` from tenant-authored text hands its author a
+ * backtracking lever over the panel's only thread. ADR-0002 kept that ban and
+ * answered the function anyway, through the linear-time engine in
+ * `shared/rules/safeRegex`; it is pinned separately below, decline included.
  */
 import { describe, it, expect } from 'vitest';
 import { tryEvaluateRuleExpression, tryEvaluateRuleExpressionDetailed } from './ruleEvaluator';
@@ -99,22 +100,31 @@ describe('isMemberOf* without a group context', () => {
   });
 });
 
-describe('isMemberOfGroupNameRegex is never run', () => {
-  it('stays unevaluable even with a group list, under its own reason', () => {
-    // Not "we lack the groups" — we have them. The pattern is tenant-authored and
-    // a RegExp built from it could hang the panel, so we decline to check.
+describe('isMemberOfGroupNameRegex is answered like its siblings', () => {
+  it('resolves against the group list instead of refusing', () => {
+    // Was `unevaluable` / `group-name-regex` for the module's whole life. ADR-0002
+    // kept the ban on building a RegExp from tenant text and removed the refusal:
+    // the pattern runs in `shared/rules/safeRegex`, which cannot backtrack.
     expect(
       tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex(".*")', user, groups),
-    ).toEqual({ outcome: 'unevaluable', reasonCode: 'group-name-regex' });
+    ).toEqual({ outcome: 'match' });
   });
 
-  it('makes the whole condition unevaluable rather than guessing around it', () => {
+  it('resolves the whole condition it sits in', () => {
     expect(
       tryEvaluateRuleExpression(
         'user.department == "Engineering" && isMemberOfGroupNameRegex("Eng.*")',
         user,
         groups,
       ),
-    ).toBe('unevaluable');
+    ).toBe('match');
+  });
+
+  it('still declines a pattern the safe engine will not run', () => {
+    // A decline is not a "no match": the check did not happen, and the reason
+    // code says which guard stopped it.
+    expect(
+      tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("(?<=x)Eng")', user, groups),
+    ).toEqual({ outcome: 'unevaluable', reasonCode: 'regex-unsupported-syntax' });
   });
 });

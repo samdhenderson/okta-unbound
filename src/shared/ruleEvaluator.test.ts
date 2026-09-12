@@ -9,6 +9,7 @@ import {
   RULE_CONNECTIVE_OPERATORS,
   type RuleNodeEvaluation,
 } from './ruleEvaluator';
+import { MAX_INPUT_LENGTH, MAX_PATTERN_LENGTH } from './rules/safeRegex';
 import type { OktaUser } from './types';
 
 /**
@@ -1011,5 +1012,120 @@ describe('conditional expressions', () => {
     expect(gateAccepts('user.userType == "EMPLOYEE" ? "a" : department')).toBe(false);
     // The test is an array literal.
     expect(gateAccepts('["a"] ? "a" : "b"')).toBe(false);
+  });
+});
+
+// ===========================================================================
+// isMemberOfGroupNameRegex — answered by the linear-time engine, not refused.
+//
+// This function was a standing refusal (`group-name-regex`) for the module's
+// whole life, because a `RegExp` built from a tenant pattern is a backtracking
+// lever pointed at the panel's only thread. ADR-0002 kept that ban and removed
+// the refusal: `shared/rules/safeRegex` runs the pattern in linear time, and
+// says so explicitly when it will not run one.
+// ===========================================================================
+
+describe('isMemberOfGroupNameRegex', () => {
+  const user: OktaUser = {
+    id: '00uFAKEuser00001',
+    status: 'ACTIVE',
+    profile: {
+      login: 'ada@example.com',
+      email: 'ada@example.com',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      department: 'Engineering',
+    },
+  };
+
+  /** The user's complete membership set, as the group-context option requires. */
+  const groups = [
+    { id: '00gFAKEgroup0001', name: 'SecOps-Alpha' },
+    { id: '00gFAKEgroup0002', name: 'Engineering' },
+    { id: '00gFAKEgroup0003', name: 'VPN — Standard' },
+  ];
+
+  it('answers match when a group name satisfies the pattern', () => {
+    expect(
+      tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("^SecOps-.*")', user, groups),
+    ).toEqual({ outcome: 'match' });
+  });
+
+  it('answers no-match when none does', () => {
+    expect(
+      tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("^Finance-.*")', user, groups),
+    ).toEqual({ outcome: 'no-match' });
+  });
+
+  it('requires the whole name to match, as Okta does server-side', () => {
+    // Java's `matches()`, not `find()`: "X-SecOps-Alpha" is not a member of
+    // `SecOps-.*` even though it contains a substring that is.
+    const shifted = [{ id: '00gFAKEgroup0009', name: 'X-SecOps-Alpha' }];
+    expect(tryEvaluateRuleExpression('isMemberOfGroupNameRegex("SecOps-.*")', user, shifted)).toBe(
+      'no-match',
+    );
+    expect(
+      tryEvaluateRuleExpression('isMemberOfGroupNameRegex(".*SecOps-.*")', user, shifted),
+    ).toBe('match');
+  });
+
+  it('negates cleanly', () => {
+    expect(tryEvaluateRuleExpression('!isMemberOfGroupNameRegex("^SecOps-.*")', user, groups)).toBe(
+      'no-match',
+    );
+    expect(
+      tryEvaluateRuleExpression('!isMemberOfGroupNameRegex("^Finance-.*")', user, groups),
+    ).toBe('match');
+  });
+
+  it('declines syntax the safe engine does not implement', () => {
+    expect(
+      tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("(?=x)SecOps")', user, groups),
+    ).toEqual({ outcome: 'unevaluable', reasonCode: 'regex-unsupported-syntax' });
+  });
+
+  it('declines a malformed pattern rather than guessing at it', () => {
+    expect(
+      tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("[")', user, groups),
+    ).toEqual({ outcome: 'unevaluable', reasonCode: 'regex-unsupported-syntax' });
+  });
+
+  it('declines a pattern past the engine’s size cap', () => {
+    const overlong = `"${'a'.repeat(MAX_PATTERN_LENGTH + 1)}"`;
+    expect(
+      tryEvaluateRuleExpressionDetailed(`isMemberOfGroupNameRegex(${overlong})`, user, groups),
+    ).toEqual({ outcome: 'unevaluable', reasonCode: 'regex-too-complex' });
+  });
+
+  it('stays group-membership-fn without a group list, like its siblings', () => {
+    expect(
+      tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("^SecOps-.*")', user),
+    ).toEqual({ outcome: 'unevaluable', reasonCode: 'group-membership-fn' });
+  });
+
+  describe('a group name the engine cannot read', () => {
+    /** Past `MAX_INPUT_LENGTH`, so matching it declines rather than answering. */
+    const overCap = { id: '00gFAKEgroup0004', name: 'Z'.repeat(MAX_INPUT_LENGTH + 1) };
+
+    it('still answers match when another name matched', () => {
+      // Eager Kleene: a found match is a found match, whatever the rest of the
+      // list did.
+      expect(
+        tryEvaluateRuleExpression('isMemberOfGroupNameRegex("^SecOps-.*")', user, [
+          ...groups,
+          overCap,
+        ]),
+      ).toBe('match');
+    });
+
+    it('never answers no-match when a name went unchecked', () => {
+      // A definite "none of them" is only claimable when every name evaluated.
+      expect(
+        tryEvaluateRuleExpressionDetailed('isMemberOfGroupNameRegex("^Finance-.*")', user, [
+          ...groups,
+          overCap,
+        ]),
+      ).toEqual({ outcome: 'unevaluable', reasonCode: 'regex-too-complex' });
+    });
   });
 });

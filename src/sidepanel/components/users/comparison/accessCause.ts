@@ -331,8 +331,8 @@ function assessRule(
     // handed the context user's complete list (see `classifyAccessCauses`), so
     // claiming it on the strength of `needsGroupContext > 0` described a
     // condition that had not happened; what actually survives a supplied list is
-    // `isMemberOfGroupNameRegex`, which is refused for its own reasons. So the
-    // diagnosis is only offered when the list genuinely is absent.
+    // an `isMemberOfGroupNameRegex` pattern the safe engine declines (ADR-0002).
+    // So the diagnosis is only offered when the list genuinely is absent.
     reason:
       groupContext === undefined && summary.needsGroupContext > 0
         ? 'needs-group-context'

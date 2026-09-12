@@ -112,8 +112,8 @@ export const Undetermined: Story = {
       ruleId: '0prFAKErule00003',
       ruleName: 'Reviewers — by group',
       transition: 'undetermined',
-      afterReason: 'group-name-regex',
-      expression: 'isMemberOfGroupNameRegex("^sec-.*$")',
+      afterReason: 'regex-unsupported-syntax',
+      expression: 'isMemberOfGroupNameRegex("(?=sec)sec-.*")',
       targetGroupIds: ['00gFAKE00000000000003'],
       targetGroupNames: ['Security-Reviewers'],
       touchedAttributes: [],
@@ -123,9 +123,7 @@ export const Undetermined: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Could not be evaluated')).toBeInTheDocument();
     // The shared sentence, not a local rewrite of it.
-    await expect(
-      canvas.getByText(/regular expression, which this panel does not run/i),
-    ).toBeInTheDocument();
+    await expect(canvas.getByText(/syntax this panel does not implement/i)).toBeInTheDocument();
     // And it never claims a direction it did not establish.
     await expect(canvas.queryByText(/Stops matching|Starts matching/)).toBeNull();
   },

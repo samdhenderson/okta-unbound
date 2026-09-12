@@ -113,8 +113,10 @@ describe('GroupMembershipsList', () => {
    * unevaluable branch through `isMemberOfGroup("00gFAKE2")`, which the pane can
    * now answer from the user's own membership list — so it would be asserting the
    * bug rather than the invariant. The invariant is unchanged and still pinned,
-   * against a condition that stays genuinely unevaluable: the evaluator declines
-   * to run tenant-authored regular expressions whatever group list it is handed.
+   * against a condition that stays genuinely unevaluable. ADR-0002 since taught
+   * the evaluator to run tenant regexes through a linear-time engine, so the
+   * stand-in is now a pattern **outside** that engine's subset — a lookahead,
+   * which is declined rather than approximated whatever group list is handed in.
    */
   it('explains an unevaluable condition neutrally rather than as a failure', async () => {
     render(
@@ -127,7 +129,7 @@ describe('GroupMembershipsList', () => {
             rules: [
               {
                 ...formattedRuleMembership.rules[0],
-                conditionExpression: 'isMemberOfGroupNameRegex("^Eng.*")',
+                conditionExpression: 'isMemberOfGroupNameRegex("(?=Eng)Eng.*")',
               },
             ],
           },
@@ -226,7 +228,9 @@ describe('GroupMembershipsList', () => {
                 // Retargeted for D-001 for the same reason as the case above:
                 // an `isMemberOfGroup` call is now answerable from the pane's own
                 // membership list, so it no longer exercises "not evaluated".
-                conditionExpression: 'isMemberOfGroupNameRegex("^On-call.*")',
+                // The pattern carries a lookahead, which the safe regex engine
+                // declines (ADR-0002) — the remaining shape of "not evaluated".
+                conditionExpression: 'isMemberOfGroupNameRegex("(?=On-call).*")',
               },
             ],
           },
@@ -370,9 +374,10 @@ describe('GroupMembershipsList — isMemberOf* resolves against the loaded membe
   });
 
   /**
-   * The fallback stays exactly as it was. A group list answers `isMemberOf*`; it
-   * does not answer a clause the evaluator refuses to run, so this one still
-   * declines — with the reason spelled out, and never as a failure.
+   * The fallback stays exactly as it was. A group list answers `isMemberOf*`,
+   * including the regex variant (ADR-0002) — but not a pattern outside the safe
+   * engine's subset, so this one still declines, with the reason spelled out and
+   * never as a failure.
    */
   it('still declines a clause no group list could answer', async () => {
     renderPane([
@@ -381,7 +386,7 @@ describe('GroupMembershipsList — isMemberOf* resolves against the loaded membe
         rules: [
           {
             ...formattedRuleMembership.rules[0],
-            conditionExpression: 'isMemberOfGroupNameRegex("^Ops.*")',
+            conditionExpression: 'isMemberOfGroupNameRegex("(?=Ops).*")',
           },
         ],
       },

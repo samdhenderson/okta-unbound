@@ -136,8 +136,8 @@ describe('ClauseChecklist', () => {
     expect(screen.getByText('Rule does not match')).toBeInTheDocument();
   });
 
-  /** A group list cannot answer a pattern the evaluator declines to run. */
-  it('still declines isMemberOfGroupNameRegex even with a group context', () => {
+  /** ADR-0002: the pattern runs in a linear-time engine, so the clause resolves. */
+  it('passes an isMemberOfGroupNameRegex clause a group name satisfies', () => {
     render(
       <ClauseChecklist
         expression='isMemberOfGroupNameRegex("^Eng.*")'
@@ -146,11 +146,24 @@ describe('ClauseChecklist', () => {
       />,
     );
 
-    const row = rowFor('isMemberOfGroupNameRegex("^Eng.*")');
-    expect(within(row).getByText('Not evaluated')).toBeInTheDocument();
     expect(
-      within(row).getByText(/regular expression, which this panel does not run/),
-    ).toBeVisible();
+      within(rowFor('isMemberOfGroupNameRegex("^Eng.*")')).getByText('Pass'),
+    ).toBeInTheDocument();
+  });
+
+  /** A pattern outside the engine's subset is declined — never approximated. */
+  it('leaves an isMemberOfGroupNameRegex clause unevaluated when the pattern is outside the subset', () => {
+    render(
+      <ClauseChecklist
+        expression='isMemberOfGroupNameRegex("(?=Eng)Eng.*")'
+        user={user}
+        groupContext={[{ id: '00gFAKE1', name: 'Engineering' }]}
+      />,
+    );
+
+    const row = rowFor('isMemberOfGroupNameRegex("(?=Eng)Eng.*")');
+    expect(within(row).getByText('Not evaluated')).toBeInTheDocument();
+    expect(within(row).getByText(/syntax this panel does not implement/)).toBeVisible();
   });
 
   it('keeps evaluating sibling clauses around an unevaluable one', () => {
