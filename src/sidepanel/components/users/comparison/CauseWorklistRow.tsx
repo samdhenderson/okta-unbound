@@ -16,26 +16,36 @@
  *
  * A failing clause used to print `isMemberOfAnyGroup("00gFAKE1")` verbatim while
  * the group list directly above it named that very id. The evidence now goes
- * through {@link module:sidepanel/components/shared/RuleExpressionText},
- * so both read the same way, off the same resolver. An id neither the host nor
- * the clause's own references can name keeps its raw form.
+ * through {@link module:sidepanel/components/shared/RuleExpressionText} (inside
+ * {@link module:sidepanel/components/shared/ClauseLedgerClause}), so both read
+ * the same way, off the same resolver. An id neither the host nor the clause's
+ * own references can name keeps its raw form.
+ *
+ * ## Each failing clause is a ledger clause
+ *
+ * Every failing leaf renders through {@link ClauseLedgerClause} — the same
+ * clause presentation `ClauseChecklist`'s own tree view uses — rather than a
+ * bespoke line of `RuleExpressionText` plus a hand-rolled "Resolved value:"
+ * caption. That is what surfaces a failing clause's attribute reads (`reads`):
+ * the `user.department → "Sales"` line that answers "why does this user lack
+ * this", which the flat presentation this replaced had no room for.
  *
  * ## Security
  *
- * `groupName`, `ruleName`, `expressionText` and `resolvedValue` are untrusted,
- * end-user-controllable tenant data and PII. Rendered through React's escaping —
- * never `dangerouslySetInnerHTML` — and **never logged**; this module logs nothing.
+ * `groupName`, `ruleName`, `expressionText`, `resolvedValue` and every attribute
+ * read's `value` are untrusted, end-user-controllable tenant data and PII.
+ * Rendered through React's escaping — never `dangerouslySetInnerHTML` — and
+ * **never logged**; this module logs nothing.
  */
 import React from 'react';
-import { Button, RuleExpressionText, type GroupNameResolver } from '../../shared';
+import { Button, ClauseLedgerClause, type GroupNameResolver } from '../../shared';
 import ClauseGroupList from './ClauseGroupList';
 import type { AccessCause, UndeterminedReason } from './accessCause';
 import type {
-  ClauseExplanation,
   ClauseGroupReference,
   ClauseGroupRequirement,
+  LeafClauseNode,
 } from '../../../../shared/rules/explainExpression';
-import type { RuleExprValue } from '../../../../shared/ruleEvaluator';
 
 /**
  * Reason code → plain language, phrased so no sentence reads as "the user does not
@@ -182,19 +192,6 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({
 );
 
 /**
- * Render a resolved value as plain text, keeping quotes on strings so a trailing
- * space or an empty string stays visible. Mirrors `ClauseChecklist`'s formatting;
- * `null` prints as `null`, which is a different fact from "no value".
- */
-const formatResolvedValue = (value: RuleExprValue): string => {
-  // Mirrors `ClauseChecklist`'s formatter, arrays included: a multi-valued
-  // attribute is a list, and printing it through `String(value)` would make it
-  // indistinguishable from a single comma-containing string.
-  if (Array.isArray(value)) return `[${value.map(formatResolvedValue).join(', ')}]`;
-  return typeof value === 'string' ? JSON.stringify(value) : String(value);
-};
-
-/**
  * A name for every group id this row can name, widest source first.
  *
  * The host's resolver knows the whole comparison's group inventory; the clause's
@@ -206,16 +203,22 @@ const formatResolvedValue = (value: RuleExprValue): string => {
  * @param resolveGroupName - The host's resolver, if it has one.
  */
 const clauseGroupNames =
-  (clause: ClauseExplanation, resolveGroupName?: GroupNameResolver): GroupNameResolver =>
+  (clause: LeafClauseNode, resolveGroupName?: GroupNameResolver): GroupNameResolver =>
   (groupId) =>
     resolveGroupName?.(groupId) ??
     clause.groupReferences?.find(
       (reference) => reference.match === 'id' && reference.value === groupId,
     )?.matchedGroupName;
 
-/** The failing-clause evidence, capped — the checklist jump carries the rest. */
+/**
+ * The failing-clause evidence, capped — the checklist jump carries the rest.
+ *
+ * Each leaf renders through {@link ClauseLedgerClause}, which is what surfaces a
+ * clause's attribute reads (the `user.department → "Sales"` line) rather than
+ * this row inventing its own "Resolved value:" caption.
+ */
 const FailingClauses: React.FC<{
-  clauses: readonly ClauseExplanation[];
+  clauses: readonly LeafClauseNode[];
   resolveGroupName?: GroupNameResolver;
 }> = ({ clauses, resolveGroupName }) => {
   if (clauses.length === 0) return null;
@@ -228,27 +231,11 @@ const FailingClauses: React.FC<{
       </p>
       <ul className="mt-1 space-y-1">
         {clauses.slice(0, CLAUSE_PREVIEW_LIMIT).map((clause, index) => (
-          <li
-            key={`${index}-${clause.expressionText}`}
-            className="rounded-md bg-neutral-50 px-2 py-1"
-          >
-            <RuleExpressionText
-              text={clause.expressionText}
+          <li key={`${index}-${clause.expressionText}`}>
+            <ClauseLedgerClause
+              leaf={clause}
               resolveGroupName={clauseGroupNames(clause, resolveGroupName)}
             />
-            {/* A group-membership call takes only string literals, and
-                `resolveClauseValue` skips literals by design — so "no value could
-                be read" is structurally guaranteed on these clauses and reads as
-                an error that has not occurred. The group list above already says
-                everything this line could. */}
-            {clause.groupReferences === undefined && (
-              <span className="mt-0.5 block text-xs text-neutral-600">
-                Resolved value:{' '}
-                {clause.resolvedValue === undefined
-                  ? 'no value could be read for this clause'
-                  : formatResolvedValue(clause.resolvedValue)}
-              </span>
-            )}
           </li>
         ))}
       </ul>

@@ -102,7 +102,7 @@ describe('a negated clause shows only what actually blocks', () => {
 });
 
 describe('group ids are labelled, not dumped', () => {
-  it('shows the resolved name with the id beneath it', () => {
+  it('shows the resolved name, with the id still reachable through its copy control', () => {
     render(
       <ClauseGroupList
         requirement="member"
@@ -112,7 +112,12 @@ describe('group ids are labelled, not dumped', () => {
     );
 
     expect(screen.getByText('us.employees.union')).toBeInTheDocument();
-    expect(screen.getByText('00gFAKENAMED01')).toBeInTheDocument();
+    // The chip recipe (`GroupReferenceChip`) trades the id printed a second time
+    // beneath the name for a copy control naming it in its accessible name — the
+    // id is still one click away, never a second line of text.
+    expect(
+      screen.getByRole('button', { name: 'Copy group id 00gFAKENAMED01' }),
+    ).toBeInTheDocument();
   });
 
   it('shows an unresolvable id exactly once, as itself', () => {
@@ -131,7 +136,9 @@ describe('group ids are labelled, not dumped', () => {
       />,
     );
 
-    expect(screen.getByText(/any group whose name starts with/i)).toBeInTheDocument();
+    // `GroupReferenceChip`'s own pattern phrasing — the same one the full clause
+    // checklist reads, off the same chip.
+    expect(screen.getByText(/startsWith "sso\."/)).toBeInTheDocument();
   });
 
   it('reads a regex reference as a description too', () => {
@@ -143,7 +150,7 @@ describe('group ids are labelled, not dumped', () => {
       />,
     );
 
-    expect(screen.getByText(/any group whose name matches/i)).toBeInTheDocument();
+    expect(screen.getByText(/matches "\^sso-\.\*"/)).toBeInTheDocument();
   });
 });
 

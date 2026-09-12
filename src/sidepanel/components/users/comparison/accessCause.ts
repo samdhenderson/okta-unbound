@@ -22,9 +22,10 @@
 
 import {
   explainRuleExpression,
-  type ClauseExplanation,
   type ClauseGroupReference,
   type ClauseGroupRequirement,
+  type ClauseTreeNode,
+  type LeafClauseNode,
 } from '../../../../shared/rules/explainExpression';
 import type { RuleGroupContext } from '../../../../shared/ruleEvaluator';
 import { groupContextOf } from '../../../../shared/membership/groupContext';
@@ -120,15 +121,24 @@ export interface AccessCause {
   /** Rule display name. **Untrusted** — render escaped, never log. */
   readonly ruleName?: string;
   /**
-   * The clauses that actually failed, for `blocked-by-attribute` and
+   * The individual clauses that actually failed, for `blocked-by-attribute` and
    * `needs-group-membership`. Empty for every other remedy. **Never** populated
    * from `not-evaluated` rows — that is the distinction this module exists to
    * preserve.
    *
-   * **PII:** `resolvedValue` is profile data. Render escaped, never log, and
-   * escape for CSV.
+   * These are **leaves** of {@link module:shared/rules/explainExpression.RuleExplanation.tree}
+   * — atomic clauses, never a connective group — collected by walking only the
+   * subtrees whose own verdict is `fail`, so a clause that failed inside a
+   * sibling OR the rule's overall verdict never needed (because that OR still
+   * passed) is never listed here. Carrying leaves rather than the flat
+   * projection's rows is what lets each one render with its own
+   * `reads` — the attribute evidence ("why does this user lack this") that the
+   * flat `ClauseExplanation` shape did not carry.
+   *
+   * **PII:** `resolvedValue` and `reads[].value` are profile data. Render
+   * escaped, never log, and escape for CSV.
    */
-  readonly failingClauses: readonly ClauseExplanation[];
+  readonly failingClauses: readonly LeafClauseNode[];
   /**
    * The groups a failing `isMemberOf*` clause asks about — "they would need to be
    * in one of these to qualify".
@@ -238,7 +248,7 @@ type RuleAssessment =
   | {
       readonly kind: 'blocked';
       readonly rule: MembershipRule;
-      readonly failingClauses: readonly ClauseExplanation[];
+      readonly failingClauses: readonly LeafClauseNode[];
       /**
        * Whether **every** failing clause was a group-membership call. Decides a
        * group remedy over `blocked-by-attribute`: a rule that also fails a profile
@@ -292,12 +302,12 @@ function assessRule(
   // With the group list in hand, `isMemberOf*` clauses resolve instead of
   // reporting `needs-group-context` — which is what turns a whole class of rows
   // from "needs investigation" into a nameable prerequisite.
-  const { clauses, summary } = explainRuleExpression(expression, contextUser, {
+  const { tree, summary } = explainRuleExpression(expression, contextUser, {
     groups: groupContext,
   });
   if (summary.result.outcome === 'match') return { kind: 'grants', rule };
 
-  const failingClauses = clauses.filter((clause) => clause.status === 'fail');
+  const failingClauses = collectFailingLeaves(tree);
   // `truncated` needs no special case: the verdict is computed over the whole
   // expression, and every clause carried here still genuinely failed.
   if (summary.result.outcome === 'no-match' && failingClauses.length > 0) {
@@ -341,12 +351,33 @@ function assessRule(
 }
 
 /**
+ * The failing leaves of one rule's explanation tree — the atomic clauses that
+ * actually resolved to `false` and are the reason the whole condition did.
+ *
+ * Descends only into a subtree whose own verdict already reads `fail`: a leaf
+ * that individually failed inside a sibling `OR` group the rule's outcome never
+ * needed (because that `OR` still passed on another alternative) is never
+ * visited, let alone collected. This is what keeps the result equivalent to the
+ * old flat projection's `clauses.filter(status === 'fail')` at the top level,
+ * while going one level deeper: where the flat list kept a failing `OR` group
+ * whole (with its parts tucked into `alternatives`, never rendered by this
+ * seam's UI), this walk reports each of that group's individually-failing
+ * leaves — every one of which genuinely failed, since an `OR` fails only when
+ * every child does.
+ */
+function collectFailingLeaves(node: ClauseTreeNode): readonly LeafClauseNode[] {
+  if (node.node === 'leaf') return node.status === 'fail' ? [node] : [];
+  if (node.verdict !== 'fail') return [];
+  return node.children.flatMap(collectFailingLeaves);
+}
+
+/**
  * Group references from the failing clauses of one polarity, kept if `keep` says
  * so. A clause with no `groupRequirement` carries no group references either, so
  * it contributes nothing to any polarity.
  */
 function groupsFromClauses(
-  clauses: readonly ClauseExplanation[],
+  clauses: readonly LeafClauseNode[],
   requirement: ClauseGroupRequirement,
   keep: (reference: ClauseGroupReference) => boolean,
 ): readonly ClauseGroupReference[] {
