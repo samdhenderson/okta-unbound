@@ -1,0 +1,1 @@
+const r=["#4356cf","var(--color-primary)","#7385ec","#95a2f1","#b7c0f6","#d6dbfb"],a="var(--color-neutral-300)",o="#e5e5e5",e="repeating-linear-gradient(45deg, var(--color-neutral-300) 0 3px, var(--color-neutral-100) 3px 6px)",n={none:"var(--color-warning)",single:"var(--color-neutral-300)",multiple:"var(--color-primary)"};export{o as C,r as I,n as M,a,e as b};

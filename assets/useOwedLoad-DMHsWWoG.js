@@ -1,0 +1,1 @@
+import{r as e}from"./iframe-tAvKsVeF.js";function n(r,u,f){const o=e.useRef(f);e.useEffect(()=>{o.current=f});const c=e.useRef(void 0);e.useEffect(()=>{!u||r===null||r===void 0||c.current!==r&&(c.current=r,o.current())},[r,u])}export{n as u};

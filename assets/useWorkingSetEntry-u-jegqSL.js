@@ -1,0 +1,1 @@
+import{r as s}from"./iframe-tAvKsVeF.js";import{w as c}from"./workingSetStore-DPT9Q6n6.js";function S({origin:t,kind:u,id:r,name:o,pane:e,enabled:f=!0}){s.useEffect(()=>{!f||!t||!r||o&&c.touch(t,{kind:u,id:r,name:o,lastPane:e})},[t,u,r,o,e,f])}export{S as u};

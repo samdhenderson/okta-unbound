@@ -1,0 +1,1 @@
+const E={ACTIVE:"success",PROVISIONED:"info",STAGED:"neutral",SUSPENDED:"warning",RECOVERY:"info",PASSWORD_EXPIRED:"warning",LOCKED_OUT:"danger",DEPROVISIONED:"danger"};function S(n){return E[n]??"neutral"}export{S as u};

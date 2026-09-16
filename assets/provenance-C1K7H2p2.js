@@ -1,0 +1,1 @@
+function t(e){if(e.state!=="unknown")return{source:"okta",rules:e.state==="rules"?e.rules.map(({id:r,name:n})=>({id:r,name:n})):[]}}function o(e,r){const n=t(r);return n?{...e,provenance:n}:e}export{o as w};

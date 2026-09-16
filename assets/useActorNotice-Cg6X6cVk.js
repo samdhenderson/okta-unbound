@@ -1,0 +1,1 @@
+import{r as t}from"./iframe-tAvKsVeF.js";const s="Couldn't confirm your signed-in identity. This action will be recorded without an actor.",i={text:s,type:"warning"};function l(){const[e,o]=t.useState(null),c=t.useCallback(r=>{o(r.kind==="resolved"?null:i)},[]),n=t.useCallback(()=>o(null),[]);return{actorNotice:e,noteActor:c,dismissActorNotice:n}}export{i as A,l as u};

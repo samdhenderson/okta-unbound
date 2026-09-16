@@ -1,0 +1,1 @@
+const e=["groups","apps","rules","appGroups"],r="::";function S(s){const n=s.indexOf("::");if(n<=0)return null;const t=s.slice(n+2);return t===""?null:{shardKey:s.slice(0,n),entityId:t}}export{e as S,r as a,S as s};

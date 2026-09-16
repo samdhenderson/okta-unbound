@@ -1,0 +1,9 @@
+import{P as o}from"./ProfileDisplayDragGhost-DwlRzOro.js";import"./iframe-tAvKsVeF.js";import"./preload-helper-PPVm8Dsz.js";const i={title:"Users/ProfileDisplayDragGhost",component:o,tags:["autodocs"],parameters:{docs:{description:{component:'A translucent follower carrying the dragged attribute or section name. It stays partly transparent so the drop indicator underneath — the thing that answers "where will this land" — is never hidden, and it is `aria-hidden` because the editor\'s live region already says the same thing in words.'}}},argTypes:{label:{description:"What is being dragged — an attribute label or a category name."},x:{description:"Client X of the pointer."},y:{description:"Client Y of the pointer."},reducedMotion:{description:"Drop the follow transition when reduced motion is asked for."}},args:{label:"Department",x:80,y:80}},e={},r={args:{label:"Contact & locale"}},t={args:{reducedMotion:!0}};e.parameters={...e.parameters,docs:{...e.parameters?.docs,source:{originalSource:"{}",...e.parameters?.docs?.source},description:{story:"Following the pointer.",...e.parameters?.docs?.description}}};r.parameters={...r.parameters,docs:{...r.parameters?.docs,source:{originalSource:`{
+  args: {
+    label: 'Contact & locale'
+  }
+}`,...r.parameters?.docs?.source},description:{story:"A section name rather than an attribute label.",...r.parameters?.docs?.description}}};t.parameters={...t.parameters,docs:{...t.parameters?.docs,source:{originalSource:`{
+  args: {
+    reducedMotion: true
+  }
+}`,...t.parameters?.docs?.source},description:{story:"No follow transition, for an admin who has asked for reduced motion.",...t.parameters?.docs?.description}}};const c=["Default","SectionGhost","ReducedMotion"];export{e as Default,t as ReducedMotion,r as SectionGhost,c as __namedExportsOrder,i as default};

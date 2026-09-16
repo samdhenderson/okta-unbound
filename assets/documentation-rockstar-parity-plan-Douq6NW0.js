@@ -1,0 +1,161 @@
+import{j as e}from"./iframe-tAvKsVeF.js";import{u as s,M as o,c as a}from"./blocks-CxSch1eI.js";import"./preload-helper-PPVm8Dsz.js";const i=`# Rockstar-parity plan (living)
+
+Goal: **stop needing [rockstar](https://gabrielsroka.github.io/rockstar/).** Replace the
+_capability_, not the implementation. Rockstar decorates Okta's own DOM by injection;
+Okta Unbound is a hardened side panel (all traffic through \`ApiScheduler\`, zod at the
+boundary, no persisted tokens, audit + undo, shared components). So every rockstar
+feature is triaged into one of three outcomes:
+
+- **Port** — rebuild the capability, side-panel-native.
+- **Re-scope** — deliver the same admin value a safer way (our security rules force it).
+- **Drop** — a cosmetic tweak to Okta's pages that a side panel makes moot.
+
+This doc owns the roadmap. The pre-existing backlog items **C (Bulk Attribute Editor)**
+and **D (Bulk Lifecycle)** in [features-plan.md](./features-plan.md) are absorbed here as
+Phase 5. Ground rules from that doc (scheduler-only traffic, Odyssey tokens, shared
+components, zod, audit-every-mutation, TypeDoc) apply to everything below.
+
+Status legend: \`[ ]\` todo · \`[~]\` partial · \`[x]\` done.
+
+## Progress
+
+**Phases 0–1 shipped.** The descriptor-driven Export Engine is live behind the
+**Export** tab. Adding an export is adding one self-contained descriptor file under
+\`src/sidepanel/export/descriptors/\` — they auto-register via \`import.meta.glob\`, with
+no registry edit. The shipped shape is an inline column picker, named idb presets plus
+last-used, raw filter passthrough with a live match count, a row-capped preview, a
+unified hub, and search-to-select context.
+
+Ten entities export today: **Users, Groups (+stats), Group Rules, Group Memberships,
+Applications, App Users, App Groups, Network Zones, Devices, Identity Providers** —
+each column-pickable, cancellable, rate-limited, zod-validated, audited. **Group regex
+search** also shipped (cached-mode \`/pattern/\` in the Groups tab).
+
+Deliberately deferred (needs your input, not blocked):
+
+- **Administrators export** — unlike every other entity there is no clean single
+  paginated list endpoint (it's per-user role assignments or the newer IAM
+  \`assignees\` API, whose response envelope needs confirming against a live tenant).
+  Left out rather than ship a likely-wrong descriptor. See the decisions this forces,
+  below.
+
+---
+
+## Triage — rockstar feature → disposition
+
+| Rockstar feature                                                                                                                             | Disposition        | Notes                                                                                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CSV export: Users / Groups(+stats) / Rules / Members / Memberships / Apps / App-Users / App-Groups / Network Zones / Devices / Admins / IdPs | **Port**           | The flagship gap. One generic export engine (below).                                                                                                                        |
+| Users/Apps column picker + query box                                                                                                         | Port               | Config on the export engine; persist choices in \`idb\`.                                                                                                                      |
+| Show SSO (decode SAMLResponse, pretty-print, highlight)                                                                                      | **Port**           | Signature feature → side-panel **SSO Inspector**.                                                                                                                           |
+| SAML IdP cert expiry (days left, <30d red)                                                                                                   | Port               | Falls out of the IdP reader.                                                                                                                                                |
+| Session expiry (minutes left)                                                                                                                | Port               | \`/api/v1/sessions/me\`; Home badge.                                                                                                                                          |
+| Show User (full profile dump)                                                                                                                | Port               | Users-tab detail (user already fetched).                                                                                                                                    |
+| Show AD (AD app assignments)                                                                                                                 | Port               | From app assignments we already read.                                                                                                                                       |
+| Show Linked Objects (manager/subordinate)                                                                                                    | Port               | \`/users/{id}/linkedObjects/*\`.                                                                                                                                              |
+| Administrator Roles view / grant / revoke                                                                                                    | **Port (write)**   | Audited + confirmed; new write surface.                                                                                                                                     |
+| Set Password                                                                                                                                 | **Port (write)**   | Audited + confirmed; gate hard.                                                                                                                                             |
+| Verify Factors (Push poll, TOTP, SMS, Voice, Email, SecQ)                                                                                    | **Port (write)**   | Interactive polling; hardest write, last.                                                                                                                                   |
+| Search Users / Search Groups (regex)                                                                                                         | Port               | \`searchUsers\` exists; add group regex search.                                                                                                                               |
+| Deleted-object browser (System Log mining)                                                                                                   | **Re-scope**       | Build the browser; **drop Backupta** (third-party data handoff breaks our privacy posture). Restore = native re-create where the log captured enough state; else read-only. |
+| API Explorer (REST client)                                                                                                                   | **Re-scope \`[~]\`** | Read-only slice shipped as the **Explorer** tab (GET-only, no new transport, no write surface). Writes remain a separate, future decision.                                  |
+| Pretty-print JSON page                                                                                                                       | **Re-scope \`[x]\`** | Shipped as \`JsonViewer\`'s Shape/Redacted/Raw tree view inside the Explorer tab.                                                                                             |
+| Omnibox \`rs\` group search                                                                                                                    | Port               | New \`omnibox\` permission + SW handler.                                                                                                                                      |
+| App Notes / App Sign-On Policy HTML scraping                                                                                                 | **Drop/Park**      | Fragile settings-page scraping; conflicts with "responses are untrusted, no hand-built HTML." Revisit only if an API appears.                                               |
+| YubiKeys / AD OU export                                                                                                                      | Park               | Narrow-org value.                                                                                                                                                           |
+| OU tooltips / Tiny Apps / All Tiny Apps / Quick Access toggle / nav shortcuts / expand-all log rows                                          | **Drop**           | Cosmetic tweaks to Okta's own pages; the side panel supersedes the need.                                                                                                    |
+| \`X-Okta-User-Agent-Extended\` header                                                                                                          | Port (trivial)     | Tag our content-script fetches.                                                                                                                                             |
+
+---
+
+## The two primitives that unlock most of it
+
+Build these once; everything downstream is cheap.
+
+1. **Generic Export Engine.** A declarative \`EntityExport\` descriptor —
+   \`{ endpoint, expand, columnCatalog, filterBox, idLinkify }\` — driving: paginate on the
+   scheduler (reuse \`parseNextLink\`, \`coreApi.runOperation\`) → column picker (persist in
+   \`idb\`) → progress/cancel (\`ProgressContext\` + \`ActivityBar\`) → CSV via existing
+   \`csvUtils.generateCSV\`/\`escapeCSV\`. **Adding an entity = writing a descriptor, not a
+   pipeline.** This single build covers ~12 rockstar export features.
+2. **Paginated collection reader + JSON render.** Reusable "fetch this Okta collection →
+   sortable table + linkified tree." Powers export previews, the API Console,
+   pretty-print, and the deleted-object browser.
+
+New UI surfaces: an **Export/Reports** tab and a **Tools** tab (SSO Inspector, API
+Console, Deleted-object browser). Both \`TabType\` additions in \`TabNavigation\`.
+
+---
+
+## Phase 0 — foundations \`[x]\` (shipped)
+
+The Export Engine, the \`EntityExport\` descriptor type, the paginated reader, the
+\`idb\`-persisted column selections, the \`X-Okta-User-Agent-Extended: okta-unbound\`
+header on content fetches, and the Export tab shell.
+
+## Phase 1 — reporting parity \`[~]\` (all descriptors + group regex search shipped; Admins deferred)
+
+The point at which reports stop pulling you back to rockstar.
+
+- Remaining descriptors: **Apps** (+ column picker), **App-Users**, **App-Groups**,
+  **Network Zones**, **Devices**, **Administrators**, **SAML IdPs**.
+- **Group regex search** (side panel; clickable results).
+- Entities needing new page-context detection (apps, devices, zones, IdPs) get
+  content-script \`pageContext\` support and zod schemas.
+- Done when: every "Port" export in the triage table is downloadable; group regex search
+  returns links; all green.
+
+---
+
+## Later phases (committed direction; detail when Phase 1 lands)
+
+- **Phase 2 — SSO & IdP diagnostics.** SSO Inspector (fetch SSO response → base64-decode
+  \`SAMLResponse\` → **React-escaped** XML pretty-print + field highlight; no
+  \`dangerouslySetInnerHTML\`, parse with \`DOMParser\`, treat as untrusted). IdP cert-expiry
+  view. Session-expiry badge on Home.
+- **Phase 3 — person deep-dive (reads).** Show User / Show AD / Show Linked Objects,
+  folded into the Users-tab detail. Low risk, high daily value.
+- **Phase 4 — API Console + deleted-object browser** _(gated on a written decision,
+  see below)._ The read-only slice — GET-only Explorer tab, pattern-based redaction,
+  Shape/Redacted/Raw viewer — has shipped. **Remaining:** write support
+  (method allow-list beyond GET, write-confirm, audit) and the deleted-object
+  browser over the System Log (no Backupta).
+- **Phase 5 — powerful writes** _(each audited, prior-state captured, hardest last)._
+  Admin-role grant/revoke → Set Password → Verify Factors. Absorbs backlog **C** (Bulk
+  Attribute Editor — profile write) and **D** (Bulk Lifecycle).
+- **Phase 6 — convenience.** Omnibox \`rs\` group search (manifest + SW handler).
+
+---
+
+## Decisions this forces (our hard rules require them — settle before the phase)
+
+- **API Console write-surface widening** (Phase 4): the read-only (GET-only) slice
+  shipped without triggering this, since it adds no write surface — today the content script enforces a same-origin path guard plus an HTTP-method
+  allow-list (there is no path-level allow-list — any same-origin path may be
+  fetched) and the Explorer only ever calls it with \`GET\`. Extending the Explorer
+  to \`POST\`/\`PUT\`/\`PATCH\`/\`DELETE\` still needs a written decision fixing
+  confirm-on-write and audit before it ships.
+- **New write endpoints** (Phase 5): profile update, set-password, admin role
+  grant/revoke, factor verify — each expands the write surface; each must audit + capture
+  prior state so undo can _restore_.
+- **\`omnibox\` permission** (Phase 6), and whether to add the \`okta-gov.com\` / \`okta.mil\`
+  hosts rockstar covers — a least-privilege call either way, and any new permission
+  or host match needs Sam's explicit sign-off.
+- **Backupta dropped** — record the privacy rationale (never hand data to a third party)
+  so it isn't re-litigated.
+- **HTML-scraping features dropped** — record the "treat every Okta response as untrusted;
+  no hand-built HTML" rationale.
+
+---
+
+## Parked / dropped (rationale recorded so we don't re-litigate)
+
+- **Backupta restore** — external service; violates the never-send-data-anywhere posture.
+- **App Notes / App Sign-On Policy scraping** — DOM-scrapes settings pages Okta doesn't
+  expose via API; fragile and against the untrusted-input rule.
+- **Cosmetic page tweaks** (Tiny Apps, Quick Access, nav shortcuts, OU tooltips,
+  expand-all log rows) — a side panel makes them unnecessary; not worth an in-page layer.
+- **YubiKeys / AD OU exports** — narrow-org value; add a descriptor later if asked.
+`;function r(t){return e.jsxs(e.Fragment,{children:[`
+`,e.jsx(o,{title:"Documentation/Rockstar Parity Plan"}),`
+`,e.jsx(a,{children:i})]})}function c(t={}){const{wrapper:n}={...s(),...t.components};return n?e.jsx(n,{...t,children:e.jsx(r,{...t})}):r()}export{c as default};
